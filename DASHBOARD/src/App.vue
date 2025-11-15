@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import DigitalTwin3D from './components/DigitalTwin3D.vue'
 import SensorStatus from './components/SensorStatus.vue'
 import TemperatureChart from './components/TemperatureChart.vue'
@@ -79,6 +79,16 @@ const {
   connectMQTT, 
   disconnectMQTT 
 } = useMQTT()
+
+// Watch untuk debug - pastikan data ter-update
+watch(() => sensorData.value, (newData, oldData) => {
+  console.log('📊 App.vue - sensorData WATCH TRIGGERED!')
+  console.log('📊 Old data:', oldData)
+  console.log('📊 New data:', newData)
+  console.log('📊 Temperature changed:', oldData?.temperature, '→', newData.temperature)
+  console.log('📊 Humidity changed:', oldData?.humidity, '→', newData.humidity)
+  console.log('📊 Is reactive?', sensorData.value === newData)
+}, { deep: true, immediate: true })
 
 const { 
   temperatureData, 
@@ -186,6 +196,23 @@ onUnmounted(() => {
 .timestamp {
   color: #7f8c8d;
   font-size: 14px;
+}
+
+.test-btn {
+  padding: 6px 12px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.test-btn:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
 }
 
 .main {

@@ -307,7 +307,7 @@ const createCeilingLight = () => {
   // Light glow
   const glow = new THREE.Mesh(
     new THREE.CylinderGeometry(0.4, 0.4, 0.05, 16),
-    new THREE.MeshBasicMaterial({ 
+    new THREE.MeshStandardMaterial({ 
       color: 0xffffaa, 
       transparent: true, 
       opacity: 0.6,
@@ -358,7 +358,7 @@ const createACUnit = () => {
   // AC Display Panel
   const display = new THREE.Mesh(
     new THREE.PlaneGeometry(0.8, 0.3),
-    new THREE.MeshBasicMaterial({ 
+    new THREE.MeshStandardMaterial({ 
       color: 0x00ff00,
       emissive: 0x00ff00,
       emissiveIntensity: 0.8
@@ -378,7 +378,7 @@ const createACUnit = () => {
   // Status indicator (LED)
   const led = new THREE.Mesh(
     new THREE.SphereGeometry(0.1, 8, 8),
-    new THREE.MeshBasicMaterial({ 
+    new THREE.MeshStandardMaterial({ 
       color: 0x00ff00,
       emissive: 0x00ff00,
       emissiveIntensity: 1
@@ -439,7 +439,7 @@ const createCCTV = () => {
   // CCTV LED indicator (merah - recording)
   const led = new THREE.Mesh(
     new THREE.SphereGeometry(0.05, 8, 8),
-    new THREE.MeshBasicMaterial({ 
+    new THREE.MeshStandardMaterial({ 
       color: 0xff0000,
       emissive: 0xff0000,
       emissiveIntensity: 1
@@ -568,7 +568,7 @@ const createAdvancedSensor = (color, label, type, data) => {
 
   // Status indicator (sphere di atas)
   const indicatorGeometry = new THREE.SphereGeometry(0.2, 16, 16)
-  const indicatorMaterial = new THREE.MeshBasicMaterial({ 
+  const indicatorMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x27ae60,
     emissive: 0x27ae60,
     emissiveIntensity: 1
@@ -614,9 +614,10 @@ const createDeviceNode = (color, label, type) => {
   // LED indicators
   for (let i = 0; i < 3; i++) {
     const ledGeometry = new THREE.SphereGeometry(0.1, 8, 8)
-    const ledMaterial = new THREE.MeshBasicMaterial({ 
+    const ledMaterial = new THREE.MeshStandardMaterial({ 
       color: 0x00ff00,
-      emissive: 0x00ff00
+      emissive: 0x00ff00,
+      emissiveIntensity: 1
     })
     const led = new THREE.Mesh(ledGeometry, ledMaterial)
     led.position.set(-0.6 + i * 0.6, 0.6, 1.1)
@@ -646,17 +647,26 @@ const updateSensorVisualization = (data) => {
         normalizedTemp
       )
       mesh.children[0].material.color = color
-      mesh.children[0].material.emissive = color
+      // Pastikan material adalah MeshStandardMaterial sebelum set emissive
+      if (mesh.children[0].material.type === 'MeshStandardMaterial') {
+        mesh.children[0].material.emissive = color
+      }
     } else if (sensor.type === 'current') {
       mesh.userData.data = { current: data.current || 0 }
       const current = data.current || 0
       const intensity = Math.min(current / 10, 1)
-      mesh.children[0].material.emissiveIntensity = 0.3 + intensity * 0.7
+      // Pastikan material adalah MeshStandardMaterial sebelum set emissiveIntensity
+      if (mesh.children[0].material.type === 'MeshStandardMaterial') {
+        mesh.children[0].material.emissiveIntensity = 0.3 + intensity * 0.7
+      }
     } else if (sensor.type === 'voltage') {
       mesh.userData.data = { voltage: data.voltage || 0 }
       const voltage = data.voltage || 0
       const intensity = Math.min(voltage / 220, 1)
-      mesh.children[0].material.emissiveIntensity = 0.3 + intensity * 0.7
+      // Pastikan material adalah MeshStandardMaterial sebelum set emissiveIntensity
+      if (mesh.children[0].material.type === 'MeshStandardMaterial') {
+        mesh.children[0].material.emissiveIntensity = 0.3 + intensity * 0.7
+      }
     }
   })
 }
@@ -979,7 +989,7 @@ const animate = () => {
   scene.children.forEach(child => {
     if (child.userData && child.userData.deviceType === 'ac') {
       // Pulse LED
-      if (child.userData.led) {
+      if (child.userData.led && child.userData.led.material.type === 'MeshStandardMaterial') {
         const intensity = 0.5 + Math.sin(Date.now() * 0.003) * 0.5
         child.userData.led.material.emissiveIntensity = intensity
       }
@@ -996,7 +1006,7 @@ const animate = () => {
       // Slow pan rotation
       child.rotation.y += 0.002
       // Pulse LED
-      if (child.userData.led) {
+      if (child.userData.led && child.userData.led.material.type === 'MeshStandardMaterial') {
         const intensity = 0.7 + Math.sin(Date.now() * 0.005) * 0.3
         child.userData.led.material.emissiveIntensity = intensity
       }

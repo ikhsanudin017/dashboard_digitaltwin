@@ -22,33 +22,94 @@ export function useAPI() {
   const fetchHistoricalData = async () => {
     try {
       // Fetch data suhu 24 jam
-      const tempResponse = await axios.get(`${API_BASE_URL}/data/suhu/24jam`)
-      if (tempResponse.data) {
-        temperatureData.value = {
-          labels: tempResponse.data.map(d => new Date(d.timestamp).toLocaleTimeString('id-ID')),
-          values: tempResponse.data.map(d => d.temperature)
+      try {
+        const tempResponse = await axios.get(`${API_BASE_URL}/data/suhu/24jam`)
+        const tempData = Array.isArray(tempResponse.data) 
+          ? tempResponse.data 
+          : (tempResponse.data?.data || [])
+        
+        if (Array.isArray(tempData) && tempData.length > 0) {
+          temperatureData.value = {
+            labels: tempData.map(d => {
+              const timestamp = d.timestamp || d.time || d.date
+              return timestamp ? new Date(timestamp).toLocaleTimeString('id-ID') : ''
+            }).filter(Boolean),
+            values: tempData.map(d => d.temperature || d.temp || d.suhu || 0)
+          }
+        } else {
+          throw new Error('No temperature data available')
         }
+      } catch (tempError) {
+        // Hanya log jika bukan network error (API belum tersedia adalah normal)
+        if (!tempError.message.includes('Network Error') && !tempError.message.includes('No temperature')) {
+          console.warn('⚠️ Failed to fetch temperature data:', tempError.message)
+        }
+        // Will use dummy data
       }
 
       // Fetch data listrik 7 hari
-      const elecResponse = await axios.get(`${API_BASE_URL}/data/listrik/7hari`)
-      if (elecResponse.data) {
-        electricityData.value = {
-          labels: elecResponse.data.map(d => new Date(d.timestamp).toLocaleDateString('id-ID')),
-          values: elecResponse.data.map(d => d.power)
+      try {
+        const elecResponse = await axios.get(`${API_BASE_URL}/data/listrik/7hari`)
+        const elecData = Array.isArray(elecResponse.data) 
+          ? elecResponse.data 
+          : (elecResponse.data?.data || [])
+        
+        if (Array.isArray(elecData) && elecData.length > 0) {
+          electricityData.value = {
+            labels: elecData.map(d => {
+              const timestamp = d.timestamp || d.time || d.date
+              return timestamp ? new Date(timestamp).toLocaleDateString('id-ID') : ''
+            }).filter(Boolean),
+            values: elecData.map(d => d.power || d.daya || 0)
+          }
+        } else {
+          throw new Error('No electricity data available')
         }
+      } catch (elecError) {
+        // Hanya log jika bukan network error (API belum tersedia adalah normal)
+        if (!elecError.message.includes('Network Error') && !elecError.message.includes('No electricity')) {
+          console.warn('⚠️ Failed to fetch electricity data:', elecError.message)
+        }
+        // Will use dummy data
       }
 
       // Fetch data orang real-time
-      const peopleResponse = await axios.get(`${API_BASE_URL}/data/orang/realtime`)
-      if (peopleResponse.data) {
-        peopleData.value = {
-          labels: peopleResponse.data.map(d => new Date(d.timestamp).toLocaleTimeString('id-ID')),
-          values: peopleResponse.data.map(d => d.count)
+      try {
+        const peopleResponse = await axios.get(`${API_BASE_URL}/data/orang/realtime`)
+        const peopleDataArray = Array.isArray(peopleResponse.data) 
+          ? peopleResponse.data 
+          : (peopleResponse.data?.data || [])
+        
+        if (Array.isArray(peopleDataArray) && peopleDataArray.length > 0) {
+          peopleData.value = {
+            labels: peopleDataArray.map(d => {
+              const timestamp = d.timestamp || d.time || d.date
+              return timestamp ? new Date(timestamp).toLocaleTimeString('id-ID') : ''
+            }).filter(Boolean),
+            values: peopleDataArray.map(d => d.count || d.people || d.orang || 0)
+          }
+        } else {
+          throw new Error('No people data available')
         }
+      } catch (peopleError) {
+        // Hanya log jika bukan network error (API belum tersedia adalah normal)
+        if (!peopleError.message.includes('Network Error') && !peopleError.message.includes('No people')) {
+          console.warn('⚠️ Failed to fetch people data:', peopleError.message)
+        }
+        // Will use dummy data
+      }
+      
+      // Jika semua fetch gagal, gunakan dummy data (normal jika API belum tersedia)
+      if (temperatureData.value.labels.length === 0 && 
+          electricityData.value.labels.length === 0 && 
+          peopleData.value.labels.length === 0) {
+        console.log('📊 Using demo data for charts (API backend not available)')
+        generateDummyData()
+      } else {
+        console.log('✅ Historical data loaded successfully')
       }
     } catch (error) {
-      console.error('Error fetching historical data:', error)
+      console.error('❌ Error fetching historical data:', error)
       // Generate dummy data untuk demo jika API belum tersedia
       generateDummyData()
     }
@@ -94,5 +155,8 @@ export function useAPI() {
     fetchHistoricalData
   }
 }
+
+
+
 
 

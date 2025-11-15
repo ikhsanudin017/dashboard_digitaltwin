@@ -5,7 +5,7 @@
         <div class="sensor-icon">🌡️</div>
         <div class="sensor-info">
           <div class="sensor-label">Suhu</div>
-          <div class="sensor-value">{{ formatValue(sensorData.temperature) }}°C</div>
+          <div class="sensor-value">{{ formatValue(temperature) }}°C</div>
           <div class="sensor-desc">DHT22 Sensor</div>
         </div>
         <div class="sensor-status-indicator" :class="getStatusClass('temperature')"></div>
@@ -15,7 +15,7 @@
         <div class="sensor-icon">💧</div>
         <div class="sensor-info">
           <div class="sensor-label">Kelembaban</div>
-          <div class="sensor-value">{{ formatValue(sensorData.humidity) }}%</div>
+          <div class="sensor-value">{{ formatValue(humidity) }}%</div>
           <div class="sensor-desc">DHT22 Sensor</div>
         </div>
         <div class="sensor-status-indicator" :class="getStatusClass('humidity')"></div>
@@ -25,7 +25,7 @@
         <div class="sensor-icon">🔌</div>
         <div class="sensor-info">
           <div class="sensor-label">Tegangan</div>
-          <div class="sensor-value">{{ formatValue(sensorData.voltage) }}V</div>
+          <div class="sensor-value">{{ formatValue(voltage) }}V</div>
           <div class="sensor-desc">ZMPT101B Sensor</div>
         </div>
         <div class="sensor-status-indicator" :class="getStatusClass('voltage')"></div>
@@ -35,7 +35,7 @@
         <div class="sensor-icon">⚡</div>
         <div class="sensor-info">
           <div class="sensor-label">Arus</div>
-          <div class="sensor-value">{{ formatValue(sensorData.current) }}A</div>
+          <div class="sensor-value">{{ formatValue(current) }}A</div>
           <div class="sensor-desc">SCT-013 Sensor</div>
         </div>
         <div class="sensor-status-indicator" :class="getStatusClass('current')"></div>
@@ -45,7 +45,7 @@
         <div class="sensor-icon">💡</div>
         <div class="sensor-info">
           <div class="sensor-label">Daya</div>
-          <div class="sensor-value">{{ formatValue(sensorData.power) }}W</div>
+          <div class="sensor-value">{{ formatValue(power) }}W</div>
           <div class="sensor-desc">Konsumsi Listrik</div>
         </div>
         <div class="sensor-status-indicator" :class="getStatusClass('power')"></div>
@@ -55,6 +55,8 @@
 </template>
 
 <script setup>
+import { computed, watch } from 'vue'
+
 const props = defineProps({
   sensorData: {
     type: Object,
@@ -68,31 +70,90 @@ const props = defineProps({
   }
 })
 
+// Computed untuk memastikan reactivity
+const temperature = computed(() => props.sensorData?.temperature ?? 0)
+const humidity = computed(() => props.sensorData?.humidity ?? 0)
+const voltage = computed(() => props.sensorData?.voltage ?? 0)
+const current = computed(() => props.sensorData?.current ?? 0)
+const power = computed(() => props.sensorData?.power ?? 0)
+
 const formatValue = (value) => {
   if (value === null || value === undefined) return '0.00'
   return Number(value).toFixed(2)
 }
 
+// Watch untuk debug
+watch(() => props.sensorData, (newData, oldData) => {
+  console.log('📊 SensorStatus - WATCH TRIGGERED!')
+  console.log('📊 Old props:', oldData)
+  console.log('📊 New props:', newData)
+  console.log('📊 Temperature in props:', props.sensorData?.temperature)
+  console.log('📊 Humidity in props:', props.sensorData?.humidity)
+  console.log('📊 Computed temperature:', temperature.value)
+  console.log('📊 Computed humidity:', humidity.value)
+}, { deep: true, immediate: true })
+
 const getStatusClass = (type) => {
-  const value = props.sensorData[type] || 0
+  const value = props.sensorData[type]
   
-  if (type === 'temperature') {
-    if (value > 30) return 'status-warning'
-    if (value < 15) return 'status-warning'
-    return 'status-online'
-  }
+  // Debug log
+  console.log(`🔍 getStatusClass(${type}):`, value, '| type:', typeof value)
   
-  if (type === 'voltage') {
-    if (value > 250 || value < 200) return 'status-warning'
-    return 'status-online'
-  }
-  
-  if (type === 'current' || type === 'power') {
-    if (value > 0) return 'status-online'
+  // Jika value null atau undefined, berarti offline
+  if (value === null || value === undefined) {
+    console.log(`⚠️ ${type} is null/undefined - OFFLINE`)
     return 'status-offline'
   }
   
-  return value > 0 ? 'status-online' : 'status-offline'
+  const numValue = parseFloat(value)
+  
+  // Jika bukan angka valid, offline
+  if (isNaN(numValue)) {
+    console.log(`⚠️ ${type} is NaN - OFFLINE`)
+    return 'status-offline'
+  }
+  
+  if (type === 'temperature') {
+    // Suhu valid antara -50 sampai 100 derajat (termasuk 0)
+    if (numValue >= -50 && numValue <= 100) {
+      if (numValue > 30 || numValue < 15) {
+        console.log(`✅ ${type} = ${numValue}°C - WARNING (out of range)`)
+        return 'status-warning'
+      }
+      console.log(`✅ ${type} = ${numValue}°C - ONLINE`)
+      return 'status-online'
+    }
+    console.log(`❌ ${type} = ${numValue}°C - OFFLINE (out of valid range)`)
+    return 'status-offline'
+  }
+  
+  if (type === 'humidity') {
+    // Kelembaban valid antara 0-100% (termasuk 0)
+    if (numValue >= 0 && numValue <= 100) {
+      console.log(`✅ ${type} = ${numValue}% - ONLINE`)
+      return 'status-online'
+    }
+    console.log(`❌ ${type} = ${numValue}% - OFFLINE (out of valid range)`)
+    return 'status-offline'
+  }
+  
+  if (type === 'voltage') {
+    // Tegangan valid jika > 0
+    if (numValue > 0) {
+      if (numValue > 250 || numValue < 200) return 'status-warning'
+      return 'status-online'
+    }
+    return 'status-offline'
+  }
+  
+  if (type === 'current' || type === 'power') {
+    // Arus dan daya valid jika >= 0
+    if (numValue >= 0) return 'status-online'
+    return 'status-offline'
+  }
+  
+  // Default: online jika ada nilai valid
+  return 'status-online'
 }
 </script>
 
@@ -210,5 +271,8 @@ const getStatusClass = (type) => {
   }
 }
 </style>
+
+
+
 
 

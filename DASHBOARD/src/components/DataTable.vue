@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const props = defineProps({
   sensorData: {
@@ -66,6 +66,11 @@ const props = defineProps({
 
 const currentTime = ref(new Date().toLocaleString('id-ID'))
 let timeInterval = null
+
+// Watch untuk debug
+watch(() => props.sensorData, (newData) => {
+  console.log('📊 DataTable component received update:', newData)
+}, { deep: true, immediate: true })
 
 onMounted(() => {
   timeInterval = setInterval(() => {
@@ -83,18 +88,22 @@ const formatValue = (value) => {
 }
 
 const getOverallStatus = () => {
-  const temp = props.sensorData.temperature || 0
-  const voltage = props.sensorData.voltage || 0
+  const temp = parseFloat(props.sensorData.temperature) || 0
+  const voltage = parseFloat(props.sensorData.voltage) || 0
+  const humidity = parseFloat(props.sensorData.humidity) || 0
   
-  if (temp > 30 || temp < 15 || voltage > 250 || voltage < 200) {
+  // Cek apakah ada data valid
+  const hasValidData = (temp > -50 && temp < 100) || (humidity >= 0 && humidity <= 100) || (voltage > 0)
+  
+  if (!hasValidData) {
+    return 'status-offline'
+  }
+  
+  if (temp > 30 || temp < 15 || (voltage > 0 && (voltage > 250 || voltage < 200))) {
     return 'status-warning'
   }
   
-  if (props.sensorData.power > 0) {
-    return 'status-online'
-  }
-  
-  return 'status-offline'
+  return 'status-online'
 }
 
 const getOverallStatusText = () => {
@@ -224,5 +233,8 @@ td {
   }
 }
 </style>
+
+
+
 
 
