@@ -46,6 +46,7 @@ const props = defineProps({
 const container = ref(null)
 const isAnimating = ref(true)
 const selectedItem = ref(null)
+const clickedObjectData = ref(null) // Store clicked object's userData for real-time updates
 
 let scene, camera, renderer, raycaster, mouse
 let room, lights, sensors = []
@@ -72,10 +73,18 @@ onUnmounted(() => {
 
 watch(() => props.sensorData, (newData) => {
   updateSensorVisualization(newData)
+  // Update popup jika sedang terbuka
+  if (selectedItem.value && clickedObjectData.value) {
+    updateSelectedItem()
+  }
 }, { deep: true })
 
 watch(() => props.peopleCount, (count) => {
   updatePeopleVisualization(count)
+  // Update popup jika sedang terbuka
+  if (selectedItem.value && clickedObjectData.value) {
+    updateSelectedItem()
+  }
 })
 
 const initThreeJS = () => {
@@ -873,15 +882,17 @@ const setupClickDetection = () => {
   }
 }
 
-const showItemDetails = (object) => {
-  const userData = object.userData
-  if (!userData) return
-
+const updateSelectedItem = () => {
+  if (!clickedObjectData.value) return
+  
+  const userData = clickedObjectData.value
+  
   // Get current data
   let data = { ...userData.data }
   
-  // Update dengan data real-time
-  if (userData.sensorType === 'temperature') {
+  // Update dengan data real-time dari MQTT
+  if (userData.sensorType === 'temperature' || userData.type === 'sensor') {
+    // Untuk sensor DHT11/DHT22, update suhu dan kelembaban
     data.temperature = props.sensorData.temperature
     data.humidity = props.sensorData.humidity
   } else if (userData.sensorType === 'current') {
@@ -902,18 +913,34 @@ const showItemDetails = (object) => {
     data.storage = '64GB'
   }
 
-  // Determine status
+  // Determine status berdasarkan data real-time
   let status = 'online'
-  let statusText = 'Online'
+  let statusText = 'Aktif'
   
   if (userData.type === 'sensor') {
-    const value = Object.values(data)[0]
-    if (value === 0 || value === null || value === undefined) {
-      status = 'offline'
-      statusText = 'Offline'
+    // Untuk sensor DHT11/DHT22, cek apakah ada data valid
+    // Untuk temperature sensor, cek temperature dan humidity
+    if (userData.sensorType === 'temperature') {
+      const hasTemp = data.temperature !== undefined && data.temperature !== null
+      const hasHum = data.humidity !== undefined && data.humidity !== null
+      // Sensor online jika ada data temperature atau humidity (bisa 0 untuk suhu di tempat dingin)
+      if (hasTemp || hasHum) {
+        status = 'online'
+        statusText = 'Aktif'
+      } else {
+        status = 'offline'
+        statusText = 'Offline'
+      }
     } else {
-      status = 'online'
-      statusText = 'Aktif'
+      // Untuk sensor lain (voltage, current), cek nilai bukan 0
+      const value = Object.values(data)[0]
+      if (value !== undefined && value !== null && value !== 0) {
+        status = 'online'
+        statusText = 'Aktif'
+      } else {
+        status = 'offline'
+        statusText = 'Offline'
+      }
     }
   } else if (userData.deviceType === 'ac') {
     status = data.status === 'on' ? 'online' : 'offline'
@@ -923,6 +950,7 @@ const showItemDetails = (object) => {
     statusText = data.status === 'recording' ? 'Merekam' : 'Tidak Aktif'
   }
 
+  // Update selectedItem dengan data terbaru
   selectedItem.value = {
     name: userData.name,
     data,
@@ -931,8 +959,20 @@ const showItemDetails = (object) => {
   }
 }
 
+const showItemDetails = (object) => {
+  const userData = object.userData
+  if (!userData) return
+
+  // Simpan reference ke userData untuk update real-time
+  clickedObjectData.value = userData
+  
+  // Update popup dengan data terbaru
+  updateSelectedItem()
+}
+
 const closePopup = () => {
   selectedItem.value = null
+  clickedObjectData.value = null // Clear reference saat popup ditutup
 }
 
 const formatLabel = (key) => {
@@ -950,8 +990,16 @@ const formatLabel = (key) => {
 }
 
 const formatValue = (key, value) => {
-  if (key === 'temperature') return `${value}°C`
-  if (key === 'humidity') return `${value}%`
+  if (key === 'temperature') {
+    // Format temperature dengan 1 desimal
+    const numValue = typeof value === 'number' ? value : parseFloat(value)
+    return `${!isNaN(numValue) ? numValue.toFixed(1) : value}°C`
+  }
+  if (key === 'humidity') {
+    // Format humidity tanpa desimal (bulatkan)
+    const numValue = typeof value === 'number' ? value : parseFloat(value)
+    return `${!isNaN(numValue) ? Math.round(numValue) : value}%`
+  }
   if (key === 'voltage') return `${value}V`
   if (key === 'current') return `${value}A`
   if (key === 'power') return `${value}W`
