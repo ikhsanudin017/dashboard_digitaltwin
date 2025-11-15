@@ -8,6 +8,9 @@
             <span class="status-dot"></span>
             {{ mqttConnected ? 'MQTT Terhubung' : 'Mode DEMO' }}
           </div>
+          <button v-if="mqttConnected" @click="testSendData" class="test-btn">
+            🧪 Test Kirim Data
+          </button>
           <div class="timestamp">
             {{ currentTime }}
           </div>
@@ -62,57 +65,36 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import DigitalTwin3D from './components/DigitalTwin3D.vue'
 import SensorStatus from './components/SensorStatus.vue'
 import TemperatureChart from './components/TemperatureChart.vue'
-import ElectricityChart from './components/ElectricityChart.vue'
+import ElectricityChart from './components/PeopleChart.vue'
 import PeopleChart from './components/PeopleChart.vue'
 import DataTable from './components/DataTable.vue'
 import { useMQTT } from './composables/useMQTT'
-import { useAPI } from './composables/useAPI'
 
 const { 
   mqttConnected, 
   sensorData, 
-  peopleCount, 
   connectMQTT, 
   disconnectMQTT 
 } = useMQTT()
 
-// Watch untuk debug - pastikan data ter-update
-watch(() => sensorData.value, (newData, oldData) => {
-  console.log('📊' + '='.repeat(70))
-  console.log('📊 App.vue - sensorData WATCH TRIGGERED!')
-  console.log('📊 Old data:', JSON.stringify(oldData))
-  console.log('📊 New data:', JSON.stringify(newData))
-  console.log('📊 Temperature changed:', oldData?.temperature, '→', newData.temperature)
-  console.log('📊 Humidity changed:', oldData?.humidity, '→', newData.humidity)
-  console.log('📊 Voltage:', newData.voltage, '| Current:', newData.current, '| Power:', newData.power)
-  console.log('📊 This should trigger UI update in SensorStatus component!')
-  console.log('📊' + '='.repeat(70))
-}, { deep: true, immediate: true })
-
-const { 
-  temperatureData, 
-  electricityData, 
-  peopleData, 
-  fetchHistoricalData 
-} = useAPI()
+// Data dummy untuk chart (nanti bisa diganti dengan real data)
+const temperatureData = ref({ labels: [], values: [] })
+const electricityData = ref({ labels: [], values: [] })
+const peopleData = ref({ labels: [], values: [] })
+const peopleCount = ref(0)
 
 const currentTime = ref(new Date().toLocaleString('id-ID'))
 
 // Update waktu setiap detik
 let timeInterval = null
 
-onMounted(async () => {
-  // Fetch data historis
-  await fetchHistoricalData()
+onMounted(() => {
+  connectMQTT()
   
-  // Connect MQTT (akan otomatis fallback ke demo mode jika gagal)
-  await connectMQTT()
-  
-  // Update waktu
   timeInterval = setInterval(() => {
     currentTime.value = new Date().toLocaleString('id-ID')
   }, 1000)
