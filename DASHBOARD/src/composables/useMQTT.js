@@ -56,13 +56,28 @@ export function useMQTT() {
         console.log('✅' + '='.repeat(60))
         mqttConnected.value = true
         
-        // Stop demo mode jika MQTT terhubung - PASTIKAN BENAR-BENAR STOP
+        // CRITICAL: Stop demo mode jika MQTT terhubung - PASTIKAN BENAR-BENAR STOP
         if (demoInterval) {
-          console.log('🛑 Stopping DEMO mode - MQTT connected')
+          console.log('🛑' + '='.repeat(60))
+          console.log('🛑 STOPPING DEMO MODE - MQTT CONNECTED!')
+          console.log('🛑 Clearing demo interval...')
           clearInterval(demoInterval)
           demoInterval = null
-          console.log('✅ DEMO mode stopped')
+          console.log('✅ DEMO mode stopped completely')
+          console.log('✅ Data will now come from real MQTT messages')
+          console.log('🛑' + '='.repeat(60))
         }
+        
+        // Reset sensorData ke 0 untuk memastikan tidak ada data demo yang tersisa
+        console.log('🔄 Resetting sensorData to initial values (waiting for real data)...')
+        sensorData.value = {
+          temperature: 0,
+          humidity: 0,
+          voltage: 0,
+          current: 0,
+          power: 0
+        }
+        console.log('✅ sensorData reset - ready for real MQTT data')
         
         // Subscribe ke semua topik yang mungkin digunakan
         const topics = [
