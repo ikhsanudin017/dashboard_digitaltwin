@@ -2,7 +2,21 @@
 
 # 🏢 Digital Twin Dashboard
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ikhsanudin017/dashboard_digitaltwin)
+
 Dashboard interaktif untuk visualisasi Digital Twin menggunakan Vue.js dan Three.js.
+
+## 🚀 Quick Deploy
+
+### Deploy ke Vercel (Recommended)
+
+1. Klik tombol di atas atau kunjungi [Vercel Dashboard](https://vercel.com)
+2. Import repository: `ikhsanudin017/dashboard_digitaltwin`
+3. Set root directory: `DASHBOARD`
+4. Tambahkan environment variables (lihat [DEPLOY.md](./DEPLOY.md))
+5. Deploy!
+
+Lihat [DEPLOY.md](./DEPLOY.md) untuk panduan lengkap deployment.
 
 ## ✨ Fitur
 
