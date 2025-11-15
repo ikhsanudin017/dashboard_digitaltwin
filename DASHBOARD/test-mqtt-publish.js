@@ -24,14 +24,20 @@ client.on('connect', () => {
   console.log('📤 Testing PUBLISH data...')
   console.log('')
   
-  // Test publish data DHT11
+  // Test publish data DHT11 (format sama dengan ESP32)
   const testData = {
-    suhu: 27.5,
-    kelembaban: 65.0
+    suhu: 27.5,  // 1 desimal seperti ESP32
+    kelembaban: 65.0  // 1 desimal seperti ESP32
   }
   
-  const topic = 'sensor/dht11/data'
+  const topic = 'sensor/dht11/data'  // ⭐ HARUS TOPIK INI!
   const message = JSON.stringify(testData)
+  
+  console.log('📋 Format data (sama dengan ESP32):')
+  console.log('   - Field: "suhu" dan "kelembaban"')
+  console.log('   - Format: JSON dengan 1 desimal')
+  console.log('   - Topic: sensor/dht11/data')
+  console.log('')
   
   console.log('📤 Publishing to topic:', topic)
   console.log('📤 Data:', message)

@@ -69,9 +69,9 @@ client.on('message', (topic, message) => {
       return
     }
     
-    // Cari data suhu
-    const suhu = data.suhu || data.temperature || data.temp
-    const kelembaban = data.kelembaban || data.humidity || data.hum
+    // Cari data suhu (prioritas: suhu dari ESP32)
+    const suhu = data.suhu !== undefined ? data.suhu : (data.temperature || data.temp)
+    const kelembaban = data.kelembaban !== undefined ? data.kelembaban : (data.humidity || data.hum)
     
     if (suhu !== undefined) {
       console.log('')
@@ -79,8 +79,24 @@ client.on('message', (topic, message) => {
       console.log('🌡️ SUHU/TEMPERATURE DETECTED!')
       console.log('🌡️ Nilai:', suhu, '°C')
       console.log('🌡️ Type:', typeof suhu)
-      console.log('🌡️ Field name:', data.suhu !== undefined ? 'suhu' : (data.temperature !== undefined ? 'temperature' : 'temp'))
+      console.log('🌡️ Field name:', data.suhu !== undefined ? 'suhu (from ESP32)' : (data.temperature !== undefined ? 'temperature' : 'temp'))
+      if (data.suhu !== undefined) {
+        console.log('✅ Format ESP32 detected! (suhu field)')
+      }
       console.log('🌡️' + '='.repeat(70))
+      console.log('')
+    }
+    
+    if (kelembaban !== undefined) {
+      console.log('💧' + '='.repeat(70))
+      console.log('💧 KELEMBABAN/HUMIDITY DETECTED!')
+      console.log('💧 Nilai:', kelembaban, '%')
+      console.log('💧 Type:', typeof kelembaban)
+      console.log('💧 Field name:', data.kelembaban !== undefined ? 'kelembaban (from ESP32)' : (data.humidity !== undefined ? 'humidity' : 'hum'))
+      if (data.kelembaban !== undefined) {
+        console.log('✅ Format ESP32 detected! (kelembaban field)')
+      }
+      console.log('💧' + '='.repeat(70))
       console.log('')
     }
     
