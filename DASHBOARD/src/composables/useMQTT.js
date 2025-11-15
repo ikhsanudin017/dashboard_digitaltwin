@@ -101,22 +101,32 @@ export function useMQTT() {
             console.log('📡 ✅ Subscribed to: # (all topics) - for debugging')
           }
         })
+        
+        // PASTIKAN MESSAGE HANDLER SUDAH TERDAFTAR
+        console.log('✅ All subscriptions completed!')
+        console.log('✅ Message handler is ready to receive data!')
+        console.log('⏳ Waiting for MQTT messages from ESP32...')
+        console.log('💡 Make sure ESP32 is sending data to topic: sensor/dht11/data')
+        console.log('💡 Expected format: {"suhu": 25.5, "kelembaban": 65.0}')
       })
 
+      // PASTIKAN MESSAGE HANDLER TERDAFTAR
+      console.log('📡 Registering MQTT message handler...')
+      
       client.on('message', (topic, message) => {
         try {
+          console.log('📨' + '='.repeat(70))
+          console.log('📨 MQTT MESSAGE RECEIVED!')
+          console.log('📨 Topic:', topic)
+          console.log('📨 Message buffer:', message)
+          console.log('📨 Message type:', typeof message)
+          
           // PASTIKAN DEMO MODE TIDAK BERJALAN saat ada data real
           if (demoInterval) {
             console.log('🛑 Stopping DEMO mode - real MQTT data received!')
             clearInterval(demoInterval)
             demoInterval = null
           }
-          
-          console.log('📨' + '='.repeat(70))
-          console.log('📨 MQTT MESSAGE RECEIVED!')
-          console.log('📨 Topic:', topic)
-          console.log('📨 Message buffer:', message)
-          console.log('📨 Message type:', typeof message)
           
           const rawMessage = message.toString()
           console.log('📨 Raw message (string):', rawMessage)
