@@ -272,18 +272,23 @@ export function useMQTT() {
               
               // Force update dengan object baru - PASTIKAN SEMUA FIELD ADA
               const currentData = sensorData.value || {}
+              
+              // CRITICAL: Gunakan nilai dari updates (ESP32), bukan dari currentData
               const newData = {
-                temperature: updates.temperature !== undefined ? updates.temperature : (currentData.temperature ?? 0),
-                humidity: updates.humidity !== undefined ? updates.humidity : (currentData.humidity ?? 0),
+                temperature: updates.temperature !== undefined ? updates.temperature : currentData.temperature,
+                humidity: updates.humidity !== undefined ? updates.humidity : currentData.humidity,
                 voltage: currentData.voltage ?? 0,
                 current: currentData.current ?? 0,
                 power: currentData.power ?? 0
               }
               
-              console.log('⭐ Creating new sensorData object...')
-              console.log('⭐ Updates to apply:', updates)
-              console.log('⭐ Current data before:', JSON.stringify(currentData))
-              console.log('⭐ New data object:', JSON.stringify(newData))
+              console.log('⭐' + '='.repeat(60))
+              console.log('⭐ CREATING NEW SENSORDATA OBJECT...')
+              console.log('⭐ Updates from ESP32:', updates)
+              console.log('⭐ ESP32 sent temperature:', updates.temperature, '°C')
+              console.log('⭐ ESP32 sent humidity:', updates.humidity, '%')
+              console.log('⭐ Current data before update:', JSON.stringify(currentData))
+              console.log('⭐ New data object (will be applied):', JSON.stringify(newData))
               
               // CRITICAL: Replace entire object untuk trigger reactivity
               console.log('🔄 BEFORE UPDATE - sensorData.value:', JSON.stringify(sensorData.value))
