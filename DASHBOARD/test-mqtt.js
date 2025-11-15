@@ -99,11 +99,6 @@ client.on('message', (topic, message) => {
       console.log('💧' + '='.repeat(70))
       console.log('')
     }
-    
-    if (kelembaban !== undefined) {
-      console.log('💧' + '='.repeat(70))
-      console.log('💧 KELEMBABAN/HUMIDITY DETECTED!')
-      console.log('💧 Nilai:', kelembaban, '%')
       console.log('💧 Type:', typeof kelembaban)
       console.log('💧 Field name:', data.kelembaban !== undefined ? 'kelembaban' : (data.humidity !== undefined ? 'humidity' : 'hum'))
       console.log('💧' + '='.repeat(70))
