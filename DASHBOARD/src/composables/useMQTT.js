@@ -82,18 +82,6 @@ export function useMQTT() {
         // Subscribe ke semua topik yang mungkin digunakan
         const topics = [
           'sensor/dht11/data',      // ⭐ Topik utama dari ESP32 DHT11
-          'sensor/dht11',            // Alternatif topik DHT11
-          'gedung/lantai1/listrik',
-          'gedung/lantai1/suhu',
-          'gedung/lantai1/orang',
-          'sensor/suhu',
-          'sensor/temperature',
-          'sensor/temp',
-          'sensor/data',
-          'esp32/sensor',
-          'esp32/data',
-          'digitaltwin/sensor',
-          'digitaltwin/data'
         ]
         
         // Subscribe ke topik spesifik
@@ -125,7 +113,8 @@ export function useMQTT() {
         console.log('💡 Expected format: {"suhu": 25.5, "kelembaban": 65.0}')
       })
 
-      // PASTIKAN MESSAGE HANDLER TERDAFTAR
+      // CRITICAL: Register message handler SEBELUM connect
+      // Ini memastikan handler siap saat koneksi berhasil
       console.log('📡 Registering MQTT message handler...')
       
       client.on('message', (topic, message) => {
@@ -273,13 +262,22 @@ export function useMQTT() {
               // Force update dengan object baru - PASTIKAN SEMUA FIELD ADA
               const currentData = sensorData.value || {}
               
-              // CRITICAL: Gunakan nilai dari updates (ESP32), bukan dari currentData
+              // CRITICAL: Gunakan nilai dari updates (ESP32) - REAL-TIME DATA
+              // Jangan fallback ke currentData, gunakan nilai baru dari ESP32
               const newData = {
-                temperature: updates.temperature !== undefined ? updates.temperature : currentData.temperature,
-                humidity: updates.humidity !== undefined ? updates.humidity : currentData.humidity,
+                temperature: updates.temperature !== undefined ? updates.temperature : (currentData.temperature ?? 0),
+                humidity: updates.humidity !== undefined ? updates.humidity : (currentData.humidity ?? 0),
                 voltage: currentData.voltage ?? 0,
                 current: currentData.current ?? 0,
                 power: currentData.power ?? 0
+              }
+              
+              // PASTIKAN: Jika updates ada, gunakan nilai tersebut (real-time dari ESP32)
+              if (updates.temperature !== undefined) {
+                newData.temperature = updates.temperature
+              }
+              if (updates.humidity !== undefined) {
+                newData.humidity = updates.humidity
               }
               
               console.log('⭐' + '='.repeat(60))
@@ -444,18 +442,20 @@ export function useMQTT() {
           
           if (dataUpdated) {
             console.log('✅' + '='.repeat(60))
-            console.log('✅ REAL-TIME MQTT DATA UPDATED SUCCESSFULLY!')
-            console.log('✅ Source: ESP32 via MQTT (NOT DEMO MODE)')
+            console.log('✅ REAL-TIME MQTT DATA UPDATED!')
+            console.log('✅ Source: ESP32 via MQTT (REAL-TIME, NOT DEMO)')
             console.log('✅ Topic:', topic)
-            console.log('📊 Current sensor values:', {
-              temperature: sensorData.value.temperature,
-              humidity: sensorData.value.humidity,
-              voltage: sensorData.value.voltage,
-              current: sensorData.value.current,
-              power: sensorData.value.power,
+            console.log('✅ Timestamp:', new Date().toLocaleTimeString('id-ID'))
+            console.log('📊 Current sensor values (REAL-TIME):', {
+              temperature: sensorData.value.temperature + '°C',
+              humidity: sensorData.value.humidity + '%',
+              voltage: sensorData.value.voltage + 'V',
+              current: sensorData.value.current + 'A',
+              power: sensorData.value.power + 'W',
               peopleCount: peopleCount.value
             })
-            console.log('📊 Full sensorData.value object:', JSON.stringify(sensorData.value))
+            console.log('📊 Full sensorData.value:', JSON.stringify(sensorData.value))
+            console.log('✅ Dashboard UI will update automatically!')
             console.log('✅' + '='.repeat(60))
           } else {
             console.warn('⚠️' + '='.repeat(60))
