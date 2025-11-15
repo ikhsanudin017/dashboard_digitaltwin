@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "vercel-build": "vite build"
+    "vercel-build": "vite build",
+    "test-mqtt": "node test-mqtt.js",
+    "test-publish": "node test-mqtt-publish.js"
   },
   "dependencies": {
     "@vueuse/core": "^10.7.0",
