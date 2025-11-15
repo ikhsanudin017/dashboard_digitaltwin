@@ -99,11 +99,6 @@ client.on('message', (topic, message) => {
       console.log('💧' + '='.repeat(70))
       console.log('')
     }
-      console.log('💧 Type:', typeof kelembaban)
-      console.log('💧 Field name:', data.kelembaban !== undefined ? 'kelembaban' : (data.humidity !== undefined ? 'humidity' : 'hum'))
-      console.log('💧' + '='.repeat(70))
-      console.log('')
-    }
     
     if (suhu === undefined && kelembaban === undefined) {
       console.log('⚠️ No temperature or humidity data found in message')
