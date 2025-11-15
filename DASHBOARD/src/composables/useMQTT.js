@@ -291,37 +291,33 @@ export function useMQTT() {
               console.log('⭐ New data object (will be applied):', JSON.stringify(newData))
               
               // CRITICAL: Replace entire object untuk trigger reactivity
-              console.log('🔄 BEFORE UPDATE - sensorData.value:', JSON.stringify(sensorData.value))
-              console.log('🔄 BEFORE UPDATE - sensorData.value reference:', sensorData.value)
-              
-              // Force new object reference dengan spread operator
               const oldRef = sensorData.value
               const oldTemp = sensorData.value.temperature
               const oldHum = sensorData.value.humidity
               
-              // CRITICAL: Gunakan reactive assignment
+              // CRITICAL: Gunakan reactive assignment dengan nilai BARU dari ESP32
               sensorData.value = { ...newData }
               
-              console.log('🔄 AFTER UPDATE - sensorData.value:', JSON.stringify(sensorData.value))
+              console.log('🔄 AFTER UPDATE:')
               console.log('🔄 Reference changed?', oldRef !== sensorData.value)
-              console.log('🔄 Temperature:', oldTemp, '→', sensorData.value.temperature)
-              console.log('🔄 Humidity:', oldHum, '→', sensorData.value.humidity)
+              console.log('🔄 Temperature:', oldTemp, '°C →', sensorData.value.temperature, '°C')
+              console.log('🔄 Humidity:', oldHum, '% →', sensorData.value.humidity, '%')
+              console.log('🔄 Full sensorData.value:', JSON.stringify(sensorData.value))
               
               dataUpdated = true
               
               // Force Vue reactivity dengan nextTick
               nextTick(() => {
-                console.log('⏰ NEXT TICK - sensorData.value:', JSON.stringify(sensorData.value))
-                console.log('⏰ NEXT TICK - temperature:', sensorData.value.temperature)
-                console.log('⏰ NEXT TICK - humidity:', sensorData.value.humidity)
-                console.log('⏰ NEXT TICK - Should trigger UI update now!')
+                console.log('⏰ NEXT TICK CHECK:')
+                console.log('⏰ sensorData.value:', JSON.stringify(sensorData.value))
+                console.log('⏰ temperature:', sensorData.value.temperature, '°C')
+                console.log('⏰ humidity:', sensorData.value.humidity, '%')
+                console.log('⏰ UI should update now with ESP32 data!')
               })
               
-              console.log('⭐' + '='.repeat(60))
-              console.log('⭐ DHT11 DATA UPDATED SUCCESSFULLY!')
-              console.log('⭐ Temperature:', sensorData.value.temperature, '°C')
-              console.log('⭐ Humidity:', sensorData.value.humidity, '%')
-              console.log('⭐ UI should update now!')
+              console.log('⭐ DHT11 DATA UPDATED SUCCESSFULLY FROM ESP32!')
+              console.log('⭐ Final temperature:', sensorData.value.temperature, '°C (from ESP32)')
+              console.log('⭐ Final humidity:', sensorData.value.humidity, '% (from ESP32)')
               console.log('⭐' + '='.repeat(60))
             } else {
               console.error('❌ DHT11 - No valid updates to apply!')
