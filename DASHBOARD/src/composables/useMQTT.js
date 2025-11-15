@@ -165,18 +165,17 @@ export function useMQTT() {
           let dataUpdated = false
           
           // Khusus untuk DHT11: update suhu dan kelembaban sekaligus jika ada
-          console.log('🔍 Checking DHT11 condition...')
+          console.log('🔍' + '='.repeat(70))
+          console.log('🔍 CHECKING DHT11 CONDITION...')
           console.log('🔍 Topic:', topic)
           console.log('🔍 Topic includes dht11?', topic.includes('dht11'))
           console.log('🔍 Topic includes sensor?', topic.includes('sensor'))
           console.log('🔍 All data keys:', Object.keys(data))
+          console.log('🔍 Full data object:', JSON.stringify(data))
           console.log('🔍 data.suhu exists?', data.suhu !== undefined, '| value:', data.suhu, '| type:', typeof data.suhu)
           console.log('🔍 data.kelembaban exists?', data.kelembaban !== undefined, '| value:', data.kelembaban, '| type:', typeof data.kelembaban)
           console.log('🔍 data.temperature exists?', data.temperature !== undefined, '| value:', data.temperature)
           console.log('🔍 data.humidity exists?', data.humidity !== undefined, '| value:', data.humidity)
-          console.log('🔍 Condition (topic dht11 + suhu/kelembaban):', topic.includes('dht11') && (data.suhu !== undefined || data.kelembaban !== undefined))
-          console.log('🔍 Condition (topic sensor + suhu/kelembaban):', topic.includes('sensor') && (data.suhu !== undefined || data.kelembaban !== undefined))
-          console.log('🔍 Condition (any topic + suhu/kelembaban):', (data.suhu !== undefined || data.kelembaban !== undefined))
           
           // Lebih fleksibel: terima data DHT11 dari topik apapun yang mengandung 'dht11' atau 'sensor', atau jika ada field suhu/kelembaban
           const isDHT11Topic = topic.includes('dht11') || topic.includes('sensor')
@@ -184,6 +183,8 @@ export function useMQTT() {
                                 (data.temperature !== undefined && data.humidity !== undefined)
           
           console.log('🔍 Final condition - isDHT11Topic:', isDHT11Topic, '| hasDHT11Data:', hasDHT11Data)
+          console.log('🔍 Will process DHT11?', isDHT11Topic && hasDHT11Data)
+          console.log('🔍' + '='.repeat(70))
           
           if (isDHT11Topic && hasDHT11Data) {
             console.log('⭐' + '='.repeat(60))
@@ -265,24 +266,32 @@ export function useMQTT() {
               
               // Force new object reference dengan spread operator
               const oldRef = sensorData.value
+              const oldTemp = sensorData.value.temperature
+              const oldHum = sensorData.value.humidity
+              
+              // CRITICAL: Gunakan reactive assignment
               sensorData.value = { ...newData }
               
               console.log('🔄 AFTER UPDATE - sensorData.value:', JSON.stringify(sensorData.value))
-              console.log('🔄 AFTER UPDATE - sensorData.value reference:', sensorData.value)
               console.log('🔄 Reference changed?', oldRef !== sensorData.value)
-              console.log('🔄 sensorData.value.temperature:', sensorData.value.temperature)
-              console.log('🔄 sensorData.value.humidity:', sensorData.value.humidity)
+              console.log('🔄 Temperature:', oldTemp, '→', sensorData.value.temperature)
+              console.log('🔄 Humidity:', oldHum, '→', sensorData.value.humidity)
               
               dataUpdated = true
               
-              // Verify update dengan delay untuk memastikan reactivity
-              setTimeout(() => {
-                console.log('⏰ DELAYED CHECK - sensorData.value:', JSON.stringify(sensorData.value))
-                console.log('⏰ DELAYED CHECK - temperature:', sensorData.value.temperature)
-                console.log('⏰ DELAYED CHECK - humidity:', sensorData.value.humidity)
-              }, 100)
+              // Force Vue reactivity dengan nextTick
+              nextTick(() => {
+                console.log('⏰ NEXT TICK - sensorData.value:', JSON.stringify(sensorData.value))
+                console.log('⏰ NEXT TICK - temperature:', sensorData.value.temperature)
+                console.log('⏰ NEXT TICK - humidity:', sensorData.value.humidity)
+                console.log('⏰ NEXT TICK - Should trigger UI update now!')
+              })
               
-              console.log('⭐ DHT11 data updated successfully!')
+              console.log('⭐' + '='.repeat(60))
+              console.log('⭐ DHT11 DATA UPDATED SUCCESSFULLY!')
+              console.log('⭐ Temperature:', sensorData.value.temperature, '°C')
+              console.log('⭐ Humidity:', sensorData.value.humidity, '%')
+              console.log('⭐ UI should update now!')
               console.log('⭐' + '='.repeat(60))
             } else {
               console.error('❌ DHT11 - No valid updates to apply!')

@@ -82,12 +82,15 @@ const {
 
 // Watch untuk debug - pastikan data ter-update
 watch(() => sensorData.value, (newData, oldData) => {
+  console.log('📊' + '='.repeat(70))
   console.log('📊 App.vue - sensorData WATCH TRIGGERED!')
-  console.log('📊 Old data:', oldData)
-  console.log('📊 New data:', newData)
+  console.log('📊 Old data:', JSON.stringify(oldData))
+  console.log('📊 New data:', JSON.stringify(newData))
   console.log('📊 Temperature changed:', oldData?.temperature, '→', newData.temperature)
   console.log('📊 Humidity changed:', oldData?.humidity, '→', newData.humidity)
-  console.log('📊 Is reactive?', sensorData.value === newData)
+  console.log('📊 Voltage:', newData.voltage, '| Current:', newData.current, '| Power:', newData.power)
+  console.log('📊 This should trigger UI update in SensorStatus component!')
+  console.log('📊' + '='.repeat(70))
 }, { deep: true, immediate: true })
 
 const { 
