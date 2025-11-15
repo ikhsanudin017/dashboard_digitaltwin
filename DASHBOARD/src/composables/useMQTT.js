@@ -294,28 +294,34 @@ export function useMQTT() {
               const oldHum = sensorData.value.humidity
               
               // CRITICAL: Gunakan reactive assignment dengan nilai BARU dari ESP32
+              // Buat object baru untuk memastikan Vue reactivity ter-trigger
               sensorData.value = { ...newData }
               
-              console.log('🔄 AFTER UPDATE:')
+              console.log('🔄' + '='.repeat(60))
+              console.log('🔄 REAL-TIME UPDATE FROM MQTT:')
               console.log('🔄 Reference changed?', oldRef !== sensorData.value)
               console.log('🔄 Temperature:', oldTemp, '°C →', sensorData.value.temperature, '°C')
               console.log('🔄 Humidity:', oldHum, '% →', sensorData.value.humidity, '%')
               console.log('🔄 Full sensorData.value:', JSON.stringify(sensorData.value))
+              console.log('🔄' + '='.repeat(60))
               
               dataUpdated = true
               
-              // Force Vue reactivity dengan nextTick
+              // Force Vue reactivity dengan nextTick untuk memastikan UI update
               nextTick(() => {
-                console.log('⏰ NEXT TICK CHECK:')
+                console.log('⏰ NEXT TICK - Verifying update:')
                 console.log('⏰ sensorData.value:', JSON.stringify(sensorData.value))
                 console.log('⏰ temperature:', sensorData.value.temperature, '°C')
                 console.log('⏰ humidity:', sensorData.value.humidity, '%')
-                console.log('⏰ UI should update now with ESP32 data!')
+                console.log('⏰ ✅ UI should update now with REAL-TIME ESP32 data!')
               })
               
-              console.log('⭐ DHT11 DATA UPDATED SUCCESSFULLY FROM ESP32!')
-              console.log('⭐ Final temperature:', sensorData.value.temperature, '°C (from ESP32)')
-              console.log('⭐ Final humidity:', sensorData.value.humidity, '% (from ESP32)')
+              console.log('⭐' + '='.repeat(60))
+              console.log('⭐ REAL-TIME MQTT DATA UPDATED SUCCESSFULLY!')
+              console.log('⭐ Source: ESP32 DHT11 via MQTT')
+              console.log('⭐ Final temperature:', sensorData.value.temperature, '°C')
+              console.log('⭐ Final humidity:', sensorData.value.humidity, '%')
+              console.log('⭐ Dashboard will update in real-time!')
               console.log('⭐' + '='.repeat(60))
             } else {
               console.error('❌ DHT11 - No valid updates to apply!')
