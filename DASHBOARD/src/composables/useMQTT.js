@@ -462,18 +462,38 @@ export function useMQTT() {
       })
 
       client.on('error', (error) => {
-        console.error('❌ MQTT Error:', error)
+        console.error('❌' + '='.repeat(70))
+        console.error('❌ MQTT ERROR!')
+        console.error('❌ Error details:', error)
+        console.error('❌ Error code:', error.code)
+        console.error('❌ Error message:', error.message)
+        console.error('❌' + '='.repeat(70))
         mqttConnected.value = false
       })
 
       client.on('close', () => {
-        console.log('🔌 MQTT Disconnected')
+        console.log('🔌' + '='.repeat(70))
+        console.log('🔌 MQTT DISCONNECTED')
+        console.log('🔌' + '='.repeat(70))
         mqttConnected.value = false
       })
 
       client.on('reconnect', () => {
-        console.log('🔄 MQTT Reconnecting...')
+        console.log('🔄' + '='.repeat(70))
+        console.log('🔄 MQTT RECONNECTING...')
+        console.log('🔄' + '='.repeat(70))
       })
+      
+      client.on('offline', () => {
+        console.log('📴' + '='.repeat(70))
+        console.log('📴 MQTT OFFLINE')
+        console.log('📴' + '='.repeat(70))
+        mqttConnected.value = false
+      })
+      
+      // Test: Log semua event untuk debugging
+      console.log('📡 MQTT client event handlers registered')
+      console.log('📡 Listening for: connect, message, error, close, reconnect, offline')
       
       // Jika koneksi gagal, jalankan demo mode
       client.on('error', () => {
