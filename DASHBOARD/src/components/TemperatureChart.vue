@@ -47,15 +47,19 @@ const chartData = computed(() => ({
       label: 'Suhu (°C)',
       data: props.data.values || [],
       borderColor: '#e74c3c',
-      backgroundColor: 'rgba(231, 76, 60, 0.1)',
-      borderWidth: 2,
+      backgroundColor: 'rgba(231, 76, 60, 0.15)',
+      borderWidth: 3,
       fill: true,
-      tension: 0.4,
-      pointRadius: 3,
-      pointHoverRadius: 5,
+      tension: 0.5,
+      pointRadius: 4,
+      pointHoverRadius: 7,
       pointBackgroundColor: '#e74c3c',
       pointBorderColor: '#fff',
-      pointBorderWidth: 2
+      pointBorderWidth: 3,
+      shadowOffsetX: 0,
+      shadowOffsetY: 4,
+      shadowBlur: 10,
+      shadowColor: 'rgba(231, 76, 60, 0.3)'
     }
   ]
 }))
@@ -66,11 +70,32 @@ const chartOptions = {
   plugins: {
     legend: {
       display: true,
-      position: 'top'
+      position: 'top',
+      labels: {
+        usePointStyle: true,
+        padding: 15,
+        font: {
+          size: 12,
+          weight: '600'
+        }
+      }
     },
     tooltip: {
       mode: 'index',
-      intersect: false
+      intersect: false,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      padding: 12,
+      titleFont: {
+        size: 13,
+        weight: '600'
+      },
+      bodyFont: {
+        size: 12
+      },
+      borderColor: '#e74c3c',
+      borderWidth: 2,
+      cornerRadius: 8,
+      displayColors: true
     }
   },
   scales: {
@@ -78,15 +103,33 @@ const chartOptions = {
       beginAtZero: false,
       title: {
         display: true,
-        text: 'Suhu (°C)'
+        text: 'Suhu (°C)',
+        font: {
+          size: 12,
+          weight: '600'
+        },
+        color: '#7f8c8d'
       },
       grid: {
-        color: 'rgba(0, 0, 0, 0.05)'
+        color: 'rgba(0, 0, 0, 0.06)',
+        lineWidth: 1
+      },
+      ticks: {
+        font: {
+          size: 11
+        },
+        color: '#95a5a6'
       }
     },
     x: {
       grid: {
         display: false
+      },
+      ticks: {
+        font: {
+          size: 11
+        },
+        color: '#95a5a6'
       }
     }
   },
@@ -94,6 +137,10 @@ const chartOptions = {
     mode: 'nearest',
     axis: 'x',
     intersect: false
+  },
+  animation: {
+    duration: 1000,
+    easing: 'easeInOutQuart'
   }
 }
 </script>

@@ -1,18 +1,30 @@
 <template>
   <div class="app">
     <header class="header">
-      <div class="container">
-        <h1>🏢 Digital Twin Dashboard</h1>
-        <div class="header-info">
-          <div class="status-badge" :class="mqttConnected ? 'connected' : 'disconnected'">
-            <span class="status-dot"></span>
-            {{ mqttConnected ? 'MQTT Terhubung' : 'Mode DEMO' }}
+      <div class="header-container">
+        <div class="header-left">
+          <div class="logo">
+            <div class="logo-icon">🏢</div>
+            <h1 class="logo-text">Digital Twin Dashboard</h1>
           </div>
-          <button v-if="mqttConnected" @click="testSendData" class="test-btn">
-            🧪 Test Kirim Data
-          </button>
-          <div class="timestamp">
-            {{ currentTime }}
+        </div>
+        
+        <div class="header-right">
+          <div class="header-actions">
+            <div class="status-badge" :class="mqttConnected ? 'connected' : 'disconnected'">
+              <span class="status-dot"></span>
+              <span class="status-text">{{ mqttConnected ? 'MQTT Terhubung' : 'Mode DEMO' }}</span>
+            </div>
+            
+            <button v-if="mqttConnected" @click="testSendData" class="test-btn">
+              <span class="btn-icon">🧪</span>
+              <span class="btn-text">Test Kirim Data</span>
+            </button>
+            
+            <div class="timestamp">
+              <span class="time-icon">🕐</span>
+              <span class="time-text">{{ currentTime }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -92,6 +104,11 @@ const currentTime = ref(new Date().toLocaleString('id-ID'))
 // Update waktu setiap detik
 let timeInterval = null
 
+const testSendData = () => {
+  // Test function - bisa diisi dengan logic test jika diperlukan
+  console.log('Test send data clicked')
+}
+
 onMounted(() => {
   connectMQTT()
   
@@ -109,119 +126,376 @@ onUnmounted(() => {
 <style scoped>
 .app {
   min-height: 100vh;
+  position: relative;
 }
 
 .header {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 20px 0;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+  background: #ffffff;
+  padding: 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  margin-bottom: 30px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  animation: slideDown 0.5s ease-out;
 }
 
-.header .container {
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.header-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 16px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
+  gap: 24px;
 }
 
-.header h1 {
-  font-size: 28px;
-  color: #2c3e50;
-  margin: 0;
-}
-
-.header-info {
+.header-left {
   display: flex;
-  gap: 20px;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  font-size: 24px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+}
+
+.logo:hover .logo-icon {
+  transform: rotate(5deg) scale(1.05);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.logo-text {
+  font-size: 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  animation: gradientShift 3s ease infinite;
+  background-size: 200% 200%;
+  white-space: nowrap;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .status-badge {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
-  border-radius: 20px;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.status-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .status-badge.connected {
-  background: #d4edda;
-  color: #155724;
+  background: linear-gradient(135deg, rgba(39, 174, 96, 0.95) 0%, rgba(46, 213, 115, 0.95) 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .status-badge.disconnected {
-  background: #f8d7da;
-  color: #721c24;
+  background: linear-gradient(135deg, rgba(231, 76, 60, 0.95) 0%, rgba(235, 77, 75, 0.95) 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 8px;
-  animation: pulse 2s infinite;
+  background: #fff;
+  animation: pulseGlow 2s infinite;
+  flex-shrink: 0;
 }
 
 .status-badge.connected .status-dot {
-  background: #27ae60;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 16px rgba(39, 174, 96, 0.6);
 }
 
 .status-badge.disconnected .status-dot {
-  background: #e74c3c;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 16px rgba(231, 76, 60, 0.6);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+.status-text {
+  font-weight: 600;
 }
 
-.timestamp {
-  color: #7f8c8d;
-  font-size: 14px;
+@keyframes pulseGlow {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.8; 
+    transform: scale(1.15);
+  }
 }
 
 .test-btn {
-  padding: 6px 12px;
-  background: #3498db;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.test-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.5s, height 0.5s;
+}
+
+.test-btn:hover::before {
+  width: 200px;
+  height: 200px;
 }
 
 .test-btn:hover {
-  background: #2980b9;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+}
+
+.test-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.btn-text {
+  font-weight: 600;
+}
+
+.timestamp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #2c3e50;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.timestamp:hover {
+  background: #e9ecef;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+.time-icon {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.time-text {
+  font-weight: 500;
+  letter-spacing: 0.3px;
 }
 
 .main {
   padding-bottom: 40px;
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .card h2 {
-  font-size: 20px;
-  margin-bottom: 20px;
+  font-size: 22px;
+  margin-bottom: 24px;
   color: #2c3e50;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 10px;
+  position: relative;
+  padding-bottom: 12px;
+  font-weight: 700;
+}
+
+.card h2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
+  animation: expandLine 0.5s ease-out;
+}
+
+@keyframes expandLine {
+  from {
+    width: 0;
+  }
+  to {
+    width: 60px;
+  }
 }
 
 @media (max-width: 768px) {
-  .header .container {
+  .header-container {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px 20px;
   }
-  
-  .header-info {
-    flex-direction: column;
-    align-items: flex-start;
+
+  .header-left {
+    width: 100%;
+  }
+
+  .logo-text {
+    font-size: 20px;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
     gap: 10px;
+  }
+
+  .status-badge,
+  .test-btn,
+  .timestamp {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+
+  .btn-text {
+    display: none;
+  }
+
+  .test-btn {
+    padding: 8px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-container {
+    padding: 12px 16px;
+  }
+
+  .logo {
+    gap: 10px;
+  }
+
+  .logo-text {
+    font-size: 18px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-badge,
+  .test-btn,
+  .timestamp {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

@@ -121,38 +121,78 @@ const getOverallStatusText = () => {
 
 .table-responsive {
   overflow-x: auto;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
-  background: white;
-  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
   overflow: hidden;
 }
 
 thead {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 3s ease infinite;
   color: white;
+  position: relative;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+thead::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 th {
-  padding: 15px;
+  padding: 18px 16px;
   text-align: left;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  position: relative;
+}
+
+th:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 tbody tr {
-  border-bottom: 1px solid #e9ecef;
-  transition: background 0.2s;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  background: white;
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(102, 126, 234, 0.02);
 }
 
 tbody tr:hover {
-  background: #f8f9fa;
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 tbody tr:last-child {
@@ -160,76 +200,148 @@ tbody tr:last-child {
 }
 
 td {
-  padding: 15px;
+  padding: 18px 16px;
   font-size: 14px;
   color: #2c3e50;
+  font-weight: 500;
 }
 
 .status-badge {
   display: inline-block;
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.status-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .status-badge.status-online {
-  background: #d4edda;
-  color: #155724;
+  background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+  color: white;
 }
 
 .status-badge.status-warning {
-  background: #fff3cd;
-  color: #856404;
+  background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%);
+  color: white;
 }
 
 .status-badge.status-offline {
-  background: #f8d7da;
-  color: #721c24;
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
 }
 
 .table-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-top: 24px;
 }
 
 .summary-item {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  padding: 20px;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 28px 24px;
+  border-radius: 20px;
   text-align: center;
-  border: 2px solid #dee2e6;
+  border: 2px solid transparent;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+  animation: cardSlideIn 0.6s ease-out backwards;
+}
+
+.summary-item:nth-child(1) { animation-delay: 0.1s; }
+.summary-item:nth-child(2) { animation-delay: 0.2s; }
+.summary-item:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.summary-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-size: 200% 100%;
+  animation: gradientShift 3s ease infinite;
+}
+
+.summary-item:hover {
+  transform: translateY(-6px) scale(1.02);
+  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: 0 16px 40px rgba(102, 126, 234, 0.15);
 }
 
 .summary-label {
   font-size: 12px;
   color: #7f8c8d;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 .summary-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #2c3e50;
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+  transition: all 0.3s;
+}
+
+.summary-item:hover .summary-value {
+  transform: scale(1.1);
 }
 
 @media (max-width: 768px) {
   .table-responsive {
     font-size: 12px;
+    border-radius: 12px;
   }
   
   th, td {
-    padding: 10px 8px;
+    padding: 12px 10px;
+    font-size: 12px;
+  }
+
+  th {
+    font-size: 11px;
   }
   
   .table-summary {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .summary-item {
+    padding: 24px 20px;
+  }
+
+  .summary-value {
+    font-size: 28px;
   }
 }
 </style>
