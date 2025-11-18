@@ -16,11 +16,6 @@
               <span class="status-text">{{ mqttConnected ? 'MQTT Terhubung' : 'Mode DEMO' }}</span>
             </div>
             
-            <button v-if="mqttConnected" @click="testSendData" class="test-btn">
-              <span class="btn-icon">🧪</span>
-              <span class="btn-text">Test Kirim Data</span>
-            </button>
-            
             <div class="timestamp">
               <span class="time-icon">🕐</span>
               <span class="time-text">{{ currentTime }}</span>
@@ -109,11 +104,6 @@ const currentTime = ref(new Date().toLocaleString('id-ID'))
 // Update waktu setiap detik
 let timeInterval = null
 let lastPowerTimestamp = Date.now()
-
-const testSendData = () => {
-  // Test function - bisa diisi dengan logic test jika diperlukan
-  console.log('Test send data clicked')
-}
 
 onMounted(() => {
   connectMQTT()
@@ -337,61 +327,6 @@ onUnmounted(() => {
   }
 }
 
-.test-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-  position: relative;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.test-btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  transform: translate(-50%, -50%);
-  transition: width 0.5s, height 0.5s;
-}
-
-.test-btn:hover::before {
-  width: 200px;
-  height: 200px;
-}
-
-.test-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
-}
-
-.test-btn:active {
-  transform: translateY(0);
-}
-
-.btn-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.btn-text {
-  font-weight: 600;
-}
-
 .timestamp {
   display: flex;
   align-items: center;
@@ -502,19 +437,11 @@ onUnmounted(() => {
   }
 
   .status-badge,
-  .test-btn,
   .timestamp {
     font-size: 12px;
     padding: 8px 14px;
   }
 
-  .btn-text {
-    display: none;
-  }
-
-  .test-btn {
-    padding: 8px 12px;
-  }
 }
 
 @media (max-width: 480px) {
@@ -542,7 +469,6 @@ onUnmounted(() => {
   }
 
   .status-badge,
-  .test-btn,
   .timestamp {
     width: 100%;
     justify-content: center;
