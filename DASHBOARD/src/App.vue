@@ -69,7 +69,11 @@
         <!-- Row 3: Detail Data -->
         <div class="card">
           <h2>📋 Detail Data Sensor</h2>
-          <DataTable :sensor-data="sensorData" :people-count="peopleCount" />
+          <DataTable 
+            :sensor-data="sensorData" 
+            :people-count="peopleCount"
+            :total-energy="totalEnergyWh"
+          />
         </div>
       </div>
     </main>
@@ -77,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import DigitalTwin3D from './components/DigitalTwin3D.vue'
 import SensorStatus from './components/SensorStatus.vue'
 import TemperatureChart from './components/TemperatureChart.vue'
@@ -98,11 +102,13 @@ const temperatureData = ref({ labels: [], values: [] })
 const electricityData = ref({ labels: [], values: [] })
 const peopleData = ref({ labels: [], values: [] })
 const peopleCount = ref(0)
+const totalEnergyWh = ref(0)
 
 const currentTime = ref(new Date().toLocaleString('id-ID'))
 
 // Update waktu setiap detik
 let timeInterval = null
+let lastPowerTimestamp = Date.now()
 
 const testSendData = () => {
   // Test function - bisa diisi dengan logic test jika diperlukan
@@ -115,6 +121,50 @@ onMounted(() => {
   timeInterval = setInterval(() => {
     currentTime.value = new Date().toLocaleString('id-ID')
   }, 1000)
+})
+
+const MAX_POINTS = 60
+
+const addDataPoint = (targetRef, value) => {
+  if (value === undefined || value === null || isNaN(value)) return
+  const timestamp = new Date().toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+  
+  const labels = [...(targetRef.value.labels || []), timestamp]
+  const values = [...(targetRef.value.values || []), parseFloat(value.toFixed(2))]
+  
+  if (labels.length > MAX_POINTS) {
+    labels.shift()
+    values.shift()
+  }
+  
+  targetRef.value = { labels, values }
+}
+
+watch(sensorData, (newData) => {
+  if (!newData) return
+  if (typeof newData.temperature === 'number') {
+    addDataPoint(temperatureData, newData.temperature)
+  }
+  if (typeof newData.power === 'number') {
+    addDataPoint(electricityData, newData.power)
+    
+    const now = Date.now()
+    const deltaHours = (now - lastPowerTimestamp) / 3600000
+    if (deltaHours > 0 && deltaHours < 1) {
+      totalEnergyWh.value += newData.power * deltaHours
+    }
+    lastPowerTimestamp = now
+  }
+}, { deep: true })
+
+watch(peopleCount, (value) => {
+  if (typeof value === 'number') {
+    addDataPoint(peopleData, value)
+  }
 })
 
 onUnmounted(() => {

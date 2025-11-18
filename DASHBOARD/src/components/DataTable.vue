@@ -40,7 +40,7 @@
       </div>
       <div class="summary-item">
         <div class="summary-label">Total Konsumsi</div>
-        <div class="summary-value">{{ formatValue(sensorData.power) }}W</div>
+        <div class="summary-value">{{ formatEnergy(totalEnergy) }}</div>
       </div>
       <div class="summary-item">
         <div class="summary-label">Kapasitas Ruangan</div>
@@ -59,6 +59,10 @@ const props = defineProps({
     default: () => ({})
   },
   peopleCount: {
+    type: Number,
+    default: 0
+  },
+  totalEnergy: {
     type: Number,
     default: 0
   }
@@ -87,19 +91,37 @@ const formatValue = (value) => {
   return Number(value).toFixed(2)
 }
 
+const formatEnergy = (value) => {
+  if (!value || value <= 0) return '0.00 kWh'
+  const kWh = value / 1000
+  return `${kWh.toFixed(2)} kWh`
+}
+
 const getOverallStatus = () => {
   const temp = parseFloat(props.sensorData.temperature) || 0
   const voltage = parseFloat(props.sensorData.voltage) || 0
+  const current = parseFloat(props.sensorData.current) || 0
   const humidity = parseFloat(props.sensorData.humidity) || 0
+  const voltageStatus = props.sensorData.voltageStatus
+  const currentStatus = props.sensorData.currentStatus
   
-  // Cek apakah ada data valid
-  const hasValidData = (temp > -50 && temp < 100) || (humidity >= 0 && humidity <= 100) || (voltage > 0)
+  const hasValidData = 
+    (temp > -50 && temp < 100) ||
+    (humidity >= 0 && humidity <= 100) ||
+    voltageStatus === 'terhubung' ||
+    currentStatus === 'terhubung'
   
   if (!hasValidData) {
     return 'status-offline'
   }
   
-  if (temp > 30 || temp < 15 || (voltage > 0 && (voltage > 250 || voltage < 200))) {
+  if (
+    temp > 30 || temp < 15 ||
+    (voltageStatus === 'terhubung' && (voltage > 250 || voltage < 180)) ||
+    (currentStatus === 'terhubung' && current > 80) ||
+    voltageStatus !== 'terhubung' ||
+    currentStatus !== 'terhubung'
+  ) {
     return 'status-warning'
   }
   

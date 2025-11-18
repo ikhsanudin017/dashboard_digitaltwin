@@ -66,15 +66,34 @@ const props = defineProps({
 
 const temperature = computed(() => props.sensorData.temperature || 0)
 const humidity = computed(() => props.sensorData.humidity || 0)
-const voltage = computed(() => 0)
-const current = computed(() => 0)
-const power = computed(() => 0)
+const voltage = computed(() => props.sensorData.voltage || 0)
+const current = computed(() => props.sensorData.current || 0)
+const power = computed(() => props.sensorData.power || 0)
 
 const formatValue = (value) => {
   return Number(value || 0).toFixed(1)
 }
 
 const getStatusClass = (type) => {
+  if (type === 'voltage') {
+    return props.sensorData.voltageStatus === 'terhubung'
+      ? 'status-online'
+      : 'status-offline'
+  }
+
+  if (type === 'current') {
+    return props.sensorData.currentStatus === 'terhubung'
+      ? 'status-online'
+      : 'status-offline'
+  }
+
+  if (type === 'power') {
+    const hasPower = Number(props.sensorData.power || 0) > 0
+    const onlineVoltage = props.sensorData.voltageStatus === 'terhubung'
+    const onlineCurrent = props.sensorData.currentStatus === 'terhubung'
+    return hasPower && onlineVoltage && onlineCurrent ? 'status-online' : 'status-offline'
+  }
+
   const value = props.sensorData[type]
   const num = parseFloat(value)
   

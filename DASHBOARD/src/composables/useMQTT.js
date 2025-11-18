@@ -5,7 +5,12 @@ export function useMQTT() {
   const mqttConnected = ref(false)
   const sensorData = ref({
     temperature: 0,
-    humidity: 0
+    humidity: 0,
+    voltage: 0,
+    current: 0,
+    power: 0,
+    voltageStatus: 'unknown',
+    currentStatus: 'unknown'
   })
   
   let client = null
@@ -53,16 +58,48 @@ export function useMQTT() {
         const data = JSON.parse(msg)
         console.log('📨 Parsed:', data)
         
-        // Update temperature dan humidity
-        if (data.suhu !== undefined) {
-          sensorData.value.temperature = parseFloat(data.suhu)
-          console.log('🌡️ Temperature:', sensorData.value.temperature)
-        }
-        if (data.kelembaban !== undefined) {
-          sensorData.value.humidity = parseFloat(data.kelembaban)
-          console.log('💧 Humidity:', sensorData.value.humidity)
+        const nextData = {
+          ...sensorData.value
         }
         
+        if (data.suhu !== undefined) {
+          nextData.temperature = parseFloat(data.suhu)
+          console.log('🌡️ Temperature:', nextData.temperature)
+        }
+        if (data.kelembaban !== undefined) {
+          nextData.humidity = parseFloat(data.kelembaban)
+          console.log('💧 Humidity:', nextData.humidity)
+        }
+        if (data.tegangan !== undefined) {
+          nextData.voltage = parseFloat(data.tegangan)
+          console.log('🔌 Voltage:', nextData.voltage)
+        }
+        if (data.arus !== undefined) {
+          nextData.current = parseFloat(data.arus)
+          console.log('⚡ Current:', nextData.current)
+        }
+        if (data.daya !== undefined) {
+          const parsedPower = parseFloat(data.daya)
+          if (!isNaN(parsedPower)) {
+            nextData.power = parsedPower
+            console.log('💡 Power (payload):', nextData.power)
+          }
+        }
+        if (data.status_tegangan) {
+          nextData.voltageStatus = data.status_tegangan
+          console.log('📡 Voltage status:', nextData.voltageStatus)
+        }
+        if (data.status_arus) {
+          nextData.currentStatus = data.status_arus
+          console.log('📡 Current status:', nextData.currentStatus)
+        }
+        
+        if ((!data.daya || nextData.power === 0) && (nextData.voltage > 0) && (nextData.current > 0)) {
+          nextData.power = parseFloat((nextData.voltage * nextData.current).toFixed(1))
+          console.log('💡 Power (computed):', nextData.power)
+        }
+        
+        sensorData.value = { ...nextData }
         console.log('✅ Updated:', sensorData.value)
       } catch (e) {
         console.error('❌ Parse error:', e.message)
