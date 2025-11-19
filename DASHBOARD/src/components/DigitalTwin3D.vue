@@ -568,10 +568,7 @@ const createSensors = () => {
     type: 'sensor',
     name: 'Sensor Arus (SCT-013)',
     sensorType: 'current',
-    data: { 
-      current: props.sensorData.current,
-      status: props.sensorData.currentStatus
-    }
+    data: { current: props.sensorData.current }
   }
   scene.add(currentSensor)
   sensors.push({ mesh: currentSensor, type: 'current' })
@@ -588,10 +585,7 @@ const createSensors = () => {
     type: 'sensor',
     name: 'Sensor Tegangan (ZMPT101B)',
     sensorType: 'voltage',
-    data: { 
-      voltage: props.sensorData.voltage,
-      status: props.sensorData.voltageStatus
-    }
+    data: { voltage: props.sensorData.voltage }
   }
   scene.add(voltageSensor)
   sensors.push({ mesh: voltageSensor, type: 'voltage' })
@@ -1003,16 +997,14 @@ const updateSelectedItem = () => {
   let data = { ...userData.data }
   
   // Update dengan data real-time dari MQTT
-  if (userData.sensorType === 'temperature') {
-    // Sensor suhu/kelembaban
+  if (userData.sensorType === 'temperature' || userData.type === 'sensor') {
+    // Untuk sensor DHT11/DHT22, update suhu dan kelembaban
     data.temperature = props.sensorData.temperature
     data.humidity = props.sensorData.humidity
   } else if (userData.sensorType === 'current') {
     data.current = props.sensorData.current
-    data.status = props.sensorData.currentStatus
   } else if (userData.sensorType === 'voltage') {
     data.voltage = props.sensorData.voltage
-    data.status = props.sensorData.voltageStatus
   } else if (userData.deviceType === 'rpi') {
     data.peopleCount = props.peopleCount
   } else if (userData.deviceType === 'ac') {
@@ -1032,9 +1024,12 @@ const updateSelectedItem = () => {
   let statusText = 'Aktif'
   
   if (userData.type === 'sensor') {
+    // Untuk sensor DHT11/DHT22, cek apakah ada data valid
+    // Untuk temperature sensor, cek temperature dan humidity
     if (userData.sensorType === 'temperature') {
       const hasTemp = data.temperature !== undefined && data.temperature !== null
       const hasHum = data.humidity !== undefined && data.humidity !== null
+      // Sensor online jika ada data temperature atau humidity (bisa 0 untuk suhu di tempat dingin)
       if (hasTemp || hasHum) {
         status = 'online'
         statusText = 'Aktif'
@@ -1042,25 +1037,8 @@ const updateSelectedItem = () => {
         status = 'offline'
         statusText = 'Offline'
       }
-    } else if (userData.sensorType === 'current') {
-      const currentStatus = props.sensorData.currentStatus
-      if (currentStatus === 'terhubung') {
-        status = 'online'
-        statusText = 'Sensor Terhubung'
-      } else {
-        status = 'offline'
-        statusText = 'Tidak Terhubung'
-      }
-    } else if (userData.sensorType === 'voltage') {
-      const voltageStatus = props.sensorData.voltageStatus
-      if (voltageStatus === 'terhubung') {
-        status = 'online'
-        statusText = 'Sensor Terhubung'
-      } else {
-        status = 'offline'
-        statusText = 'Tidak Terhubung'
-      }
     } else {
+      // Untuk sensor lain (voltage, current), cek nilai bukan 0
       const value = Object.values(data)[0]
       if (value !== undefined && value !== null && value !== 0) {
         status = 'online'
@@ -1132,14 +1110,7 @@ const formatValue = (key, value) => {
   if (key === 'current') return `${value}A`
   if (key === 'power') return `${value}W`
   if (key === 'connected') return value ? 'Ya' : 'Tidak'
-  if (key === 'status') {
-    if (value === 'on' || value === 'recording') return 'Aktif'
-    if (value === 'terhubung') return 'Terhubung'
-    if (value === 'tidak_terhubung') return 'Tidak Terhubung'
-    if (value === 'online') return 'Online'
-    if (value === 'offline') return 'Offline'
-    return value ?? 'Tidak Aktif'
-  }
+  if (key === 'status') return value === 'on' || value === 'recording' ? 'Aktif' : 'Tidak Aktif'
   if (key === 'mode') return value === 'cooling' ? 'Pendingin' : value
   if (key === 'targetTemp') return `${value}°C`
   if (key === 'peopleDetected') return `${value} orang`
