@@ -94,16 +94,16 @@ const initThreeJS = () => {
   }
 
   try {
-    // Scene dengan background terang
+    // Scene dengan background gradient effect
     scene = new THREE.Scene()
-    scene.background = new THREE.Color(0xe8f4f8)
-    // Tidak menggunakan fog untuk tampilan lebih terang
+    scene.background = new THREE.Color(0xf0f8ff)
+    scene.fog = new THREE.FogExp2(0xf0f8ff, 0.015)
 
-    // Camera
+    // Camera dengan smooth controls
     const width = container.value.clientWidth || 800
     const height = container.value.clientHeight || 500
     camera = new THREE.PerspectiveCamera(
-      60,
+      55,
       width / height,
       0.1,
       1000
@@ -111,46 +111,76 @@ const initThreeJS = () => {
     camera.position.set(20, 15, 20)
     camera.lookAt(0, 0, 0)
 
-    // Renderer dengan antialiasing dan shadow
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    // Renderer dengan enhanced quality
+    renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance"
+    })
     renderer.setSize(width, height)
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.2
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.outputColorSpace = THREE.SRGBColorSpace
     container.value.appendChild(renderer.domElement)
   } catch (error) {
     console.error('Error initializing Three.js:', error)
     return
   }
 
-  // Lighting yang lebih terang dan natural
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.9)
-  scene.add(ambientLight)
+  // Enhanced lighting setup dengan multiple light sources
+  // Hemisphere light untuk natural ambient
+  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8)
+  hemisphereLight.position.set(0, 20, 0)
+  scene.add(hemisphereLight)
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2)
-  directionalLight.position.set(15, 20, 10)
+  // Main directional light dengan improved shadows
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5)
+  directionalLight.position.set(15, 25, 10)
   directionalLight.castShadow = true
-  directionalLight.shadow.camera.left = -20
-  directionalLight.shadow.camera.right = 20
-  directionalLight.shadow.camera.top = 20
-  directionalLight.shadow.camera.bottom = -20
-  directionalLight.shadow.mapSize.width = 2048
-  directionalLight.shadow.mapSize.height = 2048
+  directionalLight.shadow.camera.left = -25
+  directionalLight.shadow.camera.right = 25
+  directionalLight.shadow.camera.top = 25
+  directionalLight.shadow.camera.bottom = -25
+  directionalLight.shadow.camera.near = 0.5
+  directionalLight.shadow.camera.far = 50
+  directionalLight.shadow.mapSize.width = 4096
+  directionalLight.shadow.mapSize.height = 4096
+  directionalLight.shadow.bias = -0.0001
+  directionalLight.shadow.normalBias = 0.02
   scene.add(directionalLight)
 
-  // Additional directional light dari sisi lain untuk mengurangi shadow
-  const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5)
-  directionalLight2.position.set(-15, 15, -10)
-  scene.add(directionalLight2)
+  // Fill light untuk mengurangi shadow yang terlalu gelap
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.4)
+  fillLight.position.set(-15, 10, -10)
+  scene.add(fillLight)
 
-  // Point light untuk accent (lebih subtle)
-  const pointLight1 = new THREE.PointLight(0x4ecdc4, 0.3, 30)
-  pointLight1.position.set(-5, 3, -5)
+  // Rim light untuk depth
+  const rimLight = new THREE.DirectionalLight(0x88ccff, 0.6)
+  rimLight.position.set(-20, 5, 20)
+  scene.add(rimLight)
+
+  // Accent point lights dengan better positioning
+  const pointLight1 = new THREE.PointLight(0x4ecdc4, 0.8, 25)
+  pointLight1.position.set(-8, 4, -8)
+  pointLight1.castShadow = true
+  pointLight1.shadow.mapSize.width = 1024
+  pointLight1.shadow.mapSize.height = 1024
   scene.add(pointLight1)
 
-  const pointLight2 = new THREE.PointLight(0xff6b6b, 0.3, 30)
-  pointLight2.position.set(5, 3, -5)
+  const pointLight2 = new THREE.PointLight(0xff6b6b, 0.8, 25)
+  pointLight2.position.set(8, 4, -8)
+  pointLight2.castShadow = true
+  pointLight2.shadow.mapSize.width = 1024
+  pointLight2.shadow.mapSize.height = 1024
   scene.add(pointLight2)
+
+  // Warm accent light
+  const warmLight = new THREE.PointLight(0xffd700, 0.5, 20)
+  warmLight.position.set(0, 3, 8)
+  scene.add(warmLight)
 
   // Raycaster untuk deteksi klik
   raycaster = new THREE.Raycaster()
@@ -174,41 +204,46 @@ const initThreeJS = () => {
 }
 
 const createRoom = () => {
-  // Floor dengan texture pattern dan tiles (lebih terang)
-  const floorGeometry = new THREE.PlaneGeometry(30, 30, 10, 10)
+  // Enhanced floor dengan better material properties
+  const floorGeometry = new THREE.PlaneGeometry(30, 30, 20, 20)
   const floorMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0xd5dbdb,
-    roughness: 0.6,
-    metalness: 0.1
+    color: 0xe8e8e8,
+    roughness: 0.7,
+    metalness: 0.05,
+    envMapIntensity: 0.5
   })
   const floor = new THREE.Mesh(floorGeometry, floorMaterial)
   floor.rotation.x = -Math.PI / 2
   floor.receiveShadow = true
   scene.add(floor)
 
-  // Add floor pattern (tiles) dengan warna lebih terang
+  // Enhanced floor pattern dengan better visual depth
   const tileGroup = new THREE.Group()
   for (let i = -15; i < 15; i += 3) {
     for (let j = -15; j < 15; j += 3) {
+      const isBorder = i % 6 === 0 || j % 6 === 0
       const tile = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.8, 2.8),
+        new THREE.PlaneGeometry(2.9, 2.9),
         new THREE.MeshStandardMaterial({ 
-          color: i % 6 === 0 || j % 6 === 0 ? 0xcacfd2 : 0xd5dbdb,
-          roughness: 0.5
+          color: isBorder ? 0xd0d0d0 : 0xf0f0f0,
+          roughness: isBorder ? 0.4 : 0.6,
+          metalness: isBorder ? 0.1 : 0.05
         })
       )
       tile.rotation.x = -Math.PI / 2
-      tile.position.set(i, 0.01, j)
+      tile.position.set(i, 0.005, j)
+      tile.receiveShadow = true
       tileGroup.add(tile)
     }
   }
   scene.add(tileGroup)
 
-  // Walls dengan detail (lebih terang)
+  // Enhanced walls dengan better material properties
   const wallMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0xffffff,
-    roughness: 0.6,
-    metalness: 0.05
+    color: 0xfafafa,
+    roughness: 0.7,
+    metalness: 0.02,
+    envMapIntensity: 0.3
   })
 
   // Back wall
@@ -240,16 +275,20 @@ const createRoom = () => {
   rightWall.receiveShadow = true
   scene.add(rightWall)
 
-  // Ceiling dengan detail (lebih terang)
+  // Enhanced ceiling dengan better lighting properties
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(30, 30),
     new THREE.MeshStandardMaterial({ 
-      color: 0xffffff,
-      roughness: 0.7
+      color: 0xf5f5f5,
+      roughness: 0.8,
+      metalness: 0.01,
+      emissive: 0xffffff,
+      emissiveIntensity: 0.05
     })
   )
   ceiling.rotation.x = Math.PI / 2
   ceiling.position.y = 12
+  ceiling.receiveShadow = true
   scene.add(ceiling)
 
   // Add ceiling lights
@@ -305,31 +344,58 @@ const createRoom = () => {
 const createCeilingLight = () => {
   const group = new THREE.Group()
   
-  // Light fixture base
+  // Enhanced light fixture base dengan better material
   const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.5, 0.5, 0.2, 16),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.8, roughness: 0.2 })
+    new THREE.CylinderGeometry(0.5, 0.5, 0.2, 32),
+    new THREE.MeshStandardMaterial({ 
+      color: 0xffffff, 
+      metalness: 0.9, 
+      roughness: 0.1,
+      envMapIntensity: 1.0
+    })
   )
   base.position.y = 0.1
+  base.castShadow = true
   group.add(base)
 
-  // Light glow
+  // Enhanced light glow dengan better emissive
   const glow = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.4, 0.05, 16),
+    new THREE.CylinderGeometry(0.45, 0.45, 0.08, 32),
     new THREE.MeshStandardMaterial({ 
-      color: 0xffffaa, 
+      color: 0xffffdd, 
       transparent: true, 
-      opacity: 0.6,
+      opacity: 0.8,
       emissive: 0xffffaa,
-      emissiveIntensity: 0.5
+      emissiveIntensity: 1.2
     })
   )
   group.add(glow)
 
-  // Point light
-  const light = new THREE.PointLight(0xffffff, 0.5, 10)
+  // Inner glow ring
+  const innerGlow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.35, 0.35, 0.03, 32),
+    new THREE.MeshBasicMaterial({ 
+      color: 0xffffff, 
+      transparent: true, 
+      opacity: 0.9,
+      emissive: 0xffffff,
+      emissiveIntensity: 2.0
+    })
+  )
+  group.add(innerGlow)
+
+  // Enhanced point light dengan better range
+  const light = new THREE.PointLight(0xffffff, 1.2, 15, 2)
   light.position.set(0, 0, 0)
+  light.castShadow = true
+  light.shadow.mapSize.width = 512
+  light.shadow.mapSize.height = 512
   group.add(light)
+
+  // Store reference untuk animasi
+  group.userData.glow = glow
+  group.userData.innerGlow = innerGlow
+  group.userData.light = light
 
   return group
 }
@@ -556,57 +622,97 @@ const createSensors = () => {
 const createAdvancedSensor = (color, label, type, data) => {
   const group = new THREE.Group()
 
-  // Main sensor body dengan glow
-  const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5)
+  // Enhanced main sensor body dengan better PBR
+  const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5, 2, 2, 2)
   const material = new THREE.MeshStandardMaterial({ 
     color,
     emissive: color,
-    emissiveIntensity: 0.5,
-    metalness: 0.7,
-    roughness: 0.3
+    emissiveIntensity: 0.6,
+    metalness: 0.8,
+    roughness: 0.2,
+    envMapIntensity: 1.0
   })
   const box = new THREE.Mesh(geometry, material)
   box.castShadow = true
+  box.receiveShadow = true
   group.add(box)
 
-  // Glow effect dengan ring
-  const ringGeometry = new THREE.TorusGeometry(1.2, 0.1, 8, 16)
-  const ringMaterial = new THREE.MeshBasicMaterial({ 
+  // Enhanced glow effect dengan multiple rings
+  const ringGeometry = new THREE.TorusGeometry(1.2, 0.08, 16, 32)
+  const ringMaterial = new THREE.MeshStandardMaterial({ 
     color,
     transparent: true,
-    opacity: 0.6
+    opacity: 0.7,
+    emissive: color,
+    emissiveIntensity: 0.8,
+    metalness: 0.9,
+    roughness: 0.1
   })
   const ring = new THREE.Mesh(ringGeometry, ringMaterial)
   ring.rotation.x = Math.PI / 2
   ring.position.y = 0.75
   group.add(ring)
 
-  // Status indicator (sphere di atas)
-  const indicatorGeometry = new THREE.SphereGeometry(0.2, 16, 16)
+  // Outer glow ring
+  const outerRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.4, 0.05, 12, 24),
+    new THREE.MeshBasicMaterial({ 
+      color,
+      transparent: true,
+      opacity: 0.4
+    })
+  )
+  outerRing.rotation.x = Math.PI / 2
+  outerRing.position.y = 0.75
+  group.add(outerRing)
+
+  // Enhanced status indicator dengan pulse effect
+  const indicatorGeometry = new THREE.SphereGeometry(0.25, 24, 24)
   const indicatorMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x27ae60,
     emissive: 0x27ae60,
-    emissiveIntensity: 1
+    emissiveIntensity: 1.5,
+    metalness: 0.3,
+    roughness: 0.7
   })
   const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial)
   indicator.position.y = 1.2
+  indicator.castShadow = true
   group.add(indicator)
 
-  // Label plane
-  const labelGeometry = new THREE.PlaneGeometry(3, 0.8)
-  const labelMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0x000000,
+  // Glow sphere untuk indicator
+  const indicatorGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 16, 16),
+    new THREE.MeshBasicMaterial({ 
+      color: 0x27ae60,
+      transparent: true,
+      opacity: 0.3,
+      emissive: 0x27ae60
+    })
+  )
+  indicatorGlow.position.y = 1.2
+  group.add(indicatorGlow)
+
+  // Enhanced label plane dengan better visibility
+  const labelGeometry = new THREE.PlaneGeometry(3.5, 1.0)
+  const labelMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x1a1a1a,
     transparent: true,
-    opacity: 0.8
+    opacity: 0.85,
+    roughness: 0.5,
+    metalness: 0.1
   })
   const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial)
   labelMesh.position.set(0, -1.2, 0)
   labelMesh.rotation.x = -Math.PI / 2
+  labelMesh.receiveShadow = true
   group.add(labelMesh)
 
   // Store reference untuk animasi
   group.userData.ring = ring
+  group.userData.outerRing = outerRing
   group.userData.indicator = indicator
+  group.userData.indicatorGlow = indicatorGlow
   group.userData.box = box
 
   return group
@@ -1048,18 +1154,42 @@ const animate = () => {
     return
   }
 
-  // Animate sensors
-  sensors.forEach(sensor => {
+  // Enhanced sensor animations dengan smooth effects
+  const time = Date.now() * 0.001
+  sensors.forEach((sensor, index) => {
     if (sensor.mesh.userData.ring) {
-      sensor.mesh.userData.ring.rotation.z += 0.02
+      sensor.mesh.userData.ring.rotation.z += 0.015
+      // Pulse effect untuk ring
+      const pulse = 1 + Math.sin(time * 2 + index) * 0.1
+      sensor.mesh.userData.ring.scale.set(pulse, pulse, 1)
     }
-    sensor.mesh.rotation.y += 0.005
+    if (sensor.mesh.userData.outerRing) {
+      sensor.mesh.userData.outerRing.rotation.z -= 0.01
+      const pulse = 1 + Math.sin(time * 1.5 + index) * 0.15
+      sensor.mesh.userData.outerRing.scale.set(pulse, pulse, 1)
+    }
+    if (sensor.mesh.userData.indicatorGlow) {
+      const glowPulse = 0.3 + Math.sin(time * 3 + index) * 0.2
+      sensor.mesh.userData.indicatorGlow.material.opacity = glowPulse
+      sensor.mesh.userData.indicatorGlow.scale.set(
+        1 + Math.sin(time * 2 + index) * 0.2,
+        1 + Math.sin(time * 2 + index) * 0.2,
+        1 + Math.sin(time * 2 + index) * 0.2
+      )
+    }
+    sensor.mesh.rotation.y += 0.003
+    // Subtle floating animation
+    sensor.mesh.position.y = 1.5 + Math.sin(time + index) * 0.05
   })
 
-  // Animate people
+  // Enhanced people animations dengan smooth movement
+  const peopleTime = Date.now() * 0.001
   peopleIndicators.forEach((person, index) => {
-    person.rotation.y += 0.01
-    person.position.y = 0.9 + Math.sin(Date.now() * 0.001 + index) * 0.1
+    person.rotation.y += 0.008
+    // Smooth floating animation
+    person.position.y = 0.9 + Math.sin(peopleTime * 1.5 + index * 0.5) * 0.08
+    // Subtle rotation untuk natural movement
+    person.rotation.x = Math.sin(peopleTime * 0.5 + index) * 0.05
   })
 
   // Animate AC
@@ -1077,19 +1207,40 @@ const animate = () => {
     }
   })
 
-  // Animate CCTV cameras (slow rotation)
-  scene.children.forEach(child => {
+  // Enhanced CCTV camera animations
+  const cctvTime = Date.now() * 0.001
+  scene.children.forEach((child, index) => {
     if (child.userData && child.userData.deviceType === 'cctv') {
-      // Slow pan rotation
-      child.rotation.y += 0.002
-      // Pulse LED
+      // Smooth pan rotation dengan easing
+      child.rotation.y += 0.0015 + Math.sin(cctvTime * 0.1 + index) * 0.0005
+      // Enhanced pulse LED dengan better timing
       if (child.userData.led && child.userData.led.material.type === 'MeshStandardMaterial') {
-        const intensity = 0.7 + Math.sin(Date.now() * 0.005) * 0.3
+        const intensity = 0.8 + Math.sin(cctvTime * 4 + index) * 0.4
         child.userData.led.material.emissiveIntensity = intensity
+        // Scale pulse
+        const scale = 1 + Math.sin(cctvTime * 6 + index) * 0.1
+        child.userData.led.scale.set(scale, scale, scale)
       }
-      // Lens reflection effect
+      // Enhanced lens reflection effect
       if (child.userData.lens) {
-        child.userData.lens.rotation.y = Math.sin(Date.now() * 0.002) * 0.2
+        child.userData.lens.rotation.y = Math.sin(cctvTime * 0.3 + index) * 0.15
+        // Lens glow effect
+        if (child.userData.lens.material.type === 'MeshStandardMaterial') {
+          const lensIntensity = 0.3 + Math.sin(cctvTime * 2 + index) * 0.1
+          child.userData.lens.material.emissiveIntensity = lensIntensity
+        }
+      }
+    }
+  })
+  
+  // Animate ceiling lights
+  scene.children.forEach((child, index) => {
+    if (child.userData && child.userData.glow) {
+      const lightTime = Date.now() * 0.001
+      const pulse = 1 + Math.sin(lightTime * 2 + index) * 0.05
+      child.userData.glow.material.emissiveIntensity = 1.2 + Math.sin(lightTime * 3 + index) * 0.3
+      if (child.userData.innerGlow) {
+        child.userData.innerGlow.material.emissiveIntensity = 2.0 + Math.sin(lightTime * 4 + index) * 0.5
       }
     }
   })
@@ -1099,8 +1250,30 @@ const animate = () => {
 }
 
 const resetCamera = () => {
-  camera.position.set(20, 15, 20)
-  camera.lookAt(0, 0, 0)
+  // Smooth camera transition
+  const startPos = camera.position.clone()
+  const targetPos = new THREE.Vector3(20, 15, 20)
+  const startTime = Date.now()
+  const duration = 1000 // 1 second
+
+  const animateCamera = () => {
+    const elapsed = Date.now() - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    
+    // Easing function (easeInOutCubic)
+    const eased = progress < 0.5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2
+    
+    camera.position.lerpVectors(startPos, targetPos, eased)
+    camera.lookAt(0, 0, 0)
+    
+    if (progress < 1) {
+      requestAnimationFrame(animateCamera)
+    }
+  }
+  
+  animateCamera()
 }
 
 const toggleAnimation = () => {
@@ -1158,11 +1331,14 @@ const cleanup = () => {
 .canvas-container {
   width: 100%;
   height: 500px;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  background: linear-gradient(135deg, #e8f4f8 0%, #d5e8f0 100%);
+  background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 50%, #ddeeff 100%);
   position: relative;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  backdrop-filter: blur(10px);
 }
 
 .controls {
