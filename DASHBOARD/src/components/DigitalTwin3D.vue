@@ -997,14 +997,25 @@ const updateSelectedItem = () => {
   let data = { ...userData.data }
   
   // Update dengan data real-time dari MQTT
-  if (userData.sensorType === 'temperature' || userData.type === 'sensor') {
-    // Untuk sensor DHT11/DHT22, update suhu dan kelembaban
+  if (userData.sensorType === 'temperature') {
+    // Hanya untuk sensor DHT11/DHT22, update suhu dan kelembaban
     data.temperature = props.sensorData.temperature
     data.humidity = props.sensorData.humidity
+    // Hapus field yang tidak relevan
+    delete data.current
+    delete data.voltage
   } else if (userData.sensorType === 'current') {
     data.current = props.sensorData.current
+    // Hapus field yang tidak relevan
+    delete data.temperature
+    delete data.humidity
+    delete data.voltage
   } else if (userData.sensorType === 'voltage') {
     data.voltage = props.sensorData.voltage
+    // Hapus field yang tidak relevan
+    delete data.temperature
+    delete data.humidity
+    delete data.current
   } else if (userData.deviceType === 'rpi') {
     data.peopleCount = props.peopleCount
   } else if (userData.deviceType === 'ac') {
