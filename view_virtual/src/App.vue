@@ -49,6 +49,12 @@
           </div>
         </div>
 
+        <!-- Row 1.5: Camera Stream -->
+        <div class="card" style="margin-bottom: 20px;">
+          <h2>📹 Live Camera Stream - People Counter</h2>
+          <CameraStream />
+        </div>
+
         <!-- Row 2: Grafik Data Historis -->
         <div class="grid grid-3">
           <div class="card">
@@ -89,6 +95,7 @@ import TemperatureChart from './components/TemperatureChart.vue'
 import ElectricityChart from './components/ElectricityChart.vue'
 import PeopleChart from './components/PeopleChart.vue'
 import DataTable from './components/DataTable.vue'
+import CameraStream from './components/CameraStream.vue'
 import { useMQTT } from './composables/useMQTT'
 
 // Dark Mode / Light Mode Toggle
@@ -198,13 +205,11 @@ watch(sensorData, (newData) => {
     }
     lastPowerTimestamp = now
   }
-}, { deep: true })
-
-watch(peopleCount, (value) => {
-  if (typeof value === 'number') {
-    addDataPoint(peopleData, value)
+  if (typeof newData.peopleCount === 'number') {
+    peopleCount.value = newData.peopleCount
+    addDataPoint(peopleData, newData.peopleCount)
   }
-})
+}, { deep: true })
 
 onUnmounted(() => {
   disconnectMQTT()

@@ -10,7 +10,9 @@ export function useMQTT() {
     current: 0,
     power: 0,
     voltageStatus: 'unknown',
-    currentStatus: 'unknown'
+    currentStatus: 'unknown',
+    peopleCount: 0,
+    lastPeopleUpdate: null
   })
   
   let client = null
@@ -36,6 +38,11 @@ export function useMQTT() {
       // Subscribe ke topic spesifik
       client.subscribe('sensor/dht11/data', (err) => {
         if (!err) console.log('✅ Subscribed: sensor/dht11/data')
+      })
+      
+      // Subscribe ke topic people counter
+      client.subscribe('sensor/camera/people', (err) => {
+        if (!err) console.log('✅ Subscribed: sensor/camera/people')
       })
       
       // Subscribe ke SEMUA topic untuk debugging
@@ -92,6 +99,13 @@ export function useMQTT() {
         if (data.status_arus) {
           nextData.currentStatus = data.status_arus
           console.log('📡 Current status:', nextData.currentStatus)
+        }
+        
+        // Handle people counter data
+        if (data.jumlahOrang !== undefined) {
+          nextData.peopleCount = parseInt(data.jumlahOrang)
+          nextData.lastPeopleUpdate = new Date().toLocaleTimeString()
+          console.log('👥 People Count:', nextData.peopleCount)
         }
         
         if ((!data.daya || nextData.power === 0) && (nextData.voltage > 0) && (nextData.current > 0)) {
