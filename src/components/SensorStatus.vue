@@ -122,7 +122,7 @@ const getStatusClass = (type) => {
 }
 
 .sensor-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--bg-card);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: 20px;
@@ -133,7 +133,7 @@ const getStatusClass = (type) => {
   position: relative;
   border: 2px solid transparent;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px var(--shadow-sm);
   overflow: hidden;
   animation: cardFadeIn 0.6s ease-out backwards;
 }
@@ -173,12 +173,20 @@ const getStatusClass = (type) => {
 
 .sensor-card:hover {
   transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 16px 40px var(--shadow-md);
 }
 
+/* Temperature card - Red tint with proper contrast */
 .sensor-card.temperature {
   border-color: rgba(231, 76, 60, 0.3);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 245, 245, 0.95) 100%);
+}
+
+[data-theme="light"] .sensor-card.temperature {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(255, 245, 245, 0.95) 100%);
+}
+
+[data-theme="dark"] .sensor-card.temperature {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.85) 100%);
 }
 
 .sensor-card.temperature:hover {
@@ -190,9 +198,17 @@ const getStatusClass = (type) => {
   color: #e74c3c;
 }
 
+/* Humidity card - Blue tint */
 .sensor-card.humidity {
   border-color: rgba(52, 152, 219, 0.3);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 250, 255, 0.95) 100%);
+}
+
+[data-theme="light"] .sensor-card.humidity {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(245, 250, 255, 0.95) 100%);
+}
+
+[data-theme="dark"] .sensor-card.humidity {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.85) 100%);
 }
 
 .sensor-card.humidity:hover {
@@ -204,9 +220,17 @@ const getStatusClass = (type) => {
   color: #3498db;
 }
 
+/* Voltage card - Purple tint */
 .sensor-card.voltage {
   border-color: rgba(155, 89, 182, 0.3);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 245, 255, 0.95) 100%);
+}
+
+[data-theme="light"] .sensor-card.voltage {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(250, 245, 255, 0.95) 100%);
+}
+
+[data-theme="dark"] .sensor-card.voltage {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.85) 100%);
 }
 
 .sensor-card.voltage:hover {
@@ -218,9 +242,17 @@ const getStatusClass = (type) => {
   color: #9b59b6;
 }
 
+/* Current card - Orange tint */
 .sensor-card.current {
   border-color: rgba(243, 156, 18, 0.3);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 250, 245, 0.95) 100%);
+}
+
+[data-theme="light"] .sensor-card.current {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(255, 250, 245, 0.95) 100%);
+}
+
+[data-theme="dark"] .sensor-card.current {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.85) 100%);
 }
 
 .sensor-card.current:hover {
@@ -232,9 +264,17 @@ const getStatusClass = (type) => {
   color: #f39c12;
 }
 
+/* Power card - Green tint */
 .sensor-card.power {
   border-color: rgba(39, 174, 96, 0.3);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 255, 250, 0.95) 100%);
+}
+
+[data-theme="light"] .sensor-card.power {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(245, 255, 250, 0.95) 100%);
+}
+
+[data-theme="dark"] .sensor-card.power {
+  background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.85) 100%);
 }
 
 .sensor-card.power:hover {
@@ -270,17 +310,18 @@ const getStatusClass = (type) => {
 
 .sensor-label {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  transition: color 0.3s ease;
 }
 
 .sensor-value {
   font-size: 28px;
   font-weight: 800;
-  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -295,8 +336,9 @@ const getStatusClass = (type) => {
 
 .sensor-desc {
   font-size: 11px;
-  color: #95a5a6;
+  color: var(--text-muted);
   font-weight: 500;
+  transition: color 0.3s ease;
 }
 
 .sensor-status-indicator {
@@ -307,23 +349,23 @@ const getStatusClass = (type) => {
   height: 14px;
   border-radius: 50%;
   animation: pulseGlow 2s infinite;
-  border: 2px solid white;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 0 0 3px var(--border-color);
 }
 
 .status-online {
-  background: #27ae60;
-  box-shadow: 0 0 12px #27ae60, 0 0 24px rgba(39, 174, 96, 0.4);
+  background: var(--status-online);
+  box-shadow: 0 0 12px var(--status-online), 0 0 24px rgba(39, 174, 96, 0.4);
 }
 
 .status-offline {
-  background: #e74c3c;
-  box-shadow: 0 0 12px #e74c3c, 0 0 24px rgba(231, 76, 60, 0.4);
+  background: var(--status-offline);
+  box-shadow: 0 0 12px var(--status-offline), 0 0 24px rgba(231, 76, 60, 0.4);
 }
 
 .status-warning {
-  background: #f39c12;
-  box-shadow: 0 0 12px #f39c12, 0 0 24px rgba(243, 156, 18, 0.4);
+  background: var(--status-warning);
+  box-shadow: 0 0 12px var(--status-warning), 0 0 24px rgba(243, 156, 18, 0.4);
 }
 
 @keyframes pulseGlow {

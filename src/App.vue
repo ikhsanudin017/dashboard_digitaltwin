@@ -11,6 +11,11 @@
         
         <div class="header-right">
           <div class="header-actions">
+            <button @click="toggleTheme" class="theme-toggle" :title="isDarkMode ? 'Light Mode' : 'Dark Mode'">
+              <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
+              <span class="theme-text">{{ isDarkMode ? 'Light' : 'Dark' }}</span>
+            </button>
+            
             <div class="status-badge" :class="mqttConnected ? 'connected' : 'disconnected'">
               <span class="status-dot"></span>
               <span class="status-text">{{ mqttConnected ? 'MQTT Terhubung' : 'Mode DEMO' }}</span>
@@ -34,6 +39,7 @@
             <DigitalTwin3D 
               :sensor-data="sensorData"
               :people-count="peopleCount"
+              :is-dark-mode="isDarkMode"
             />
           </div>
           
@@ -47,17 +53,17 @@
         <div class="grid grid-3">
           <div class="card">
             <h2>🌡️ Suhu (24 Jam)</h2>
-            <TemperatureChart :data="temperatureData" />
+            <TemperatureChart :data="temperatureData" :is-dark-mode="isDarkMode" />
           </div>
           
           <div class="card">
             <h2>⚡ Konsumsi Listrik (7 Hari)</h2>
-            <ElectricityChart :data="electricityData" />
+            <ElectricityChart :data="electricityData" :is-dark-mode="isDarkMode" />
           </div>
           
           <div class="card">
             <h2>👥 Jumlah Orang (Real-time)</h2>
-            <PeopleChart :data="peopleData" />
+            <PeopleChart :data="peopleData" :is-dark-mode="isDarkMode" />
           </div>
         </div>
 
@@ -85,6 +91,38 @@ import PeopleChart from './components/PeopleChart.vue'
 import DataTable from './components/DataTable.vue'
 import { useMQTT } from './composables/useMQTT'
 
+// Dark Mode / Light Mode Toggle
+const isDarkMode = ref(false)
+
+// Load theme preference from localStorage
+const loadTheme = () => {
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme) {
+    isDarkMode.value = savedTheme === 'dark'
+  } else {
+    // Check system preference
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    isDarkMode.value = prefersDark
+  }
+  applyTheme()
+}
+
+// Apply theme to document
+const applyTheme = () => {
+  if (isDarkMode.value) {
+    document.documentElement.setAttribute('data-theme', 'dark')
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light')
+  }
+}
+
+// Toggle theme
+const toggleTheme = () => {
+  isDarkMode.value = !isDarkMode.value
+  localStorage.setItem('theme', isDarkMode.value ? 'dark' : 'light')
+  applyTheme()
+}
+
 const { 
   mqttConnected, 
   sensorData, 
@@ -106,11 +144,22 @@ let timeInterval = null
 let lastPowerTimestamp = Date.now()
 
 onMounted(() => {
+  loadTheme()
   connectMQTT()
   
   timeInterval = setInterval(() => {
     currentTime.value = new Date().toLocaleString('id-ID')
   }, 1000)
+  
+  // Listen for system theme changes
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  const handleThemeChange = (e) => {
+    if (!localStorage.getItem('theme')) {
+      isDarkMode.value = e.matches
+      applyTheme()
+    }
+  }
+  mediaQuery.addEventListener('change', handleThemeChange)
 })
 
 const MAX_POINTS = 60
@@ -170,15 +219,16 @@ onUnmounted(() => {
 }
 
 .header {
-  background: #ffffff;
+  background: var(--bg-header);
   padding: 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 12px var(--shadow-sm);
   margin-bottom: 30px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--border-dark);
   position: sticky;
   top: 0;
   z-index: 100;
   animation: slideDown 0.5s ease-out;
+  transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 @keyframes slideDown {
@@ -265,6 +315,42 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px var(--shadow-sm);
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--shadow-md);
+  border-color: var(--border-color-hover);
+}
+
+.theme-icon {
+  font-size: 16px;
+  transition: transform 0.3s ease;
+}
+
+.theme-toggle:hover .theme-icon {
+  transform: scale(1.1) rotate(10deg);
+}
+
+.theme-text {
+  font-weight: 600;
+}
+
 .status-badge {
   display: flex;
   align-items: center;
@@ -331,20 +417,20 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 500;
   padding: 10px 16px;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border-dark);
   white-space: nowrap;
   transition: all 0.3s ease;
 }
 
 .timestamp:hover {
-  background: #e9ecef;
-  border-color: rgba(0, 0, 0, 0.12);
+  background: var(--bg-card);
+  border-color: var(--border-color-hover);
 }
 
 .time-icon {
@@ -376,10 +462,11 @@ onUnmounted(() => {
 .card h2 {
   font-size: 22px;
   margin-bottom: 24px;
-  color: #2c3e50;
+  color: var(--text-primary);
   position: relative;
   padding-bottom: 12px;
   font-weight: 700;
+  transition: color 0.3s ease;
 }
 
 .card h2::after {

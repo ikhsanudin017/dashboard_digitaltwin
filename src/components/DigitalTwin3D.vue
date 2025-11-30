@@ -40,6 +40,10 @@ const props = defineProps({
   peopleCount: {
     type: Number,
     default: 0
+  },
+  isDarkMode: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -87,6 +91,34 @@ watch(() => props.peopleCount, (count) => {
   }
 })
 
+// Watch theme changes
+watch(() => props.isDarkMode, () => {
+  updateSceneTheme()
+})
+
+// Update scene theme based on dark mode
+const updateSceneTheme = () => {
+  if (!scene) return
+  
+  if (props.isDarkMode) {
+    // Dark mode colors
+    scene.background = new THREE.Color(0x0f172a)
+    if (scene.fog) {
+      scene.fog.color.setHex(0x0f172a)
+    } else {
+      scene.fog = new THREE.FogExp2(0x0f172a, 0.015)
+    }
+  } else {
+    // Light mode colors
+    scene.background = new THREE.Color(0xf0f8ff)
+    if (scene.fog) {
+      scene.fog.color.setHex(0xf0f8ff)
+    } else {
+      scene.fog = new THREE.FogExp2(0xf0f8ff, 0.015)
+    }
+  }
+}
+
 const initThreeJS = () => {
   if (!container.value) {
     console.error('Container not found')
@@ -96,8 +128,7 @@ const initThreeJS = () => {
   try {
     // Scene dengan background gradient effect
     scene = new THREE.Scene()
-    scene.background = new THREE.Color(0xf0f8ff)
-    scene.fog = new THREE.FogExp2(0xf0f8ff, 0.015)
+    updateSceneTheme()
 
     // Camera dengan smooth controls
     const width = container.value.clientWidth || 800
@@ -1315,12 +1346,13 @@ const cleanup = () => {
   height: 500px;
   border-radius: 16px;
   overflow: hidden;
-  background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 50%, #ddeeff 100%);
+  background: linear-gradient(135deg, var(--three-bg-start) 0%, var(--three-bg-end) 50%, var(--three-bg-tertiary) 100%);
   position: relative;
   box-shadow: 
-    0 10px 30px rgba(0, 0, 0, 0.2),
-    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    0 10px 30px var(--shadow-md),
+    0 0 0 1px var(--border-color) inset;
   backdrop-filter: blur(10px);
+  transition: background 0.3s ease;
 }
 
 .controls {
@@ -1365,14 +1397,16 @@ const cleanup = () => {
 }
 
 .popup-content {
-  background: white;
+  background: var(--bg-card);
   border-radius: 16px;
   padding: 30px;
   max-width: 400px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px var(--shadow-lg);
   position: relative;
   animation: slideUp 0.3s;
+  border: 1px solid var(--border-color);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .close-btn {
@@ -1394,8 +1428,9 @@ const cleanup = () => {
 
 .popup-content h3 {
   margin: 0 0 20px 0;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-size: 24px;
+  transition: color 0.3s ease;
 }
 
 .popup-details {
@@ -1406,7 +1441,8 @@ const cleanup = () => {
   display: flex;
   justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid #ecf0f1;
+  border-bottom: 1px solid var(--border-dark);
+  transition: border-color 0.3s ease;
 }
 
 .detail-row:last-child {
@@ -1415,13 +1451,15 @@ const cleanup = () => {
 
 .detail-label {
   font-weight: 600;
-  color: #7f8c8d;
+  color: var(--text-secondary);
+  transition: color 0.3s ease;
 }
 
 .detail-value {
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-size: 18px;
+  transition: color 0.3s ease;
 }
 
 .popup-status {
@@ -1429,9 +1467,10 @@ const cleanup = () => {
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: #f8f9fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
   font-weight: 600;
+  transition: background 0.3s ease;
 }
 
 .status-indicator {

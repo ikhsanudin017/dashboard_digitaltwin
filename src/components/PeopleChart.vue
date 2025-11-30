@@ -41,6 +41,10 @@ const props = defineProps({
   data: {
     type: Object,
     default: () => ({ labels: [], values: [] })
+  },
+  isDarkMode: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -74,87 +78,93 @@ const chartData = computed(() => ({
   ]
 }))
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: true,
-      position: 'top',
-      labels: {
-        usePointStyle: true,
-        padding: 15,
-        font: {
-          size: 12,
+const chartOptions = computed(() => {
+  const isDark = props.isDarkMode
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: {
+            size: 12,
+            weight: '600'
+          },
+          color: isDark ? '#b8b8c8' : '#7f8c8d'
+        }
+      },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        backgroundColor: isDark ? 'rgba(30, 30, 46, 0.95)' : 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+        titleFont: {
+          size: 13,
           weight: '600'
+        },
+        bodyFont: {
+          size: 12
+        },
+        borderColor: '#9b59b6',
+        borderWidth: 2,
+        cornerRadius: 8,
+        displayColors: true,
+        titleColor: isDark ? '#e8e8e8' : '#ffffff',
+        bodyColor: isDark ? '#b8b8c8' : '#ffffff'
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 25,
+        ticks: {
+          stepSize: 5,
+          font: {
+            size: 11
+          },
+          color: isDark ? '#b8b8c8' : '#95a5a6'
+        },
+        title: {
+          display: true,
+          text: 'Jumlah Orang',
+          font: {
+            size: 12,
+            weight: '600'
+          },
+          color: isDark ? '#b8b8c8' : '#7f8c8d'
+        },
+        grid: {
+          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
+          lineWidth: 1
+        }
+      },
+      x: {
+        grid: {
+          display: false
+        },
+        ticks: {
+          font: {
+            size: 11
+          },
+          color: isDark ? '#b8b8c8' : '#95a5a6'
         }
       }
     },
-    tooltip: {
-      mode: 'index',
-      intersect: false,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      padding: 12,
-      titleFont: {
-        size: 13,
-        weight: '600'
-      },
-      bodyFont: {
-        size: 12
-      },
-      borderColor: '#9b59b6',
-      borderWidth: 2,
-      cornerRadius: 8,
-      displayColors: true
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      max: 25,
-      ticks: {
-        stepSize: 5,
-        font: {
-          size: 11
-        },
-        color: '#95a5a6'
-      },
-      title: {
-        display: true,
-        text: 'Jumlah Orang',
-        font: {
-          size: 12,
-          weight: '600'
-        },
-        color: '#7f8c8d'
-      },
-      grid: {
-        color: 'rgba(0, 0, 0, 0.06)',
-        lineWidth: 1
-      }
+    interaction: {
+      mode: 'nearest',
+      axis: 'x',
+      intersect: false
     },
-    x: {
-      grid: {
-        display: false
-      },
-      ticks: {
-        font: {
-          size: 11
-        },
-        color: '#95a5a6'
-      }
+    animation: {
+      duration: 1000,
+      easing: 'easeInOutQuart'
     }
-  },
-  interaction: {
-    mode: 'nearest',
-    axis: 'x',
-    intersect: false
-  },
-  animation: {
-    duration: 1000,
-    easing: 'easeInOutQuart'
   }
-}
+})
 </script>
 
 <style scoped>

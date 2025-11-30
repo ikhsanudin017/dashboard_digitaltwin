@@ -152,10 +152,11 @@ table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--bg-card);
   backdrop-filter: blur(10px);
   border-radius: 16px;
   overflow: hidden;
+  transition: background 0.3s ease;
 }
 
 thead {
@@ -202,19 +203,27 @@ th:not(:last-child)::after {
 }
 
 tbody tr {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--border-dark);
   transition: all 0.3s ease;
-  background: white;
+  background: var(--bg-card);
 }
 
 tbody tr:nth-child(even) {
-  background: rgba(102, 126, 234, 0.02);
+  background: var(--bg-secondary);
 }
 
 tbody tr:hover {
-  background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  background: var(--bg-secondary);
   transform: scale(1.01);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px var(--shadow-sm);
+}
+
+[data-theme="light"] tbody tr:hover {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+}
+
+[data-theme="dark"] tbody tr:hover {
+  background: rgba(102, 126, 234, 0.15);
 }
 
 tbody tr:last-child {
@@ -224,8 +233,9 @@ tbody tr:last-child {
 td {
   padding: 18px 16px;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-primary);
   font-weight: 500;
+  transition: color 0.3s ease;
 }
 
 .status-badge {
@@ -268,14 +278,14 @@ td {
 }
 
 .summary-item {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--bg-card);
   backdrop-filter: blur(10px);
   padding: 28px 24px;
   border-radius: 20px;
   text-align: center;
   border: 2px solid transparent;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 24px var(--shadow-sm);
   position: relative;
   overflow: hidden;
   animation: cardSlideIn 0.6s ease-out backwards;
@@ -310,17 +320,18 @@ td {
 
 .summary-item:hover {
   transform: translateY(-6px) scale(1.02);
-  border-color: rgba(102, 126, 234, 0.3);
-  box-shadow: 0 16px 40px rgba(102, 126, 234, 0.15);
+  border-color: var(--border-color-hover);
+  box-shadow: 0 16px 40px var(--shadow-md);
 }
 
 .summary-label {
   font-size: 12px;
-  color: #7f8c8d;
+  color: var(--text-secondary);
   margin-bottom: 12px;
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 1px;
+  transition: color 0.3s ease;
 }
 
 .summary-value {
