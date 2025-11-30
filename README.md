@@ -1,66 +1,80 @@
-# Amikom Room Digital Twin (SPA)
+# 🏢 Digital Twin Dashboard
 
-Single-page app for monitoring a classroom (room-101) with real-time dashboard, history replay, alerts, and a simple 3D digital twin.
+Dashboard interaktif untuk visualisasi Digital Twin menggunakan Vue.js dan Three.js.
 
-## Stack
+## 🚀 Quick Start
 
-- Vue 3 (Composition API) + Vite
-- Tailwind CSS (darkMode: class) + CSS variables
-- Pinia state
-- Chart.js + vue-chartjs
-- dayjs (+timezone, relativeTime)
-- Three.js scene
-- mqtt (WebSocket)
-- ESLint + Prettier
-- Vitest + Vue Test Utils
+```bash
+# Install dependencies
+npm install
 
-## Getting Started
-
-1. Copy `.env.example` to `.env` and adjust if needed.
-2. Install deps and run:
-
-```
-pnpm install
-pnpm dev
+# Jalankan development server
+npm run dev
 ```
 
-Open the URL printed by Vite.
+Server akan berjalan di `http://localhost:3000`
 
-## Features
+## ✨ Fitur
 
-- Light/Dark theme with toggle in the header. Preference persists to `localStorage` and reapplies on reload.
-- Responsive layout: left sidebar (320px on desktop) and main panel on the right. On ≤1024px, sidebar becomes off-canvas with a burger toggle.
-- Real-time cards and charts for Temperature/RH and Power/kWh.
-- History + Replay: pick a range, load synthetic history, play/pause/stop, speed 0.5×/1×/2×/5×, and seek via slider.
-- Alerts list with filter and acknowledge.
-- Simple Three.js scene: room box, AC (clickable with popover), sensor indicator scales to temp; AC color reflects latest severity.
-- Live vs Mock modes: Mock generates data every second (default). Live can connect to a broker via the Connection panel.
+- **Visualisasi 3D Digital Twin** - Model 3D ruangan dengan sensor dan indikator real-time
+- **Data Real-time via MQTT** - Koneksi langsung ke MQTT Broker untuk data sensor
+- **Grafik Data Historis** - Visualisasi data suhu, listrik, dan jumlah orang
+- **Status Sensor** - Monitoring status semua sensor secara real-time
+- **Responsive Design** - Tampilan optimal di desktop dan mobile
 
-## MQTT Topics (room-101)
+## 📦 Teknologi
 
-- `campus/amikom/room/room-101/env` → `{ ts, temp_c, rh }`
-- `campus/amikom/room/room-101/power` → `{ ts, watt, kwh_total }`
-- `campus/amikom/room/room-101/occupancy` → `{ ts, count, confidence }`
-- `campus/amikom/room/room-101/alerts` → `{ ts, type, value, threshold, severity }`
+- **Vue.js 3** - Framework frontend
+- **Three.js** - Library 3D visualization
+- **Chart.js** - Library untuk grafik
+- **MQTT.js** - Client MQTT untuk real-time data
+- **Axios** - HTTP client untuk REST API
+- **Vite** - Build tool
 
-QoS: env/power=1, occupancy=0.
+## 🔧 Konfigurasi
 
-## Tests
-
-Run unit tests for stores:
-
-```
-pnpm test
+1. Copy file environment:
+```bash
+cp env.example.txt .env
 ```
 
-Included tests:
+2. Edit file `.env` dan isi konfigurasi MQTT dan API:
+```
+VITE_MQTT_BROKER_URL=wss://your-broker.hivemq.cloud:8884/mqtt
+VITE_MQTT_USERNAME=your-username
+VITE_MQTT_PASSWORD=your-password
+VITE_API_BASE_URL=http://localhost:3000/api
+```
 
-- Ingest order & buffer for env series
-- Replay start/stop updates state and emits events
-- Power spike detection via median + 3*IQR
+## 📁 Struktur Proyek
 
-## Notes
+```
+dashboard_digitaltwin/
+├── src/
+│   ├── components/          # Komponen Vue
+│   │   ├── DigitalTwin3D.vue
+│   │   ├── SensorStatus.vue
+│   │   ├── TemperatureChart.vue
+│   │   ├── ElectricityChart.vue
+│   │   ├── PeopleChart.vue
+│   │   └── DataTable.vue
+│   ├── composables/         # Composables Vue
+│   │   ├── useMQTT.js
+│   │   └── useAPI.js
+│   ├── App.vue              # Komponen utama
+│   ├── main.js              # Entry point
+│   └── style.css            # Global styles
+├── index.html
+├── package.json
+└── vite.config.js
+```
 
-- Tailwind uses CSS variables declared in `src/styles/theme.css` and applies via `theme-light` / `theme-dark` on the `<html>` element.
-- Charts use decimation for smooth performance with up to 5000 points per series.
+## 🚀 Deploy
 
+Lihat [DEPLOY.md](./DEPLOY.md) untuk panduan lengkap deployment ke Vercel.
+
+## 📝 Catatan
+
+- Dashboard menggunakan dummy data jika API belum tersedia
+- Pastikan kredensial MQTT sudah benar untuk koneksi real-time
+- Visualisasi 3D memerlukan browser yang mendukung WebGL
