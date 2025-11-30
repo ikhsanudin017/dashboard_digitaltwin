@@ -1,0 +1,26 @@
+# IDE
+.vscode/
+.idea/
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Bridge files dengan API keys (jangan push)
+sensor iot/bridge/bridge.js
+sensor iot/bridge/bridge-multi.js
+sensor iot/bridge/query-data.js
+sensor iot/bridge/query-latest.js
+
+# Environment files
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db

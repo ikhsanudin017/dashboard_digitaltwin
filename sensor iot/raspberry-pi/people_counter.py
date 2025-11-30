@@ -16,8 +16,8 @@ import ssl
 # ===== MQTT Configuration =====
 MQTT_BROKER = "02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883
-MQTT_USERNAME = "digitaltwin"  # Ganti dengan HiveMQ username kamu
-MQTT_PASSWORD = "Digitaltwin123"  # Ganti dengan HiveMQ password kamu
+MQTT_USERNAME = "digitaltwin"
+MQTT_PASSWORD = "Digitaltwin1"
 MQTT_TOPIC = "sensor/camera/people"
 DEVICE_ID = "RASPBERRY_PI_CAMERA_001"
 
@@ -252,22 +252,20 @@ def main():
                 fps_start_time = time.time()
                 frame_count = 0
             
-            # Display info on frame
-            cv2.putText(annotated_frame, f"People: {people_count}", (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 60), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            # Display info on frame (commented out for headless mode)
+            # cv2.putText(annotated_frame, f"People: {people_count}", (10, 30), 
+            #            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            # cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 60), 
+            #            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
             
-            # Show frame
-            cv2.imshow('People Counter - Digital Twin', annotated_frame)
+            # Show frame (disabled for headless mode)
+            # cv2.imshow('People Counter - Digital Twin', annotated_frame)
             
             # Publish to MQTT
             publish_people_count(people_count)
             
-            # Exit on 'q' key
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("\n👋 Exiting...")
-                break
+            # Small delay to prevent CPU overload
+            time.sleep(0.1)
     
     except KeyboardInterrupt:
         print("\n⚠️  Interrupted by user")
