@@ -1,0 +1,33 @@
+# Azure setup files
+.env
+*.log
+
+# Node modules
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Azure Functions
+local.settings.json
+.python_packages/
+.funcignore
+
+# Secrets
+*.key
+*.pem
+connection_strings.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

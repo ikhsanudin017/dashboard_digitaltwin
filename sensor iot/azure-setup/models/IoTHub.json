@@ -1,0 +1,50 @@
+{
+  "@context": "dtmi:dtdl:context;2",
+  "@id": "dtmi:digitaltwin:infrastructure:IoTHub;1",
+  "@type": "Interface",
+  "displayName": "Azure IoT Hub",
+  "description": "Azure IoT Hub untuk device management dan telemetry ingestion",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "hubName",
+      "displayName": "Hub Name",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "location",
+      "displayName": "Azure Region",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "tier",
+      "displayName": "Pricing Tier",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Telemetry",
+      "name": "messagesIngested",
+      "displayName": "Messages Ingested",
+      "description": "Jumlah pesan yang diterima IoT Hub",
+      "schema": "integer"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "connectedDevices",
+      "displayName": "Connected Devices",
+      "description": "Jumlah device yang terhubung",
+      "schema": "integer"
+    },
+    {
+      "@type": "Relationship",
+      "name": "routesTo",
+      "@id": "dtmi:digitaltwin:infrastructure:IoTHub:routesTo;1",
+      "displayName": "routes data to"
+    }
+  ]
+}

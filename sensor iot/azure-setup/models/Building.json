@@ -1,0 +1,29 @@
+{
+  "@context": "dtmi:dtdl:context;2",
+  "@id": "dtmi:digitaltwin:energymonitor:Building;1",
+  "@type": "Interface",
+  "displayName": "Building",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "name",
+      "schema": "string"
+    },
+    {
+      "@type": "Property",
+      "name": "address",
+      "schema": "string"
+    },
+    {
+      "@type": "Property",
+      "name": "floors",
+      "schema": "integer"
+    },
+    {
+      "@type": "Relationship",
+      "name": "hasRoom",
+      "@id": "dtmi:digitaltwin:energymonitor:Building:hasRoom;1",
+      "displayName": "has room"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "@context": "dtmi:dtdl:context;2",
+  "@id": "dtmi:digitaltwin:infrastructure:MqttBroker;1",
+  "@type": "Interface",
+  "displayName": "MQTT Broker",
+  "description": "MQTT message broker untuk komunikasi IoT",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "hostname",
+      "displayName": "Hostname",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "port",
+      "displayName": "Port",
+      "schema": "integer",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "protocol",
+      "displayName": "Protocol",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "provider",
+      "displayName": "Provider",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Telemetry",
+      "name": "messagesReceived",
+      "displayName": "Messages Received",
+      "description": "Jumlah pesan yang diterima broker",
+      "schema": "integer"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "activeConnections",
+      "displayName": "Active Connections",
+      "description": "Jumlah koneksi aktif ke broker",
+      "schema": "integer"
+    },
+    {
+      "@type": "Relationship",
+      "name": "receivesFrom",
+      "@id": "dtmi:digitaltwin:infrastructure:MqttBroker:receivesFrom;1",
+      "displayName": "receives data from"
+    }
+  ]
+}

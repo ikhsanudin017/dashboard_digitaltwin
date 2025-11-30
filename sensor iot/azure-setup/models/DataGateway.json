@@ -1,0 +1,56 @@
+{
+  "@context": "dtmi:dtdl:context;2",
+  "@id": "dtmi:digitaltwin:infrastructure:DataGateway;1",
+  "@type": "Interface",
+  "displayName": "Data Gateway",
+  "description": "Gateway/Bridge untuk forwarding data dari MQTT ke Cloud",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "name",
+      "displayName": "Gateway Name",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "status",
+      "displayName": "Status",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "location",
+      "displayName": "Deployment Location",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Telemetry",
+      "name": "messagesForwarded",
+      "displayName": "Messages Forwarded",
+      "description": "Jumlah pesan yang berhasil di-forward",
+      "schema": "integer"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "errorCount",
+      "displayName": "Error Count",
+      "description": "Jumlah error saat forwarding",
+      "schema": "integer"
+    },
+    {
+      "@type": "Relationship",
+      "name": "subscribesTo",
+      "@id": "dtmi:digitaltwin:infrastructure:DataGateway:subscribesTo;1",
+      "displayName": "subscribes to"
+    },
+    {
+      "@type": "Relationship",
+      "name": "forwardsTo",
+      "@id": "dtmi:digitaltwin:infrastructure:DataGateway:forwardsTo;1",
+      "displayName": "forwards to"
+    }
+  ]
+}

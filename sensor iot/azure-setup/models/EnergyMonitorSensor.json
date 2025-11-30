@@ -1,0 +1,123 @@
+{
+  "@context": "dtmi:dtdl:context;2",
+  "@id": "dtmi:digitaltwin:energymonitor:EnergyMonitorSensor;1",
+  "@type": "Interface",
+  "displayName": "Energy Monitor Sensor",
+  "description": "ESP32 sensor untuk monitoring suhu, kelembaban, tegangan, dan arus AC",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "deviceId",
+      "displayName": "Device ID",
+      "description": "Unique identifier untuk ESP32 device",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "suhu",
+      "displayName": "Suhu Terakhir",
+      "description": "Suhu ruangan terakhir dalam Celsius",
+      "schema": "double",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "kelembaban",
+      "displayName": "Kelembaban Terakhir",
+      "description": "Kelembaban relatif udara terakhir",
+      "schema": "double",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "tegangan",
+      "displayName": "Tegangan AC Terakhir",
+      "description": "Tegangan AC RMS terakhir dalam Volt",
+      "schema": "double",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "arus",
+      "displayName": "Arus AC Terakhir",
+      "description": "Arus AC RMS terakhir dalam Ampere",
+      "schema": "double",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "daya",
+      "displayName": "Daya Terakhir",
+      "description": "Daya listrik terakhir dalam Watt",
+      "schema": "double",
+      "writable": false
+    },
+    {
+      "@type": "Telemetry",
+      "name": "suhu_telemetry",
+      "displayName": "Suhu Stream",
+      "description": "Suhu ruangan streaming",
+      "schema": "double"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "kelembaban_telemetry",
+      "displayName": "Kelembaban Stream",
+      "description": "Kelembaban streaming",
+      "schema": "double"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "tegangan_telemetry",
+      "displayName": "Tegangan Stream",
+      "description": "Tegangan AC streaming",
+      "schema": "double"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "arus_telemetry",
+      "displayName": "Arus Stream",
+      "description": "Arus AC streaming",
+      "schema": "double"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "daya_telemetry",
+      "displayName": "Daya Stream",
+      "description": "Daya listrik streaming",
+      "schema": "double"
+    },
+    {
+      "@type": "Property",
+      "name": "status_tegangan",
+      "displayName": "Status Sensor Tegangan",
+      "description": "Status koneksi sensor tegangan",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "status_arus",
+      "displayName": "Status Sensor Arus",
+      "description": "Status koneksi sensor arus",
+      "schema": "string",
+      "writable": false
+    },
+    {
+      "@type": "Property",
+      "name": "location",
+      "displayName": "Lokasi",
+      "description": "Lokasi fisik sensor",
+      "schema": "string",
+      "writable": true
+    },
+    {
+      "@type": "Telemetry",
+      "name": "timestamp",
+      "displayName": "Timestamp",
+      "description": "Waktu pengukuran data",
+      "schema": "dateTime"
+    }
+  ]
+}
