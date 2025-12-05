@@ -1,14 +1,7 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "view_virtual/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "view_virtual/dist"
-      }
-    }
-  ],
+  "buildCommand": "cd view_virtual && npm install --legacy-peer-deps && npm run build",
+  "outputDirectory": "view_virtual/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
