@@ -6,8 +6,8 @@
 #include <ArduinoJson.h>
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "Umi";
-const char* password = "tanyaumi";
+const char* ssid = "TOKO BERAS";
+const char* password = "sumberagung5758";
 
 // ===== KONFIGURASI MQTT HiveMQ Cloud =====
 const char* mqtt_server = "02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud";
@@ -28,24 +28,25 @@ const char* mqtt_topic = "sensor/dht11/data";  // Topic untuk data JSON
 #define VREF 3.3          // Tegangan referensi ESP32 (3.3V)
 
 // KALIBRASI: Dikalibrasi untuk PLN 220V Indonesia
-// Berdasarkan pengukuran: RMS mentah = 0.33V saat PLN 220V
-// Perhitungan: 220V / 0.33V = 667
-#define VOLTAGE_CALIBRATION 680.0  // Faktor kalibrasi untuk PLN 220V (SUDAH DIKALIBRASI!)
+// Berdasarkan pengukuran: RMS mentah = 0.38V saat PLN 220V
+// Perhitungan: 220V / 0.38V = 579
+#define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi untuk PLN 220V (DIKALIBRASI ULANG!)
 
 #define RMS_THRESHOLD 0.15  // Threshold minimum RMS untuk deteksi sinyal valid (150mV)
 #define VOLTAGE_THRESHOLD 100.0  // Threshold minimum tegangan output (100V) untuk dianggap terhubung ke 220V
 
 // ===== KONFIGURASI SCT013-000 (Sensor Arus AC 100A/50mA) =====
 #define SCT013_PIN 32     // Pin analog untuk sensor arus (GPIO 32 / ADC1_CH4 - Kompatibel dengan WiFi)
-#define BURDEN_RESISTOR 1000.0  // Burden resistor 1kΩ (coklat-hitam-merah)
-// SCT013-000: 100A primary -> 50mA secondary
-// Dengan burden resistor 1kΩ: 50mA × 1000Ω = 50V peak (TERLALU TINGGI! Ideal 62Ω)
+#define BURDEN_RESISTOR 1000.0  // Burden resistor 1kΩ (sesuai hardware fisik Anda)
+// SCT013-000: 100A primary -> 50mA secondary (ratio 2000:1)
+// Dengan burden resistor 1kΩ: Output = 50mA × 1000Ω = 50V peak (saturasi ADC!)
+// SOLUSI: Gunakan faktor kalibrasi yang disesuaikan dengan resistor 1kΩ
 // Rangkaian TANPA bias voltage: Merah->Resistor->GPIO32, Hitam->GND
 // ADC hanya baca setengah gelombang AC (rectified)
-#define CURRENT_CALIBRATION 2000.0  // Ratio SCT013: 100A / 0.05A = 2000
-#define CURRENT_RMS_THRESHOLD 0.03  // Threshold minimum RMS untuk deteksi arus valid (30mV = ~0.5A)
-#define CURRENT_THRESHOLD_MIN 0.3  // Arus minimum untuk dianggap ada beban (0.3A = ~65W)
-#define DISABLE_CURRENT_SENSOR false  // Set true untuk disable sensor arus
+#define CURRENT_CALIBRATION 300.0  // Faktor kalibrasi disesuaikan untuk burden 1kΩ (turun dari 2000)
+#define CURRENT_RMS_THRESHOLD 0.01  // Threshold minimum RMS untuk deteksi arus valid (10mV)
+#define CURRENT_THRESHOLD_MIN 0.1  // Arus minimum untuk dianggap ada beban (0.1A = ~22W)
+#define DISABLE_CURRENT_SENSOR false  // ENABLED: Sensor arus aktif (nilai mungkin belum akurat)
 
 // Inisialisasi objekx
 DHT dht(DHTPIN, DHTTYPE);
