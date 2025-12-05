@@ -5,12 +5,12 @@
       "src": "view_virtual/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "view_virtual/dist",
+        "distDir": "dist",
         "buildCommand": "npm install --legacy-peer-deps && npm run build"
       }
     }
   ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
