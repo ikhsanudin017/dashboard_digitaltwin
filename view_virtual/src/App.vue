@@ -11,10 +11,15 @@
         
         <div class="header-right">
           <div class="header-actions">
-            <button @click="toggleTheme" class="theme-toggle" :title="isDarkMode ? 'Light Mode' : 'Dark Mode'">
-              <span class="theme-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
-              <span class="theme-text">{{ isDarkMode ? 'Light' : 'Dark' }}</span>
-            </button>
+            <div class="theme-toggle-container" :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+              <label class="theme-switch">
+                <input type="checkbox" :checked="isDarkMode" @change="toggleTheme">
+                <span class="slider">
+                  <span class="slider-icon sun">☀️</span>
+                  <span class="slider-icon moon">🌙</span>
+                </span>
+              </label>
+            </div>
             
             <div class="status-badge" :class="mqttConnected ? 'connected' : 'disconnected'">
               <span class="status-dot"></span>
@@ -275,30 +280,26 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   font-size: 24px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
 
 .logo:hover .logo-icon {
   transform: rotate(5deg) scale(1.05);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .logo-text {
   font-size: 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffffff;
   margin: 0;
   font-weight: 800;
   letter-spacing: -0.3px;
-  animation: gradientShift 3s ease infinite;
-  background-size: 200% 200%;
   white-space: nowrap;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 @keyframes gradientShift {
@@ -320,36 +321,126 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-.theme-toggle {
+/* Theme Toggle Switch */
+.theme-toggle-container {
+  display: inline-block;
+}
+
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 68px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.theme-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  border-radius: 32px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 2px 8px rgba(6, 182, 212, 0.25),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 24px;
+  width: 24px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.15),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.slider-icon {
+  position: absolute;
+  top: 50%;
+  font-size: 13px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  line-height: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 13px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px var(--shadow-sm);
-  white-space: nowrap;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
 }
 
-.theme-toggle:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px var(--shadow-md);
-  border-color: var(--border-color-hover);
+.slider-icon.sun {
+  left: 6px;
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
 }
 
-.theme-icon {
-  font-size: 16px;
-  transition: transform 0.3s ease;
+.slider-icon.moon {
+  right: 6px;
+  opacity: 0;
+  transform: scale(0.3) rotate(-90deg);
 }
 
-.theme-toggle:hover .theme-icon {
-  transform: scale(1.1) rotate(10deg);
+input:checked + .slider {
+  background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 2px rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+input:checked + .slider:before {
+  transform: translateX(36px);
+  background: #2a2a2a;
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .slider .sun {
+  opacity: 0;
+  transform: scale(0.3) rotate(90deg);
+}
+
+input:checked + .slider .moon {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+.theme-switch:hover .slider {
+  box-shadow: 
+    0 4px 12px rgba(6, 182, 212, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+.theme-switch:hover .slider:before {
+  transform: scale(1.05);
+}
+
+input:checked + .slider:hover {
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.45),
+    inset 0 1px 2px rgba(255, 255, 255, 0.05);
+}
+
+input:checked + .slider:hover:before {
+  transform: translateX(36px) scale(1.05);
 }
 
 .theme-text {

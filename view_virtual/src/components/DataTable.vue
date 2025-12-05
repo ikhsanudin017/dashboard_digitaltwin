@@ -160,7 +160,7 @@ table {
 }
 
 thead {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%);
   background-size: 200% 200%;
   animation: gradientShift 3s ease infinite;
   color: white;
@@ -219,11 +219,11 @@ tbody tr:hover {
 }
 
 [data-theme="light"] tbody tr:hover {
-  background: linear-gradient(90deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  background: linear-gradient(90deg, rgba(6, 182, 212, 0.08) 0%, rgba(8, 145, 178, 0.08) 100%);
 }
 
 [data-theme="dark"] tbody tr:hover {
-  background: rgba(102, 126, 234, 0.15);
+  background: rgba(6, 182, 212, 0.15);
 }
 
 tbody tr:last-child {
@@ -313,7 +313,7 @@ td {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(90deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%);
   background-size: 200% 100%;
   animation: gradientShift 3s ease infinite;
 }
@@ -337,7 +337,7 @@ td {
 .summary-value {
   font-size: 32px;
   font-weight: 800;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

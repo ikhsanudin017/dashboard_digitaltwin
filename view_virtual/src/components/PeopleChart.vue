@@ -59,21 +59,21 @@ const chartData = computed(() => ({
     {
       label: 'Jumlah Orang',
       data: props.data.values || [],
-      borderColor: '#9b59b6',
-      backgroundColor: 'rgba(155, 89, 182, 0.15)',
+      borderColor: '#06b6d4',
+      backgroundColor: 'rgba(6, 182, 212, 0.15)',
       borderWidth: 3,
       fill: true,
       tension: 0.5,
       pointRadius: 5,
       pointHoverRadius: 8,
-      pointBackgroundColor: '#9b59b6',
+      pointBackgroundColor: '#06b6d4',
       pointBorderColor: '#fff',
       pointBorderWidth: 3,
       stepped: false,
       shadowOffsetX: 0,
       shadowOffsetY: 4,
       shadowBlur: 10,
-      shadowColor: 'rgba(155, 89, 182, 0.3)'
+      shadowColor: 'rgba(6, 182, 212, 0.3)'
     }
   ]
 }))
@@ -109,7 +109,7 @@ const chartOptions = computed(() => {
         bodyFont: {
           size: 12
         },
-        borderColor: '#9b59b6',
+        borderColor: '#06b6d4',
         borderWidth: 2,
         cornerRadius: 8,
         displayColors: true,
