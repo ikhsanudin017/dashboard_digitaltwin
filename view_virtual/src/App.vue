@@ -4,7 +4,9 @@
       <div class="header-container">
         <div class="header-left">
           <div class="logo">
-            <div class="logo-icon">🏢</div>
+            <div class="logo-icon">
+              <img src="/logo.png" alt="TwinSpace Logo" class="logo-image" />
+            </div>
             <h1 class="logo-text">Digital Twin Dashboard</h1>
           </div>
         </div>
@@ -23,12 +25,19 @@
             
             <div class="status-badge" :class="mqttConnected ? 'connected' : 'disconnected'">
               <span class="status-dot"></span>
-              <span class="status-text">{{ mqttConnected ? 'MQTT Terhubung' : 'Mode DEMO' }}</span>
+              <span class="status-text">{{ mqttConnected ? 'Terhubung' : 'Mode DEMO' }}</span>
             </div>
             
             <div class="timestamp">
-              <span class="time-icon">🕐</span>
-              <span class="time-text">{{ currentTime }}</span>
+              <div class="time-section">
+                <span class="time-icon">📅</span>
+                <span class="time-text">{{ formattedDate }}</span>
+              </div>
+              <div class="time-divider"></div>
+              <div class="time-section">
+                <span class="time-icon">🕐</span>
+                <span class="time-text">{{ formattedTime }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -93,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import DigitalTwin3D from './components/DigitalTwin3D.vue'
 import SensorStatus from './components/SensorStatus.vue'
 import TemperatureChart from './components/TemperatureChart.vue'
@@ -149,7 +158,17 @@ const peopleData = ref({ labels: [], values: [] })
 const peopleCount = ref(0)
 const totalEnergyWh = ref(0)
 
-const currentTime = ref(new Date().toLocaleString('id-ID'))
+const currentTime = ref(new Date())
+
+const formattedDate = computed(() => {
+  const options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
+  return currentTime.value.toLocaleDateString('id-ID', options)
+})
+
+const formattedTime = computed(() => {
+  const options = { hour: '2-digit', minute: '2-digit', second: '2-digit' }
+  return currentTime.value.toLocaleTimeString('id-ID', options)
+})
 
 // Update waktu setiap detik
 let timeInterval = null
@@ -160,7 +179,7 @@ onMounted(() => {
   connectMQTT()
   
   timeInterval = setInterval(() => {
-    currentTime.value = new Date().toLocaleString('id-ID')
+    currentTime.value = new Date()
   }, 1000)
   
   // Listen for system theme changes
@@ -275,16 +294,23 @@ onUnmounted(() => {
 }
 
 .logo-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
-  font-size: 24px;
+  padding: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .logo:hover .logo-icon {
@@ -512,11 +538,11 @@ input:checked + .slider:hover:before {
 .timestamp {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 500;
-  padding: 10px 16px;
+  padding: 8px 16px;
   background: var(--bg-secondary);
   border-radius: 12px;
   border: 1px solid var(--border-dark);
@@ -527,6 +553,19 @@ input:checked + .slider:hover:before {
 .timestamp:hover {
   background: var(--bg-card);
   border-color: var(--border-color-hover);
+}
+
+.time-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-dark);
+  opacity: 0.5;
 }
 
 .time-icon {
