@@ -29,13 +29,17 @@
         <div class="spinner"></div>
         <p>Connecting to camera...</p>
       </div>
+      
+      <div v-if="errorMessage" class="error-overlay">
+        <p>{{ errorMessage }}</p>
+      </div>
     </div>
     
     <div class="stream-controls">
       <input 
         v-model="raspberryPiIp" 
         type="text" 
-        placeholder="Raspberry Pi IP (e.g., 192.168.1.100)"
+        placeholder="Raspberry Pi IP (e.g., 192.168.1.14)"
         class="ip-input"
         @keyup.enter="updateStream"
       />
@@ -49,8 +53,9 @@
         🔗 Test in New Tab
       </button>
     </div>
-    <div v-if="streamUrl" class="debug-info">
-      <small>Stream URL: {{ streamUrl }}</small>
+    <div class="debug-info">
+      <small v-if="streamUrl">Stream URL: {{ streamUrl }}</small>
+      <small v-else style="color: orange;">Stream not initialized. IP: {{ raspberryPiIp }}</small>
     </div>
   </div>
 </template>
@@ -58,11 +63,12 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const raspberryPiIp = ref(localStorage.getItem('raspberryPiIp') || '192.168.1.8')
+const raspberryPiIp = ref(localStorage.getItem('raspberryPiIp') || '192.168.1.14')
 const streamUrl = ref(null)
 const isLoading = ref(false)
 const isStreamActive = ref(false)
 const streamPort = ref(5000)
+const errorMessage = ref('')
 
 const updateStream = () => {
   if (!raspberryPiIp.value) {
@@ -95,15 +101,18 @@ const handleLoad = () => {
 const handleError = (event) => {
   isLoading.value = false
   isStreamActive.value = false
-  console.error('❌ Stream error')
+  errorMessage.value = 'Cannot load stream. Check if Raspberry Pi server is running.'
+  console.error('❌ Stream error:', event)
+  console.error('Stream URL:', streamUrl.value)
   
-  // Retry after 3 seconds
+  // Retry after 5 seconds
   setTimeout(() => {
     if (streamUrl.value) {
-      console.log('🔄 Retrying...')
+      console.log('🔄 Retrying stream...')
+      errorMessage.value = ''
       refreshStream()
     }
-  }, 3000)
+  }, 5000)
 }
 
 const openInNewTab = () => {
@@ -113,11 +122,10 @@ const openInNewTab = () => {
 }
 
 onMounted(() => {
-  const savedIp = localStorage.getItem('raspberryPiIp')
-  if (savedIp) {
-    raspberryPiIp.value = savedIp
-    updateStream()
-  }
+  // Always try to start stream on mount
+  console.log('🎥 CameraStream mounted, starting stream...')
+  console.log('📍 Raspberry Pi IP:', raspberryPiIp.value)
+  updateStream()
 })
 </script>
 
@@ -186,6 +194,20 @@ onMounted(() => {
   padding: 6px 12px;
   border-radius: 4px;
   backdrop-filter: blur(8px);
+}
+
+.error-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .stream-info {

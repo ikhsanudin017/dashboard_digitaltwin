@@ -1,115 +1,198 @@
 #!/usr/bin/env python3
 """
-Raspberry Pi Camera Stream with YOLO v3 People Detection
-High accuracy people detection using YOLO
+USB Webcam dengan People Detection AKURAT
+Menggunakan YOLO v4-tiny (State-of-the-art object detection)
 """
 
-import numpy as np
+import cv2
+from flask import Flask, Response
+from flask_cors import CORS
+import threading
 import time
 import json
-from datetime import datetime
 import paho.mqtt.client as mqtt
 import ssl
-from flask import Flask, Response
-import threading
-from picamera2 import Picamera2
-import cv2
+from datetime import datetime
+import numpy as np
 
-# ===== MQTT Configuration =====
+# ===== KONFIGURASI =====
+WEBCAM_PORT = 0
+STREAM_PORT = 5000
+FRAME_WIDTH = 320  # Resolusi kecil untuk performa tinggi
+FRAME_HEIGHT = 240
+
+# ===== MQTT =====
 MQTT_BROKER = "02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883
 MQTT_USERNAME = "digitaltwin"
 MQTT_PASSWORD = "Digitaltwin1"
 MQTT_TOPIC = "sensor/camera/people"
-DEVICE_ID = "RASPBERRY_PI_CAMERA_001"
+MQTT_CLIENT_ID = "RASPBERRY_PI_CAMERA_001"
 
-# ===== HTTP Stream Configuration =====
-STREAM_PORT = 5000
+# ===== DETECTION =====
+CONFIDENCE_THRESHOLD = 0.5  # 50% confidence minimum
+NMS_THRESHOLD = 0.4  # Non-maximum suppression
+PUBLISH_INTERVAL = 5
+INPUT_SIZE = 224  # Input size untuk YOLO (kecil untuk speed)
 
-# ===== YOLO Configuration =====
-YOLO_PATH = "/home/digitaltwin/yolo/"
-YOLO_WEIGHTS = YOLO_PATH + "yolov3.weights"
-YOLO_CONFIG = YOLO_PATH + "yolov3.cfg"
-YOLO_NAMES = YOLO_PATH + "coco.names"
-CONFIDENCE_THRESHOLD = 0.5
-NMS_THRESHOLD = 0.4
-
-# ===== Global Variables =====
-people_count = 0
+# ===== INISIALISASI =====
+app = Flask(__name__)
+CORS(app)
+camera = None
 output_frame = None
 lock = threading.Lock()
+people_count = 0
 mqtt_client = None
+mqtt_connected = False
+net = None
+output_layers = None
+classes = None
 
-# ===== Flask App =====
-app = Flask(__name__)
-
-# ===== MQTT Functions =====
-def on_connect(client, userdata, flags, rc):
-    if rc == 0:
-        print("✅ Connected to HiveMQ Cloud MQTT Broker")
-        print(f"📡 Publishing to topic: {MQTT_TOPIC}")
-    else:
-        print(f"❌ Connection failed with code {rc}")
-
-def on_publish(client, userdata, mid):
-    print(f"📤 Message published (mid: {mid})")
-
-def on_disconnect(client, userdata, rc):
-    if rc != 0:
-        print(f"⚠️  Disconnected from MQTT broker (code: {rc})")
-
-def init_mqtt():
-    global mqtt_client
+def download_yolo_files():
+    """Download YOLO v4-tiny files"""
+    import os
+    import urllib.request
     
-    mqtt_client = mqtt.Client(client_id=DEVICE_ID)
-    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-    mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS)
+    files = {
+        'yolov4-tiny.cfg': 'https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4-tiny.cfg',
+        'yolov4-tiny.weights': 'https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v4_pre/yolov4-tiny.weights',
+        'coco.names': 'https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names'
+    }
     
-    mqtt_client.on_connect = on_connect
-    mqtt_client.on_publish = on_publish
-    mqtt_client.on_disconnect = on_disconnect
+    for filename, url in files.items():
+        if not os.path.exists(filename):
+            print(f"📥 Downloading {filename}...")
+            try:
+                urllib.request.urlretrieve(url, filename)
+                print(f"✓ {filename} downloaded")
+            except Exception as e:
+                print(f"✗ Error downloading {filename}: {e}")
+                return False
     
-    try:
-        print(f"🔌 Connecting to {MQTT_BROKER}:{MQTT_PORT}...")
-        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
-        mqtt_client.loop_start()
-        return True
-    except Exception as e:
-        print(f"❌ MQTT Connection Error: {e}")
+    return True
+
+def init_yolo():
+    """Inisialisasi YOLO v4-tiny"""
+    global net, output_layers, classes
+    
+    print("🤖 Initializing YOLO v4-tiny detector...")
+    
+    if not download_yolo_files():
+        print("✗ Failed to download YOLO files")
         return False
-
-# ===== YOLO Functions =====
-def load_yolo_model():
-    print("🔄 Loading YOLO v3 model...")
+    
     try:
-        net = cv2.dnn.readNet(YOLO_WEIGHTS, YOLO_CONFIG)
+        # Load YOLO
+        net = cv2.dnn.readNet("yolov4-tiny.weights", "yolov4-tiny.cfg")
+        
+        # Set backend and target
         net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
         
+        # Get output layers
         layer_names = net.getLayerNames()
         output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
         
-        with open(YOLO_NAMES, "r") as f:
+        # Load class names
+        with open("coco.names", "r") as f:
             classes = [line.strip() for line in f.readlines()]
         
-        print("✅ YOLO model loaded successfully")
-        return net, output_layers, classes
-    
+        print("✓ YOLO v4-tiny loaded successfully")
+        print(f"  Classes: {len(classes)}")
+        print(f"  Output layers: {len(output_layers)}")
+        return True
+        
     except Exception as e:
-        print(f"❌ Error loading YOLO model: {e}")
-        return None, None, None
+        print(f"✗ Error loading YOLO: {e}")
+        return False
 
-def detect_people(frame, net, output_layers):
+def on_connect(client, userdata, flags, rc):
+    global mqtt_connected
+    mqtt_connected = (rc == 0)
+    if mqtt_connected:
+        print("✓ MQTT connected")
+
+def on_disconnect(client, userdata, rc):
+    global mqtt_connected
+    mqtt_connected = False
+
+def init_mqtt():
+    global mqtt_client
+    print("🔌 Initializing MQTT...")
+    mqtt_client = mqtt.Client(client_id=MQTT_CLIENT_ID)
+    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+    mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
+    mqtt_client.tls_insecure_set(False)
+    mqtt_client.on_connect = on_connect
+    mqtt_client.on_disconnect = on_disconnect
+    
+    try:
+        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        mqtt_client.loop_start()
+        return True
+    except Exception as e:
+        print(f"✗ MQTT error: {e}")
+        return False
+
+def publish_people_count(count):
+    if not mqtt_connected:
+        return
+    try:
+        payload = {
+            "deviceId": MQTT_CLIENT_ID,
+            "jumlahOrang": count,
+            "timestamp": datetime.now().isoformat(),
+            "location": "Ruang Server"
+        }
+        mqtt_client.publish(MQTT_TOPIC, json.dumps(payload), qos=1)
+        print(f"✓ MQTT: {count} people")
+    except Exception as e:
+        print(f"✗ MQTT publish error: {e}")
+
+def init_camera():
+    global camera
+    print("🎥 Initializing camera...")
+    
+    camera = cv2.VideoCapture(WEBCAM_PORT, cv2.CAP_V4L2)
+    if not camera.isOpened():
+        camera = cv2.VideoCapture(WEBCAM_PORT)
+    
+    if not camera.isOpened():
+        print("✗ Cannot open camera")
+        return False
+    
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
+    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
+    
+    # Warm-up
+    for _ in range(5):
+        ret, _ = camera.read()
+        if ret:
+            break
+        time.sleep(0.5)
+    
+    print("✓ Camera initialized")
+    return True
+
+def detect_people_yolo(frame):
+    """Deteksi orang dengan YOLO v4-tiny"""
+    if net is None:
+        return 0, frame
+    
     height, width = frame.shape[:2]
     
-    # Use smaller input size for faster processing (320x320 instead of 416x416)
-    blob = cv2.dnn.blobFromImage(frame, 1/255.0, (320, 320), swapRB=True, crop=False)
+    # Prepare input blob dengan size lebih kecil untuk speed
+    blob = cv2.dnn.blobFromImage(frame, 1/255.0, (INPUT_SIZE, INPUT_SIZE), swapRB=True, crop=False)
     net.setInput(blob)
+    
+    # Forward pass
     outputs = net.forward(output_layers)
     
     # Process detections
     boxes = []
     confidences = []
+    class_ids = []
     
     for output in outputs:
         for detection in output:
@@ -117,263 +200,209 @@ def detect_people(frame, net, output_layers):
             class_id = np.argmax(scores)
             confidence = scores[class_id]
             
-            # Class 0 is 'person' in COCO dataset
+            # Filter: only person class (class_id = 0 in COCO) and high confidence
             if class_id == 0 and confidence > CONFIDENCE_THRESHOLD:
+                # Get bounding box
                 center_x = int(detection[0] * width)
                 center_y = int(detection[1] * height)
                 w = int(detection[2] * width)
                 h = int(detection[3] * height)
                 
-                x = int(center_x - w/2)
-                y = int(center_y - h/2)
+                # Rectangle coordinates
+                x = int(center_x - w / 2)
+                y = int(center_y - h / 2)
                 
                 boxes.append([x, y, w, h])
                 confidences.append(float(confidence))
+                class_ids.append(class_id)
     
     # Apply Non-Maximum Suppression
     indices = cv2.dnn.NMSBoxes(boxes, confidences, CONFIDENCE_THRESHOLD, NMS_THRESHOLD)
     
-    people_boxes = []
+    people_detected = 0
     if len(indices) > 0:
         for i in indices.flatten():
-            people_boxes.append(boxes[i])
+            x, y, w, h = boxes[i]
+            confidence = confidences[i]
+            
+            # Draw bounding box
+            color = (0, 255, 0)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            
+            # Draw label
+            label = f"Person {confidence:.2f}"
+            label_size, base_line = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            y_label = max(y, label_size[1])
+            
+            cv2.rectangle(frame, (x, y_label - label_size[1] - 10), 
+                         (x + label_size[0], y_label + base_line - 10), color, cv2.FILLED)
+            cv2.putText(frame, label, (x, y_label - 7), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            
+            people_detected += 1
     
-    return len(people_boxes), people_boxes
+    return people_detected, frame
 
-def publish_people_count(count):
-    global mqtt_client
+def capture_frames():
+    global camera, output_frame, lock, people_count
     
-    if mqtt_client is None or not mqtt_client.is_connected():
-        return
-    
-    # Rate limiting: publish max every 5 seconds
-    current_time = time.time()
-    if not hasattr(publish_people_count, 'last_publish_time'):
-        publish_people_count.last_publish_time = 0
-    
-    if current_time - publish_people_count.last_publish_time < 5:
-        return
-    
-    payload = {
-        "deviceId": DEVICE_ID,
-        "jumlahOrang": count,
-        "timestamp": datetime.now().astimezone().isoformat(),
-        "location": "Ruang Server"
-    }
-    
-    try:
-        result = mqtt_client.publish(MQTT_TOPIC, json.dumps(payload), qos=1)
-        
-        if result.rc == mqtt.MQTT_ERR_SUCCESS:
-            print(f"👥 People detected: {count} | Published at {datetime.now().strftime('%H:%M:%S')}")
-        else:
-            print(f"⚠️  Publish failed with code: {result.rc}")
-    
-    except Exception as e:
-        print(f"❌ Error publishing: {e}")
-    
-    publish_people_count.last_publish_time = current_time
-
-# ===== Video Capture Thread =====
-def capture_video(net, output_layers):
-    global output_frame, people_count
-    
-    print("📷 Initializing Picamera2...")
-    picam2 = Picamera2()
-    
-    # Configure camera for 640x480 @ 30fps
-    config = picam2.create_preview_configuration(
-        main={"size": (640, 480), "format": "RGB888"},
-        controls={"FrameRate": 30}
-    )
-    picam2.configure(config)
-    
-    print("✅ Starting camera...")
-    picam2.start()
-    time.sleep(2)  # Camera warmup
-    
-    print("✅ Camera initialized")
-    print("🚀 Starting YOLO detection and streaming...")
-    
+    print("📹 Starting capture and detection...")
     frame_count = 0
-    detected_boxes = []
-    last_detection_time = time.time()
+    start_time = time.time()
+    last_publish = time.time()
     
     while True:
         try:
-            # Capture frame from Picamera2
-            frame = picam2.capture_array()
-            
-            frame_count += 1
-            if frame_count % 100 == 1:
-                print(f"📸 Frame {frame_count} captured")
-            
-            # Convert RGB to BGR for OpenCV
-            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            
-            # Run YOLO detection every 30 frames OR every 1 second (whichever is longer)
-            # This ensures smooth video while still getting accurate detection
-            current_time = time.time()
-            if frame_count % 30 == 0 or (current_time - last_detection_time) >= 1.0:
-                # Use smaller frame for YOLO processing (huge speed boost)
-                small_frame = cv2.resize(frame_bgr, (320, 240))
-                
-                count, boxes = detect_people(small_frame, net, output_layers)
-                
-                # Scale boxes back to original size
-                detected_boxes = []
-                for box in boxes:
-                    x, y, w, h = box
-                    x, y, w, h = x*2, y*2, w*2, h*2
-                    detected_boxes.append([x, y, w, h])
-                
-                people_count = count
-                last_detection_time = current_time
-                
-                # Publish to MQTT
-                publish_people_count(count)
-            
-            # Draw bounding boxes on every frame
-            for box in detected_boxes:
-                x, y, w, h = box
-                cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(frame_bgr, "Person", (x, y - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            
-            # Add overlay text
-            cv2.putText(frame_bgr, f"People: {people_count}", (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.putText(frame_bgr, datetime.now().strftime("%H:%M:%S"), (10, 60),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(frame_bgr, "YOLO Detection", (10, 85),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            
-            # Update global frame
-            with lock:
-                output_frame = frame_bgr.copy()
-        
-        except Exception as e:
-            print(f"⚠️ Error in capture loop: {e}")
-            time.sleep(0.1)
-            continue
-        
-        # Small delay to prevent CPU overload
-        time.sleep(0.005)
-
-# ===== Flask Routes =====
-def generate_frames():
-    # Wait for first frame to be available
-    while output_frame is None:
-        time.sleep(0.1)
-    
-    while True:
-        with lock:
-            if output_frame is None:
-                time.sleep(0.1)
-                continue
-            
-            # Encode frame as JPEG
-            ret, buffer = cv2.imencode('.jpg', output_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            ret, frame = camera.read()
             if not ret:
                 time.sleep(0.1)
                 continue
             
-            frame_bytes = buffer.tobytes()
+            frame_count += 1
+            current_time = time.time()
+            
+            # Perform detection SETIAP FRAME agar boxes smooth mengikuti pergerakan
+            count, frame = detect_people_yolo(frame)
+            people_count = count
+            
+            # Calculate FPS (only for tracking, not displayed)
+            elapsed = current_time - start_time
+            fps = frame_count / elapsed if elapsed > 0 else 0
+            
+            # No text overlays - clean video with boxes only
+            
+            # Publish to MQTT
+            if current_time - last_publish > PUBLISH_INTERVAL:
+                publish_people_count(people_count)
+                last_publish = current_time
+            
+            with lock:
+                output_frame = frame.copy()
+            
+            if frame_count >= 1000:
+                frame_count = 0
+                start_time = time.time()
+                
+        except Exception as e:
+            print(f"⚠️  Capture error: {e}")
+            time.sleep(1)
+
+def generate_stream():
+    global output_frame, lock
+    while True:
+        with lock:
+            if output_frame is None:
+                continue
+            # Lower JPEG quality untuk streaming lebih lancar
+            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            if not flag:
+                continue
         
-        # Yield frame in MJPEG format
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        
-        time.sleep(0.02)  # ~50 FPS max
+               b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded) + b'\r\n')
 
 @app.route('/video_feed')
 def video_feed():
-    response = Response(generate_frames(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET'
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
-
-@app.route('/snapshot')
-def snapshot():
-    """Return single JPEG frame"""
-    with lock:
-        if output_frame is None:
-            return Response(b'', mimetype='image/jpeg', status=503)
-        else:
-            ret, buffer = cv2.imencode('.jpg', output_frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            if ret:
-                response = Response(buffer.tobytes(), mimetype='image/jpeg')
-            else:
-                response = Response(b'', mimetype='image/jpeg', status=500)
-    
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    return Response(generate_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/')
 def index():
-    return '''
+    return f"""
+    <!DOCTYPE html>
     <html>
-    <head><title>Raspberry Pi YOLO Detection</title></head>
-    <body style="background: #000; color: #fff; font-family: Arial; text-align: center;">
-    <h1>🎥 Live Camera - YOLO People Detection</h1>
-    <img src="/video_feed" style="max-width: 90%; border: 2px solid #00ff00;">
-    <p style="color: #00ff00;">✅ YOLO v3 Active</p>
+    <head>
+        <title>YOLO People Counter</title>
+        <style>
+            body {{ font-family: Arial; background: #1a1a1a; color: white; text-align: center; padding: 20px; }}
+            h1 {{ color: #00ff00; }}
+            img {{ width: 100%; max-width: 640px; border: 3px solid #00ff00; border-radius: 8px; }}
+            .info {{ background: #2a2a2a; padding: 15px; margin: 20px auto; max-width: 640px; border-radius: 8px; }}
+            .status {{ color: #00ff00; font-weight: bold; font-size: 24px; }}
+        </style>
+        <script>
+            setInterval(() => {{
+                fetch('/count').then(r => r.json()).then(d => {{
+                    document.getElementById('count').textContent = d.count;
+                }});
+            }}, 1000);
+        </script>
+    </head>
+    <body>
+        <h1>🎥 YOLO v4-tiny People Counter</h1>
+        <p class="status">● LIVE | People: <span id="count">0</span></p>
+        <img src="/video_feed">
+        <div class="info">
+            <h3>📌 Info</h3>
+            <p><strong>Detection:</strong> YOLO v4-tiny (State-of-the-art)</p>
+            <p><strong>Confidence:</strong> {CONFIDENCE_THRESHOLD*100:.0f}%</p>
+            <p><strong>MQTT:</strong> {MQTT_TOPIC}</p>
+        </div>
     </body>
     </html>
-    '''
+    """
 
-# ===== Main Function =====
+@app.route('/status')
+def status():
+    return {
+        'status': 'online',
+        'people_count': people_count,
+        'mqtt_connected': mqtt_connected,
+        'detection': 'YOLO v4-tiny',
+        'confidence_threshold': CONFIDENCE_THRESHOLD
+    }
+
+@app.route('/count')
+def count():
+    return {'count': people_count, 'mqtt': mqtt_connected}
+
 def main():
-    print("=" * 60)
-    print("🎥 Raspberry Pi Camera + YOLO v3 Detection")
-    print("=" * 60)
+    print("\n" + "="*60)
+    print("YOLO v4-tiny PEOPLE COUNTER - HIGH ACCURACY")
+    print("="*60)
     
-    # Initialize MQTT
-    if not init_mqtt():
-        print("⚠️  Starting without MQTT")
-    else:
-        time.sleep(2)  # Wait for MQTT connection
-    
-    # Load YOLO model
-    net, output_layers, classes = load_yolo_model()
-    if net is None:
-        print("❌ Cannot start without YOLO model")
-        if mqtt_client:
-            mqtt_client.loop_stop()
+    if not init_yolo():
+        print("✗ Failed to initialize YOLO")
         return
     
-    # Start video capture thread
-    capture_thread = threading.Thread(target=capture_video, args=(net, output_layers))
-    capture_thread.daemon = True
+    if not init_camera():
+        print("✗ Failed to initialize camera")
+        return
+    
+    init_mqtt()
+    
+    capture_thread = threading.Thread(target=capture_frames, daemon=True)
     capture_thread.start()
     
-    # Wait for first frame to be captured
-    print("⏳ Waiting for first frame...")
-    while output_frame is None:
+    # Wait for first frame
+    print("\n⏳ Waiting for first frame...")
+    for _ in range(100):
+        if output_frame is not None:
+            break
         time.sleep(0.1)
-    print("✅ First frame captured")
     
-    # Start Flask server
-    print(f"\n🌐 Video stream: http://192.168.1.8:{STREAM_PORT}/video_feed")
-    print(f"📺 Web interface: http://192.168.1.8:{STREAM_PORT}/")
-    print(f"📸 Snapshot: http://192.168.1.8:{STREAM_PORT}/snapshot")
-    print("\nPress Ctrl+C to stop\n")
+    if output_frame is None:
+        print("✗ Timeout waiting for frame")
+        return
+    
+    print("✓ First frame captured")
+    print(f"\n🌐 Server running on port {STREAM_PORT}")
+    print(f"📡 Stream: http://192.168.1.14:{STREAM_PORT}/video_feed")
+    print(f"🏠 Home: http://192.168.1.14:{STREAM_PORT}/")
+    print(f"👥 Count API: http://192.168.1.14:{STREAM_PORT}/count")
+    print("\n💡 YOLO v4-tiny active - High accuracy people detection!")
+    print("="*60 + "\n")
     
     try:
         app.run(host='0.0.0.0', port=STREAM_PORT, threaded=True, debug=False)
     except KeyboardInterrupt:
-        print("\n⚠️  Interrupted by user")
+        print("\n⏹️  Stopping...")
     finally:
+        if camera:
+            camera.release()
         if mqtt_client:
             mqtt_client.loop_stop()
-        print("👋 Shutting down...")
+            mqtt_client.disconnect()
+        print("✓ Done")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

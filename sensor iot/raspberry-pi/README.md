@@ -1,21 +1,21 @@
-# 🎥 Raspberry Pi People Counter Integration
+# 🎥 Raspberry Pi USB Webcam Streaming
 
-Sistem deteksi dan hitung jumlah orang menggunakan Raspberry Pi dengan kamera.
+Sistem streaming USB webcam sederhana untuk Dashboard Digital Twin.
 
 ## 📋 Requirements
 
 ### Hardware:
 - Raspberry Pi 3/4/5
-- Raspberry Pi Camera Module atau USB Webcam
-- Memory minimal 2GB RAM (recommended 4GB)
+- USB Webcam (V4L2 compatible)
+- Memory minimal 2GB RAM
 
 ### Software:
 - Raspberry Pi OS (Bullseye or later)
 - Python 3.7+
+- Flask
 - OpenCV
-- YOLO v3 model
 
-## 🔧 Installation
+## 🚀 Quick Setup
 
 ### 1. Connect to Raspberry Pi via SSH
 
@@ -26,113 +26,69 @@ ssh digitaltwin@digitaltwin
 
 ### 2. Copy Files to Raspberry Pi
 
-From your Mac, copy the Python script:
+Dari Mac Anda:
 
 ```bash
-# Copy people_counter.py
-scp raspberry-pi/people_counter.py digitaltwin@digitaltwin:~/
+# Copy file utama
+scp "sensor iot/raspberry-pi/webcam_stream.py" digitaltwin@digitaltwin:~/
 
-# Copy setup script
-scp raspberry-pi/setup_raspberry.sh digitaltwin@digitaltwin:~/
+# Copy requirements
+scp "sensor iot/raspberry-pi/requirements.txt" digitaltwin@digitaltwin:~/
 ```
 
-### 3. Run Setup on Raspberry Pi
+### 3. Install Dependencies
+
+Di Raspberry Pi:
 
 ```bash
-ssh digitaltwin@digitaltwin
-
-# Make setup script executable
-chmod +x setup_raspberry.sh
-
-# Run setup (this will take 10-15 minutes)
-bash setup_raspberry.sh
+# Install Python packages
+pip3 install -r requirements.txt
 ```
 
 This will:
 - Update system packages
 - Install Python dependencies (opencv-python, paho-mqtt)
-- Download YOLO model files (~200MB)
-
-### 4. Configure MQTT Credentials
-
-Edit `people_counter.py` and update:
-
-```python
-MQTT_USERNAME = "your-hivemq-username"  # Same as ESP32
-MQTT_PASSWORD = "your-hivemq-password"  # Same as ESP32
-```
-
-### 5. Enable Camera
-
-If using Raspberry Pi Camera Module:
+### 4. Test Webcam
 
 ```bash
-sudo raspi-config
-# Go to: Interface Options → Camera → Enable
-# Reboot: sudo reboot
-```
+# Cek device video tersedia
+ls /dev/video*
 
-If using USB webcam, it should work automatically.
+# Test dengan v4l2
+v4l2-ctl --list-devices
+```
 
 ## 🚀 Running
 
-### Test Run (with display):
+### Jalankan Webcam Stream:
 
 ```bash
-python3 people_counter.py
+python3 webcam_stream.py
 ```
 
-Press `q` to quit.
+Server akan berjalan di `http://[RASPBERRY_PI_IP]:5000`
 
-### Background Run (headless):
+### Test di Browser:
+
+```
+# Halaman preview
+http://[RASPBERRY_PI_IP]:5000/
+
+# Video stream endpoint  
+http://[RASPBERRY_PI_IP]:5000/video_feed
+
+# Status check
+http://[RASPBERRY_PI_IP]:5000/status
+```
+
+### Background Run:
 
 ```bash
 # Run in background
-nohup python3 people_counter.py > people_counter.log 2>&1 &
+nohup python3 webcam_stream.py > webcam.log 2>&1 &
 
-# Check if running
-ps aux | grep people_counter
-
-# View logs
-tail -f people_counter.log
-
-# Stop
-pkill -f people_counter.py
-```
-
-### Auto-start on Boot:
-
-Create systemd service:
-
-```bash
-sudo nano /etc/systemd/system/people-counter.service
-```
-
-Add:
-
-```ini
-[Unit]
-Description=People Counter for Digital Twin
-After=network.target
-
-[Service]
-Type=simple
-User=digitaltwin
-WorkingDirectory=/home/digitaltwin
-ExecStart=/usr/bin/python3 /home/digitaltwin/people_counter.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl enable people-counter
-sudo systemctl start people-counter
-sudo systemctl status people-counter
+# Check logs
+tail -f webcam.log
 ```
 
 ## 📊 Data Flow
@@ -163,56 +119,57 @@ Topic: sensor/camera/people
 
 Payload:
 {
-  "deviceId": "RASPBERRY_PI_CAMERA_001",
-  "jumlahOrang": 3,
-  "timestamp": "2025-11-19T08:30:15.123Z",
-  "location": "Ruang Server"
-}
+  "devStreaming Flow
+
 ```
-
-## 🔍 Testing
-
-### Test MQTT Connection:
+USB Webcam (Raspberry Pi)
+    ↓
+OpenCV Capture
+    ↓
+Flask HTTP Server
+    ↓
+MJPEG StrWebcam:
 
 ```bash
-# Install mosquitto client
-sudo apt-get install -y mosquitto-clients
+# Install fswebcam untuk test
+sudo apt install fswebcam
 
-# Subscribe to topic
-mosquitto_sub -h 02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud \
-  -p 8883 \
-  -t "sensor/camera/people" \
-  -u "your-username" \
-  -P "your-password" \
-  --capath /etc/ssl/certs/
+# Capture test image
+fswebcam test.jpg
+
+# List available cameras
+ls -l /dev/video*
 ```
 
-### Test Camera:
+### Test dengan Python:
 
 ```python
 import cv2
 
+# Test buka webcam
 cap = cv2.VideoCapture(0)
 ret, frame = cap.read()
 
 if ret:
     cv2.imwrite('test.jpg', frame)
-    print("✅ Camera working!")
+    print("✅ Webcam working!")
 else:
-    print("❌ Camera not working")
+    print("❌ Webcam not working")
 
 cap.release()
 ```
 
-## ⚙️ Configuration
+### Test Stream dari Browser:
+Konfigurasi
 
-Edit `people_counter.py` to customize:
+Edit `webcam_stream.py` untuk customize:
 
 ```python
-# Detection sensitivity
-CONFIDENCE_THRESHOLD = 0.5  # Lower = more sensitive
-NMS_THRESHOLD = 0.4
-
+WEBCAM_PORT = 0       # Port USB webcam (0, 1, 2...)
+STREAM_PORT = 5000    # Port Flask server
+STREAM_FPS = 15       # Frame per second
+FRAME_WIDTH = 640     # Lebar frame video
+FRAME_HEIGHT = 480    # Tinggi frame video
 # Publishing frequency
 PUBLISH_INTERVAL = 5  # seconds
 
@@ -223,71 +180,83 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
 ## 🐛 Troubleshooting
 
-### Camera not detected:
+### Webcam tidak terdeteksi:
 
 ```bash
-# Check camera
-vcgencmd get_camera  # For Pi Camera
-ls /dev/video*       # For USB webcam
+# Cek permission
+sudo usermod -a -G video $USER
 
-# If using Pi Camera, enable in raspi-config
-sudo raspi-config
+# Cek USB webcam
+lsusb | grep -i camera
+
+# Test capture
+fswebcam test.jpg
 ```
 
-### Low FPS / Slow detection:
-
-- Use lower camera resolution (320x240)
-- Use YOLOv3-tiny instead of YOLOv3 (faster but less accurate)
-- Reduce detection frequency
-
-### MQTT connection fails:
-
-- Check credentials
-- Verify HiveMQ broker address
-- Test with mosquitto_sub first
-
-### Out of memory:
-
-- Increase swap size
-- Use YOLOv3-tiny
-- Reduce camera resolution
-
-## 📈 Performance
-
-**YOLOv3 on Raspberry Pi 4 (4GB):**
-- Resolution: 640x480
-- FPS: ~2-3 fps
-- CPU Usage: 80-90%
-
-**YOLOv3-tiny (faster alternative):**
-- FPS: ~5-8 fps
-- Less accurate but real-time
-
-## 🔄 Alternative: YOLOv3-tiny (Faster)
-
-For better performance, use YOLOv3-tiny:
+### Error: "Cannot open camera"
 
 ```bash
-cd ~/yolo
+# Cek proses yang menggunakan webcam
+sudo fuser /dev/video0
 
-# Download tiny model
-wget https://pjreddie.com/media/files/yolov3-tiny.weights
-wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg
+# Kill proses jika ada
+sudo fuser -k /dev/video0
 ```
 
-Update in `people_counter.py`:
+### Low FPS / Lag:
 
-```python
-YOLO_CONFIG = "/home/digitaltwin/yolo/yolov3-tiny.cfg"
-YOLO_WEIGHTS = "/home/digitaltwin/yolo/yolov3-tiny.weights"
+- Turunkan resolusi: `FRAME_WIDTH = 320`, `FRAME_HEIGHT = 240`
+- Turunkan FPS: `STREAM_FPS = 10`
+- Pastikan bandwidth jaringan cukup
+- Cek CPU usage: `htop`
+
+### Flask server tidak bisa diakses:
+
+```bash
+# Cek firewall
+sudo ufw status
+
+# Allow port 5000
+sudo ufw allow 5000
+
+# Cek service berjalan
+ps aux | grep webcam_stream
+```
+
+## 🔗 Integrasi dengan Dashboard
+
+Update file `view_virtual/src/components/CameraStream.vue`:
+
+```vue
+<template>
+  <div class="camera-container">
+    <h3>📹 Live Camera Feed</h3>
+    <img 
+      :src="streamUrl" 
+      alt="Webcam Stream"
+      @error="onStreamError"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+
+// Ganti dengan IP Raspberry Pi Anda
+const streamUrl = ref('http://192.168.1.100:5000/video_feed')
+
+const onStreamError = () => {
+  console.error('Stream error - cek Raspberry Pi')
+}
+</script>
 ```
 
 ## 📝 Next Steps
 
-After Raspberry Pi is running:
+1. ✅ Setup Raspberry Pi dengan webcam
+2. ✅ Test streaming di browser
+3. 🔲 Integrasikan ke Dashboard Vue.js
+4. 🔲 (Optional) Tambahkan people counting nanti
+5. 🔲 (Optional) Tambahkan motion detection
 
-1. **Update Bridge Script** - Add handling for camera data
-2. **Update Digital Twin Model** - Add PeopleCounterSensor
-3. **Update Dashboard** - Show people count in real-time
-
-See: `INTEGRATION.md` for bridge and Digital Twins integration steps.
+**Lihat:** `WEBCAM_SETUP.md` untuk panduan detail integrasi.
