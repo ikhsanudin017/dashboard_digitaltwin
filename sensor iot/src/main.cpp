@@ -6,8 +6,8 @@
 #include <ArduinoJson.h>
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "Umi";
-const char* password = "tanyaumi";
+const char* ssid = "TOKO BAROKAH";
+const char* password = "sumberagung5758";
 
 // ===== KONFIGURASI MQTT HiveMQ Cloud =====
 const char* mqtt_server = "02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud";
