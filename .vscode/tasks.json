@@ -28,6 +28,14 @@
 			"options": {
 				"cwd": "${workspaceFolder}/sensor iot/azure-setup/azure-function"
 			}
+		},
+		{
+			"label": "PlatformIO: Upload ESP32",
+			"type": "shell",
+			"command": "platformio run --target upload",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }

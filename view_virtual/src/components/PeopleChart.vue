@@ -59,21 +59,21 @@ const chartData = computed(() => ({
     {
       label: 'Jumlah Orang',
       data: props.data.values || [],
-      borderColor: '#9b59b6',
-      backgroundColor: 'rgba(155, 89, 182, 0.15)',
+      borderColor: '#06b6d4',
+      backgroundColor: 'rgba(6, 182, 212, 0.15)',
       borderWidth: 3,
       fill: true,
       tension: 0.5,
       pointRadius: 5,
       pointHoverRadius: 8,
-      pointBackgroundColor: '#9b59b6',
+      pointBackgroundColor: '#06b6d4',
       pointBorderColor: '#fff',
       pointBorderWidth: 3,
       stepped: false,
       shadowOffsetX: 0,
       shadowOffsetY: 4,
       shadowBlur: 10,
-      shadowColor: 'rgba(155, 89, 182, 0.3)'
+      shadowColor: 'rgba(6, 182, 212, 0.3)'
     }
   ]
 }))
@@ -109,7 +109,7 @@ const chartOptions = computed(() => {
         bodyFont: {
           size: 12
         },
-        borderColor: '#9b59b6',
+        borderColor: '#06b6d4',
         borderWidth: 2,
         cornerRadius: 8,
         displayColors: true,
@@ -177,12 +177,12 @@ const chartOptions = computed(() => {
   text-align: center;
   margin-bottom: 24px;
   padding: 28px 24px;
-  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 50%, #7d3c98 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%);
   background-size: 200% 200%;
   animation: gradientShift 3s ease infinite;
   border-radius: 20px;
   color: white;
-  box-shadow: 0 8px 24px rgba(155, 89, 182, 0.3);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
@@ -211,7 +211,7 @@ const chartOptions = computed(() => {
 
 .people-count-display:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(155, 89, 182, 0.4);
+  box-shadow: 0 12px 32px rgba(6, 182, 212, 0.4);
 }
 
 .count-value {
