@@ -10,7 +10,7 @@ const char* ssid = "TOKO BERAS";
 const char* password = "sumberagung5758";
 
 // ===== KONFIGURASI MQTT HiveMQ Cloud =====
-const char* mqtt_server = "02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud";
+const char* mqtt_server = "aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud";
 const int mqtt_port = 8883;  // Port TLS
 const char* mqtt_username = "digitaltwin";  // Ganti dengan username dari Access Management
 const char* mqtt_password = "Digitaltwin1";  // Ganti dengan password dari Access Management

@@ -1,5 +1,29 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import mqtt from 'mqtt'
+
+const STORAGE_KEY = 'sensor_last_data'
+
+// Simpan data ke localStorage sebagai backup
+const saveLastData = (data) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  } catch (e) {
+    console.error('❌ Failed to save to localStorage:', e)
+  }
+}
+
+// Load data terakhir dari localStorage (sebagai fallback)
+const loadLastData = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      return JSON.parse(saved)
+    }
+  } catch (e) {
+    console.error('❌ Failed to load from localStorage:', e)
+  }
+  return null
+}
 
 export function useMQTT() {
   const mqttConnected = ref(false)
@@ -15,10 +39,91 @@ export function useMQTT() {
     lastPeopleUpdate: null
   })
   
+  // Auto-save ke localStorage setiap ada perubahan data
+  watch(sensorData, (newData) => {
+    saveLastData(newData)
+  }, { deep: true })
+  
   let client = null
+  
+  // Fetch latest data from Azure Storage Table
+  const fetchLatestFromAzure = async () => {
+    const azureUrl = import.meta.env.VITE_AZURE_FUNCTION_URL
+    if (!azureUrl) {
+      console.log('⚠️ Azure Function URL not configured, using localStorage')
+      const cached = loadLastData()
+      if (cached) {
+        sensorData.value = cached
+        console.log('💾 Loaded from localStorage')
+      }
+      return false
+    }
+    
+    try {
+      console.log('☁️ Fetching latest data from Azure Storage Table (SensorTelemetry)...')
+      const response = await fetch(`${azureUrl}/api/GetTelemetryData/latest`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.error('❌ Azure API error:', response.status, response.statusText)
+        // Fallback ke localStorage
+        const cached = loadLastData()
+        if (cached) {
+          sensorData.value = cached
+          console.log('💾 Loaded from localStorage (Azure failed)')
+        }
+        return false
+      }
+      
+      const result = await response.json()
+      
+      if (result.success && result.data) {
+        const data = result.data
+        console.log('✅ Got latest data from Azure Storage:', data)
+        
+        sensorData.value = {
+          temperature: parseFloat(data.suhu) || 0,
+          humidity: parseFloat(data.kelembaban) || 0,
+          voltage: parseFloat(data.tegangan) || 0,
+          current: parseFloat(data.arus) || 0,
+          power: parseFloat(data.daya) || 0,
+          voltageStatus: data.status_tegangan || 'unknown',
+          currentStatus: data.status_arus || 'unknown',
+          peopleCount: sensorData.value.peopleCount,
+          lastPeopleUpdate: sensorData.value.lastPeopleUpdate
+        }
+        
+        console.log('📊 Dashboard updated with Azure Storage data')
+        console.log('🕐 Last update from Azure:', data.timestamp)
+        return true
+      } else {
+        console.log('⚠️ No data from Azure, trying localStorage')
+        const cached = loadLastData()
+        if (cached) {
+          sensorData.value = cached
+          console.log('💾 Loaded from localStorage')
+        }
+      }
+      
+      return false
+    } catch (error) {
+      console.error('❌ Failed to fetch from Azure:', error.message)
+      // Fallback ke localStorage
+      const cached = loadLastData()
+      if (cached) {
+        sensorData.value = cached
+        console.log('💾 Loaded from localStorage (Azure error)')
+      }
+      return false
+    }
+  }
 
   const connectMQTT = () => {
-    const brokerUrl = 'wss://02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud:8884/mqtt'
+    const brokerUrl = 'wss://aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud:8884/mqtt'
     const username = 'digitaltwin'
     const password = 'Digitaltwin1'
     
@@ -51,6 +156,10 @@ export function useMQTT() {
       })
       
       console.log('⏳ Waiting for ESP32 data...')
+      
+      // Fetch latest data from Azure Storage on connect
+      console.log('🔄 Loading last known data from Azure Storage...')
+      fetchLatestFromAzure()
     })
 
     client.on('message', (topic, payload) => {
@@ -114,7 +223,7 @@ export function useMQTT() {
         }
         
         sensorData.value = { ...nextData }
-        console.log('✅ Updated:', sensorData.value)
+        console.log('✅ Updated (LIVE):', sensorData.value)
       } catch (e) {
         console.error('❌ Parse error:', e.message)
       }
@@ -122,20 +231,38 @@ export function useMQTT() {
     })
 
     client.on('error', (err) => {
-      console.error('❌', err.message)
+      console.error('❌ MQTT Error:', err.message)
       mqttConnected.value = false
+      // JANGAN reset sensorData - biarkan data terakhir tetap tampil
+      console.log('⚠️ Connection error, keeping last known data')
+    })
+
+    client.on('close', () => {
+      console.log('⚠️ MQTT Connection closed')
+      mqttConnected.value = false
+      // JANGAN reset sensorData - biarkan data terakhir tetap tampil
+      console.log('💾 Keeping last known data on dashboard')
+    })
+
+    client.on('offline', () => {
+      console.log('⚠️ MQTT Offline')
+      mqttConnected.value = false
+      // JANGAN reset sensorData - biarkan data terakhir tetap tampil
+      console.log('💾 Keeping last known data on dashboard')
     })
   }
 
   const disconnectMQTT = () => {
     if (client) client.end()
     mqttConnected.value = false
+    // JANGAN reset sensorData saat disconnect manual
   }
 
   return {
     mqttConnected,
     sensorData,
     connectMQTT,
-    disconnectMQTT
+    disconnectMQTT,
+    fetchLatestFromAzure
   }
 }

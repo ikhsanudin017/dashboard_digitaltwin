@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import axios from 'axios'
 
+// Azure Function URL - ganti dengan URL Azure Function Anda setelah deploy
+const AZURE_FUNCTION_URL = import.meta.env.VITE_AZURE_FUNCTION_URL || ''
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
 
 export function useAPI() {
@@ -20,6 +22,17 @@ export function useAPI() {
   })
 
   const fetchHistoricalData = async () => {
+    // Coba fetch dari Azure Storage terlebih dahulu
+    if (AZURE_FUNCTION_URL) {
+      try {
+        await fetchFromAzure()
+        return
+      } catch (azureError) {
+        console.warn('⚠️ Azure Storage tidak tersedia, mencoba API lokal...', azureError.message)
+      }
+    }
+
+    // Fallback ke API lokal atau dummy data
     try {
       // Fetch data suhu 24 jam
       try {
@@ -148,11 +161,61 @@ export function useAPI() {
     }
   }
 
+  const fetchFromAzure = async () => {
+    console.log('🔵 Fetching data from Azure Storage...')
+    
+    try {
+      // Fetch historical data (24 hours)
+      const response = await axios.get(`${AZURE_FUNCTION_URL}/api/GetTelemetryData/history?hours=24&limit=100`)
+      
+      if (response.data.success && response.data.data && response.data.data.length > 0) {
+        const data = response.data.data
+        
+        // Process temperature data
+        temperatureData.value = {
+          labels: data.map(d => new Date(d.timestamp).toLocaleTimeString('id-ID', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })),
+          values: data.map(d => d.suhu || 0)
+        }
+        
+        // Process electricity data (aggregate by day for 7 days)
+        const dayData = {}
+        data.forEach(d => {
+          const day = new Date(d.timestamp).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+          if (!dayData[day]) {
+            dayData[day] = { total: 0, count: 0 }
+          }
+          dayData[day].total += (d.daya || 0)
+          dayData[day].count++
+        })
+        
+        electricityData.value = {
+          labels: Object.keys(dayData),
+          values: Object.values(dayData).map(v => v.total / v.count)
+        }
+        
+        console.log('✅ Azure Storage data loaded successfully')
+        console.log(`   - Temperature: ${temperatureData.value.values.length} points`)
+        console.log(`   - Electricity: ${electricityData.value.values.length} days`)
+        
+        return true
+      } else {
+        throw new Error('No data from Azure Storage')
+      }
+    } catch (error) {
+      console.error('❌ Error fetching from Azure Storage:', error.message)
+      throw error
+    }
+  }
+
   return {
     temperatureData,
     electricityData,
     peopleData,
-    fetchHistoricalData
+    fetchHistoricalData,
+    fetchFromAzure
   }
 }
 
