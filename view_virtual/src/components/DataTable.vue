@@ -1,57 +1,80 @@
 <template>
   <div class="data-table">
-    <div class="table-responsive">
-      <table>
-        <thead>
-          <tr>
-            <th>Waktu</th>
-            <th>Suhu (°C)</th>
-            <th>Kelembaban (%)</th>
-            <th>Tegangan (V)</th>
-            <th>Arus (A)</th>
-            <th>Daya (W)</th>
-            <th>Jumlah Orang</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{{ currentTime }}</td>
-            <td>{{ formatValue(sensorData.temperature) }}</td>
-            <td>{{ formatValue(sensorData.humidity) }}</td>
-            <td>{{ formatValue(sensorData.voltage) }}</td>
-            <td>{{ formatValue(sensorData.current) }}</td>
-            <td>{{ formatValue(sensorData.power) }}</td>
-            <td>{{ peopleCount }}</td>
-            <td>
-              <span class="status-badge" :class="getOverallStatus()">
-                {{ getOverallStatusText() }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <EmptyState 
+      v-if="!hasData"
+      :is-dark-mode="false"
+      icon="📋"
+      icon-type="info"
+      title="Belum Ada Data Sensor"
+      description="Dashboard menunggu koneksi dari semua sensor IoT"
+      :actions="[
+        { icon: '🔌', text: 'Hubungkan ke MQTT broker' },
+        { icon: '🌡️', text: 'Sensor suhu dan kelembaban' },
+        { icon: '⚡', text: 'Sensor arus dan tegangan' },
+        { icon: '📹', text: 'Kamera people counter' }
+      ]"
+      button-text="Cek Koneksi MQTT"
+      @button-click="checkConnection"
+      :show-status="true"
+      :status-text="connectionStatus"
+      :status-class="connectionClass"
+    />
     
-    <div class="table-summary">
-      <div class="summary-item">
-        <div class="summary-label">Rata-rata Suhu</div>
-        <div class="summary-value">{{ formatValue(sensorData.temperature) }}°C</div>
+    <template v-else>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Waktu</th>
+              <th>Suhu (°C)</th>
+              <th>Kelembaban (%)</th>
+              <th>Tegangan (V)</th>
+              <th>Arus (A)</th>
+              <th>Daya (W)</th>
+              <th>Jumlah Orang</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{{ currentTime }}</td>
+              <td>{{ formatValue(sensorData.temperature) }}</td>
+              <td>{{ formatValue(sensorData.humidity) }}</td>
+              <td>{{ formatValue(sensorData.voltage) }}</td>
+              <td>{{ formatValue(sensorData.current) }}</td>
+              <td>{{ formatValue(sensorData.power) }}</td>
+              <td>{{ peopleCount }}</td>
+              <td>
+                <span class="status-badge" :class="getOverallStatus()">
+                  {{ getOverallStatusText() }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div class="summary-item">
-        <div class="summary-label">Total Konsumsi</div>
-        <div class="summary-value">{{ formatEnergy(totalEnergy) }}</div>
+      
+      <div class="table-summary">
+        <div class="summary-item">
+          <div class="summary-label">Rata-rata Suhu</div>
+          <div class="summary-value">{{ formatValue(sensorData.temperature) }}°C</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">Total Konsumsi</div>
+          <div class="summary-value">{{ formatEnergy(totalEnergy) }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">Kapasitas Ruangan</div>
+          <div class="summary-value">{{ peopleCount }} / 20</div>
+        </div>
       </div>
-      <div class="summary-item">
-        <div class="summary-label">Kapasitas Ruangan</div>
-        <div class="summary-value">{{ peopleCount }} / 20</div>
-      </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import EmptyState from './EmptyState.vue'
 
 const props = defineProps({
   sensorData: {
@@ -70,6 +93,37 @@ const props = defineProps({
 
 const currentTime = ref(new Date().toLocaleString('id-ID'))
 let timeInterval = null
+
+const hasData = computed(() => {
+  const temp = parseFloat(props.sensorData.temperature) || 0
+  const humidity = parseFloat(props.sensorData.humidity) || 0
+  const voltage = parseFloat(props.sensorData.voltage) || 0
+  const current = parseFloat(props.sensorData.current) || 0
+  
+  // Check if any sensor has valid data
+  return (
+    (temp > -50 && temp < 100) ||
+    (humidity >= 0 && humidity <= 100) ||
+    voltage > 0 ||
+    current > 0 ||
+    props.peopleCount > 0
+  )
+})
+
+const connectionStatus = computed(() => {
+  if (hasData.value) return 'Terhubung'
+  return 'Menunggu koneksi...'
+})
+
+const connectionClass = computed(() => {
+  if (hasData.value) return 'connected'
+  return 'waiting'
+})
+
+const checkConnection = () => {
+  console.log('🔌 Checking MQTT connection...')
+  // This can trigger a reconnection attempt if needed
+}
 
 // Watch untuk debug
 watch(() => props.sensorData, (newData) => {

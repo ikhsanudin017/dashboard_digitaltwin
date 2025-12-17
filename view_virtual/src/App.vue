@@ -7,7 +7,7 @@
             <div class="logo-icon">
               <img src="/logo.png" alt="TwinSpace Logo" class="logo-image" />
             </div>
-            <h1 class="logo-text">Digital Twin Dashboard</h1>
+            <h1 class="logo-text">Twin Space Dashboard</h1>
           </div>
         </div>
         
@@ -70,7 +70,7 @@
         </div>
 
         <!-- Row 2: Grafik Data Historis -->
-        <div class="grid grid-3">
+        <div class="grid grid-3" style="margin-bottom: 20px;">
           <div class="card">
             <h2>🌡️ Suhu (24 Jam)</h2>
             <TemperatureChart :data="temperatureData" :is-dark-mode="isDarkMode" />
@@ -87,8 +87,11 @@
           </div>
         </div>
 
+        <!-- Energy Management -->
+        <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" />
+
         <!-- Row 3: Detail Data -->
-        <div class="card">
+        <div class="card" style="margin-top: 20px;">
           <h2>📋 Detail Data Sensor</h2>
           <DataTable 
             :sensor-data="sensorData" 
@@ -96,6 +99,9 @@
             :total-energy="totalEnergyWh"
           />
         </div>
+
+        <!-- Historical Analytics -->
+        <HistoricalAnalytics :is-dark-mode="isDarkMode" />
       </div>
     </main>
   </div>
@@ -110,7 +116,10 @@ import ElectricityChart from './components/ElectricityChart.vue'
 import PeopleChart from './components/PeopleChart.vue'
 import DataTable from './components/DataTable.vue'
 import CameraStream from './components/CameraStream.vue'
+import HistoricalAnalytics from './components/HistoricalAnalytics.vue'
+import EnergyManagement from './components/EnergyManagement.vue'
 import { useMQTT } from './composables/useMQTT'
+import { useHistoricalData } from './composables/useHistoricalData'
 
 // Dark Mode / Light Mode Toggle
 const isDarkMode = ref(false)
@@ -151,12 +160,19 @@ const {
   disconnectMQTT 
 } = useMQTT()
 
+// Historical Data Management
+const { loadHistoricalData, addDataPoint: addHistoricalDataPoint } = useHistoricalData()
+
 // Data dummy untuk chart (nanti bisa diganti dengan real data)
 const temperatureData = ref({ labels: [], values: [] })
 const electricityData = ref({ labels: [], values: [] })
 const peopleData = ref({ labels: [], values: [] })
 const peopleCount = ref(0)
 const totalEnergyWh = ref(0)
+
+// Auto-save throttling
+let lastSaveTimestamp = 0
+const SAVE_INTERVAL = 30000 // 30 seconds
 
 const currentTime = ref(new Date())
 
@@ -177,6 +193,7 @@ let lastPowerTimestamp = Date.now()
 onMounted(() => {
   loadTheme()
   connectMQTT()
+  loadHistoricalData() // Load historical data from localStorage
   
   timeInterval = setInterval(() => {
     currentTime.value = new Date()
@@ -195,7 +212,7 @@ onMounted(() => {
 
 const MAX_POINTS = 60
 
-const addDataPoint = (targetRef, value) => {
+const addChartDataPoint = (targetRef, value) => {
   if (value === undefined || value === null || isNaN(value)) return
   const timestamp = new Date().toLocaleTimeString('id-ID', {
     hour: '2-digit',
@@ -216,11 +233,13 @@ const addDataPoint = (targetRef, value) => {
 
 watch(sensorData, (newData) => {
   if (!newData) return
+  
+  // Update chart data
   if (typeof newData.temperature === 'number') {
-    addDataPoint(temperatureData, newData.temperature)
+    addChartDataPoint(temperatureData, newData.temperature)
   }
   if (typeof newData.power === 'number') {
-    addDataPoint(electricityData, newData.power)
+    addChartDataPoint(electricityData, newData.power)
     
     const now = Date.now()
     const deltaHours = (now - lastPowerTimestamp) / 3600000
@@ -231,7 +250,15 @@ watch(sensorData, (newData) => {
   }
   if (typeof newData.peopleCount === 'number') {
     peopleCount.value = newData.peopleCount
-    addDataPoint(peopleData, newData.peopleCount)
+    addChartDataPoint(peopleData, newData.peopleCount)
+  }
+  
+  // Auto-save to historical data (throttled)
+  const now = Date.now()
+  if (now - lastSaveTimestamp >= SAVE_INTERVAL) {
+    addHistoricalDataPoint(newData)
+    lastSaveTimestamp = now
+    console.log('💾 Auto-saved sensor data to historical storage')
   }
 }, { deep: true })
 

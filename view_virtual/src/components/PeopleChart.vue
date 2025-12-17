@@ -1,19 +1,38 @@
 <template>
   <div class="chart-container">
-    <div class="people-count-display">
-      <div class="count-value">{{ currentCount }}</div>
-      <div class="count-label">Orang di Ruangan</div>
-    </div>
-    <Line
-      :data="chartData"
-      :options="chartOptions"
+    <EmptyState 
+      v-if="!hasData"
+      :is-dark-mode="isDarkMode"
+      icon="👥"
+      icon-type="info"
+      title="Menunggu Data People Counter"
+      description="Sistem menunggu data dari kamera penghitung orang"
+      :actions="[
+        { icon: '📹', text: 'Pastikan kamera Raspberry Pi aktif' },
+        { icon: '🤖', text: 'Model YOLO memproses video' },
+        { icon: '📡', text: 'Data dikirim melalui MQTT' }
+      ]"
+      :show-status="true"
+      status-text="Menunggu deteksi kamera..."
+      status-class="waiting"
     />
+    <template v-else>
+      <div class="people-count-display">
+        <div class="count-value">{{ currentCount }}</div>
+        <div class="count-label">Orang di Ruangan</div>
+      </div>
+      <Line
+        :data="chartData"
+        :options="chartOptions"
+      />
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { Line } from 'vue-chartjs'
+import EmptyState from './EmptyState.vue'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -48,6 +67,9 @@ const props = defineProps({
   }
 })
 
+const hasData = computed(() => {
+  return props.data && props.data.values && props.data.values.length > 0
+})
 const currentCount = computed(() => {
   const values = props.data.values || []
   return values.length > 0 ? values[values.length - 1] : 0

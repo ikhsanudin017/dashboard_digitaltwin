@@ -1,6 +1,23 @@
 <template>
   <div class="chart-container">
+    <EmptyState 
+      v-if="!hasData"
+      :is-dark-mode="isDarkMode"
+      icon="🌡️"
+      icon-type="info"
+      title="Menunggu Data Suhu"
+      description="Sistem menunggu data dari sensor suhu dan kelembaban"
+      :actions="[
+        { icon: '🔌', text: 'Pastikan MQTT broker terhubung' },
+        { icon: '📡', text: 'Periksa koneksi sensor DHT11' },
+        { icon: '⏱️', text: 'Data akan muncul dalam beberapa detik' }
+      ]"
+      :show-status="true"
+      status-text="Menunggu koneksi sensor..."
+      status-class="waiting"
+    />
     <Line
+      v-else
       :data="chartData"
       :options="chartOptions"
     />
@@ -10,6 +27,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Line } from 'vue-chartjs'
+import EmptyState from './EmptyState.vue'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,6 +60,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
+})
+
+const hasData = computed(() => {
+  return props.data && props.data.values && props.data.values.length > 0
 })
 
 const chartData = computed(() => ({
