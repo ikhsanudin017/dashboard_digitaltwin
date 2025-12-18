@@ -24,12 +24,12 @@ module.exports = async function (context, req) {
         // Log received data
         context.log('📊 Received sensor data:', JSON.stringify(sensorData));
         
-        // Validasi data sensor
-        const requiredFields = ['suhu', 'kelembaban', 'tegangan', 'arus', 'daya'];
-        const missingFields = requiredFields.filter(field => sensorData[field] === undefined);
+        // Deteksi tipe data (sensor ESP32 atau people counter)
+        const isESP32Data = sensorData.suhu !== undefined;
+        const isPeopleCountData = sensorData.jumlahOrang !== undefined;
         
-        if (missingFields.length > 0) {
-            context.log.warn(`⚠️  Missing fields: ${missingFields.join(', ')}`);
+        if (!isESP32Data && !isPeopleCountData) {
+            context.log.warn('⚠️  Unknown data format - no sensor data or people count');
         }
 
         // Tambahkan timestamp dan metadata
@@ -68,24 +68,38 @@ module.exports = async function (context, req) {
                 partitionKey: deviceId,
                 rowKey: Date.now().toString(), // Unique ID menggunakan timestamp
                 timestamp: timestamp,
-                suhu: enrichedData.suhu,
-                kelembaban: enrichedData.kelembaban,
-                tegangan: enrichedData.tegangan,
-                arus: enrichedData.arus,
-                daya: enrichedData.daya,
-                status_tegangan: enrichedData.status_tegangan || "unknown",
-                status_arus: enrichedData.status_arus || "unknown",
                 deviceId: deviceId,
                 receivedAt: enrichedData.receivedAt
             };
+            
+            // Tambahkan field ESP32 jika ada
+            if (enrichedData.suhu !== undefined) {
+                entity.suhu = enrichedData.suhu;
+                entity.kelembaban = enrichedData.kelembaban;
+                entity.tegangan = enrichedData.tegangan;
+                entity.arus = enrichedData.arus;
+                entity.daya = enrichedData.daya;
+                entity.status_tegangan = enrichedData.status_tegangan || "unknown";
+                entity.status_arus = enrichedData.status_arus || "unknown";
+            }
+            
+            // Tambahkan field people count jika ada
+            if (enrichedData.jumlahOrang !== undefined) {
+                entity.jumlahOrang = enrichedData.jumlahOrang;
+            }
 
             // Insert ke Storage Table
             await tableClient.createEntity(entity);
             
             context.log('💾 Data saved to Storage Table successfully');
             context.log(`   - Device: ${deviceId}`);
-            context.log(`   - Suhu: ${enrichedData.suhu}°C`);
-            context.log(`   - Daya: ${enrichedData.daya}W`);
+            if (enrichedData.suhu !== undefined) {
+                context.log(`   - Suhu: ${enrichedData.suhu}°C`);
+                context.log(`   - Daya: ${enrichedData.daya}W`);
+            }
+            if (enrichedData.jumlahOrang !== undefined) {
+                context.log(`   - Jumlah Orang: ${enrichedData.jumlahOrang}`);
+            }
 
         } catch (storageError) {
             context.log.error('❌ Storage error:', storageError.message);

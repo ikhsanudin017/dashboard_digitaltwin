@@ -20,7 +20,10 @@ MQTT_BROKER = "aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883
 MQTT_USERNAME = "digitaltwin"
 MQTT_PASSWORD = "Digitaltwin1"
-MQTT_TOPIC = "sensor/dht11/data"
+MQTT_TOPICS = [
+    ("sensor/dht11/data", 1),      # ESP32 sensor data
+    ("sensor/camera/people", 1)    # Raspberry Pi people count
+]
 
 # ===== KONFIGURASI AZURE FUNCTION =====
 AZURE_FUNCTION_URL = "https://func-energymonitor-7d2e5be2.azurewebsites.net/api/MqttToIoTHub"
@@ -35,8 +38,10 @@ def on_connect(client, userdata, flags, rc):
     """Callback saat connect ke MQTT broker"""
     if rc == 0:
         print("✅ Connected to HiveMQ Cloud!")
-        print(f"📡 Subscribing to topic: {MQTT_TOPIC}")
-        client.subscribe(MQTT_TOPIC, qos=1)
+        print(f"📡 Subscribing to topics:")
+        for topic, qos in MQTT_TOPICS:
+            client.subscribe(topic, qos=qos)
+            print(f"   - {topic}")
     else:
         print(f"❌ Connection failed with code {rc}")
         sys.exit(1)
@@ -55,13 +60,22 @@ def on_message(client, userdata, msg):
     try:
         # Parse JSON payload
         payload = json.loads(msg.payload.decode())
+        topic = msg.topic
         
-        print(f"\n📥 [{messages_received}] Data received from ESP32:")
-        print(f"   Suhu: {payload.get('suhu')}°C")
-        print(f"   Kelembaban: {payload.get('kelembaban')}%")
-        print(f"   Tegangan: {payload.get('tegangan')}V")
-        print(f"   Arus: {payload.get('arus')}A")
-        print(f"   Daya: {payload.get('daya')}W")
+        print(f"\n📥 [{messages_received}] Data received from topic: {topic}")
+        
+        # Tampilkan data sesuai topic
+        if topic == "sensor/dht11/data":
+            print(f"   ESP32 Sensor Data:")
+            print(f"   - Suhu: {payload.get('suhu')}°C")
+            print(f"   - Kelembaban: {payload.get('kelembaban')}%")
+            print(f"   - Tegangan: {payload.get('tegangan')}V")
+            print(f"   - Arus: {payload.get('arus')}A")
+            print(f"   - Daya: {payload.get('daya')}W")
+        elif topic == "sensor/camera/people":
+            print(f"   People Counter Data:")
+            print(f"   - Jumlah Orang: {payload.get('jumlahOrang')}")
+            print(f"   - Timestamp: {payload.get('timestamp')}")
         
         # Forward ke Azure Function
         url = f"{AZURE_FUNCTION_URL}?code={AZURE_FUNCTION_KEY}"
@@ -92,7 +106,9 @@ def main():
     print("🌉 MQTT to Azure Bridge")
     print("=" * 60)
     print(f"MQTT Broker: {MQTT_BROKER}:{MQTT_PORT}")
-    print(f"Topic: {MQTT_TOPIC}")
+    print(f"Topics:")
+    for topic, qos in MQTT_TOPICS:
+        print(f"  - {topic}")
     print(f"Azure Function: {AZURE_FUNCTION_URL}")
     print("=" * 60)
     print()

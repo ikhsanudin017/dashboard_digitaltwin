@@ -22,7 +22,7 @@ FRAME_WIDTH = 320  # Resolusi kecil untuk performa tinggi
 FRAME_HEIGHT = 240
 
 # ===== MQTT =====
-MQTT_BROKER = "02cd9f1cff1343ed8f68b7e5820a46d5.s1.eu.hivemq.cloud"
+MQTT_BROKER = "aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883
 MQTT_USERNAME = "digitaltwin"
 MQTT_PASSWORD = "Digitaltwin1"
