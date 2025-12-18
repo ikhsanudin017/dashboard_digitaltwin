@@ -22,17 +22,20 @@ export function useAPI() {
   })
 
   const fetchHistoricalData = async () => {
-    // Coba fetch dari Azure Storage terlebih dahulu
+    // PRIORITAS 1: Selalu coba fetch dari Azure Storage terlebih dahulu
     if (AZURE_FUNCTION_URL) {
       try {
-        await fetchFromAzure()
-        return
+        const azureSuccess = await fetchFromAzure()
+        if (azureSuccess) {
+          console.log('✅ Data historis berhasil dimuat dari Azure Storage')
+          return
+        }
       } catch (azureError) {
-        console.warn('⚠️ Azure Storage tidak tersedia, mencoba API lokal...', azureError.message)
+        console.warn('⚠️ Azure Storage tidak tersedia:', azureError.message)
       }
     }
 
-    // Fallback ke API lokal atau dummy data
+    // PRIORITAS 2: Fallback ke API lokal (jika ada)
     try {
       // Fetch data suhu 24 jam
       try {
@@ -162,51 +165,90 @@ export function useAPI() {
   }
 
   const fetchFromAzure = async () => {
-    console.log('🔵 Fetching data from Azure Storage...')
+    console.log('🔵 Mengambil data dari Azure Storage (stenergy750b783c)...')
     
     try {
-      // Fetch historical data (24 hours)
-      const response = await axios.get(`${AZURE_FUNCTION_URL}/api/GetTelemetryData/history?hours=24&limit=100`)
+      // Ambil data dari Azure Storage Table melalui Azure Function
+      const response = await axios.get(`${AZURE_FUNCTION_URL}/telemetry/history?hours=168&limit=500`, {
+        timeout: 10000 // 10 detik timeout
+      })
       
-      if (response.data.success && response.data.data && response.data.data.length > 0) {
-        const data = response.data.data
+      console.log('📊 Response dari Azure:', response.data)
+      
+      if (response.data.success) {
+        const data = response.data.data || []
         
-        // Process temperature data
-        temperatureData.value = {
-          labels: data.map(d => new Date(d.timestamp).toLocaleTimeString('id-ID', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })),
-          values: data.map(d => d.suhu || 0)
-        }
-        
-        // Process electricity data (aggregate by day for 7 days)
-        const dayData = {}
-        data.forEach(d => {
-          const day = new Date(d.timestamp).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
-          if (!dayData[day]) {
-            dayData[day] = { total: 0, count: 0 }
+        if (data.length > 0) {
+          console.log(`✅ Ditemukan ${data.length} data dari Azure Storage Table`)
+          
+          // Process temperature data (24 jam terakhir)
+          temperatureData.value = {
+            labels: data.slice(-24).map(d => new Date(d.timestamp).toLocaleTimeString('id-ID', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })),
+            values: data.slice(-24).map(d => parseFloat(d.suhu) || 0)
           }
-          dayData[day].total += (d.daya || 0)
-          dayData[day].count++
-        })
-        
-        electricityData.value = {
-          labels: Object.keys(dayData),
-          values: Object.values(dayData).map(v => v.total / v.count)
+          
+          // Process electricity data (aggregate by day)
+          const dayData = {}
+          data.forEach(d => {
+            const day = new Date(d.timestamp).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+            if (!dayData[day]) {
+              dayData[day] = { total: 0, count: 0 }
+            }
+            dayData[day].total += (parseFloat(d.daya) || 0)
+            dayData[day].count++
+          })
+          
+          electricityData.value = {
+            labels: Object.keys(dayData),
+            values: Object.values(dayData).map(v => v.total / v.count)
+          }
+          
+          // Process people count data (jika ada)
+          try {
+            const peopleResponse = await axios.get(`${AZURE_FUNCTION_URL}/telemetry/people?hours=24`, {
+              timeout: 5000
+            })
+            if (peopleResponse.data.success && peopleResponse.data.data?.length > 0) {
+              const pData = peopleResponse.data.data
+              peopleData.value = {
+                labels: pData.map(d => new Date(d.timestamp).toLocaleTimeString('id-ID', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })),
+                values: pData.map(d => parseInt(d.count) || 0)
+              }
+              console.log(`   - People Count: ${peopleData.value.values.length} points`)
+            }
+          } catch (peopleError) {
+            console.log('   - People Count: Data tidak tersedia')
+          }
+          
+          console.log(`   ✓ Suhu: ${temperatureData.value.values.length} data point`)
+          console.log(`   ✓ Listrik: ${electricityData.value.values.length} hari`)
+          console.log('   📍 Sumber: Azure Storage Table (stenergy750b783c)')
+          
+          return true
+        } else {
+          console.log('⚠️ Azure Storage Table kosong atau belum ada data')
+          console.log('   Pastikan ESP32 sudah mengirim data ke Azure Storage')
+          return false
         }
-        
-        console.log('✅ Azure Storage data loaded successfully')
-        console.log(`   - Temperature: ${temperatureData.value.values.length} points`)
-        console.log(`   - Electricity: ${electricityData.value.values.length} days`)
-        
-        return true
       } else {
-        throw new Error('No data from Azure Storage')
+        console.warn('⚠️ Response dari Azure tidak valid')
+        return false
       }
     } catch (error) {
-      console.error('❌ Error fetching from Azure Storage:', error.message)
-      throw error
+      if (error.code === 'ECONNABORTED') {
+        console.error('❌ Timeout connecting to Azure Storage')
+      } else if (error.response) {
+        console.error('❌ Azure Function error:', error.response.status, error.response.data)
+      } else {
+        console.error('❌ Network error:', error.message)
+      }
+      return false
     }
   }
 

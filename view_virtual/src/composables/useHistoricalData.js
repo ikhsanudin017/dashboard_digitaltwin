@@ -1,22 +1,65 @@
 import { ref } from 'vue'
+import axios from 'axios'
 
 const STORAGE_KEY = 'digitaltwin_historical_data'
 const MAX_DATA_POINTS = 10000
+const AZURE_FUNCTION_URL = import.meta.env.VITE_AZURE_FUNCTION_URL || ''
 
 export function useHistoricalData() {
   const historicalData = ref([])
+  const isLoading = ref(false)
   
-  const loadHistoricalData = () => {
+  const loadHistoricalData = async () => {
+    isLoading.value = true
+    
+    // PRIORITAS 1: Coba ambil dari Azure Storage terlebih dahulu
+    if (AZURE_FUNCTION_URL) {
+      try {
+        console.log('🔵 Loading data from Azure Storage...')
+        const response = await axios.get(`${AZURE_FUNCTION_URL}/telemetry/history?hours=720&limit=5000`, {
+          timeout: 15000
+        })
+        
+        if (response.data.success && response.data.data?.length > 0) {
+          const azureData = response.data.data.map(item => ({
+            timestamp: item.timestamp,
+            temperature: item.suhu || null,
+            humidity: item.kelembaban || null,
+            voltage: item.tegangan || null,
+            current: item.arus || null,
+            power: item.daya || null,
+            peopleCount: null // Will be loaded separately if available
+          }))
+          
+          historicalData.value = azureData
+          console.log('✅ Azure Storage data loaded:', historicalData.value.length, 'records')
+          
+          // Simpan ke localStorage sebagai cache
+          saveHistoricalData()
+          isLoading.value = false
+          return
+        }
+      } catch (azureError) {
+        console.warn('⚠️ Azure Storage error:', azureError.message)
+      }
+    }
+    
+    // PRIORITAS 2: Fallback ke localStorage
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         historicalData.value = JSON.parse(stored)
-        console.log('📂 Historical data loaded:', historicalData.value.length, 'records')
+        console.log('📂 Historical data loaded from cache:', historicalData.value.length, 'records')
+      } else {
+        console.log('ℹ️ No historical data available')
+        historicalData.value = []
       }
     } catch (error) {
       console.error('Error loading historical data:', error)
       historicalData.value = []
     }
+    
+    isLoading.value = false
   }
   
   const saveHistoricalData = () => {
@@ -183,6 +226,7 @@ export function useHistoricalData() {
   
   return {
     historicalData,
+    isLoading,
     loadHistoricalData,
     addDataPoint,
     getDataByDateRange,

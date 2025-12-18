@@ -47,9 +47,12 @@ module.exports = async function (context, req) {
             case 'stats':
                 await handleStats(context, tableClient, hours);
                 break;
+            case 'people':
+                await handlePeopleCount(context, connectionString, hours, limit);
+                break;
             default:
                 context.res.status = 400;
-                context.res.body = { error: "Invalid action. Use: latest, history, or stats" };
+                context.res.body = { error: "Invalid action. Use: latest, history, stats, or people" };
         }
 
     } catch (error) {
@@ -172,5 +175,49 @@ async function handleStats(context, tableClient, hours) {
     } else {
         context.res.status = 404;
         context.res.body = { error: "No data found for the specified time range" };
+    }
+}
+
+async function handlePeopleCount(context, connectionString, hours, limit) {
+    try {
+        const tableClient = TableClient.fromConnectionString(
+            connectionString,
+            "PeopleCount"
+        );
+        
+        const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+        const entities = tableClient.listEntities();
+        
+        const data = [];
+        for await (const entity of entities) {
+            if (new Date(entity.timestamp) >= cutoffTime) {
+                data.push({
+                    timestamp: entity.timestamp,
+                    count: entity.count || 0,
+                    location: entity.location || 'unknown'
+                });
+            }
+            if (data.length >= limit) break;
+        }
+        
+        // Sort by timestamp descending
+        data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        context.res.status = 200;
+        context.res.body = {
+            success: true,
+            count: data.length,
+            hours: hours,
+            data: data
+        };
+    } catch (error) {
+        context.log.error('Error fetching people count:', error);
+        context.res.status = 200;
+        context.res.body = {
+            success: true,
+            count: 0,
+            hours: hours,
+            data: []
+        };
     }
 }

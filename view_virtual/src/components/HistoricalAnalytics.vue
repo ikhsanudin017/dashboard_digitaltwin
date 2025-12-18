@@ -144,9 +144,16 @@ const props = defineProps({
   isDarkMode: Boolean
 })
 
-const { getDataByDateRange, getAggregatedData, exportToCSV, getStatistics } = useHistoricalData()
+const { historicalData, isLoading, loadHistoricalData, getDataByDateRange, getAggregatedData, exportToCSV, getStatistics } = useHistoricalData()
 
 const isExpanded = ref(false)
+
+// Load data from Azure Storage when component mounts
+onMounted(async () => {
+  console.log('🔄 HistoricalAnalytics: Loading data from Azure Storage...')
+  await loadHistoricalData()
+  console.log('📊 HistoricalAnalytics: Data loaded, total records:', historicalData.value.length)
+})
 const today = new Date().toISOString().split('T')[0]
 const endDate = ref(today)
 const startDate = ref(getDateDaysAgo(7))

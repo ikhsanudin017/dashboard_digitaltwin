@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue'
 import mqtt from 'mqtt'
+import axios from 'axios'
 
 const STORAGE_KEY = 'sensor_last_data'
 
@@ -61,25 +62,11 @@ export function useMQTT() {
     
     try {
       console.log('☁️ Fetching latest data from Azure Storage Table (SensorTelemetry)...')
-      const response = await fetch(`${azureUrl}/api/GetTelemetryData/latest`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await axios.get(`${azureUrl}/telemetry/latest`, {
+        timeout: 10000
       })
       
-      if (!response.ok) {
-        console.error('❌ Azure API error:', response.status, response.statusText)
-        // Fallback ke localStorage
-        const cached = loadLastData()
-        if (cached) {
-          sensorData.value = cached
-          console.log('💾 Loaded from localStorage (Azure failed)')
-        }
-        return false
-      }
-      
-      const result = await response.json()
+      const result = response.data
       
       if (result.success && result.data) {
         const data = result.data
