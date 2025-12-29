@@ -1,6 +1,15 @@
 <template>
   <div class="digital-twin-3d">
     <div ref="container" class="canvas-container"></div>
+    
+    <!-- Loading Indicator -->
+    <div v-if="!modelLoaded" class="loading-overlay">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Loading 3D Model... {{ loadingProgress.toFixed(0) }}%</p>
+      </div>
+    </div>
+    
     <div class="controls">
       <button @click="resetCamera" class="btn btn-primary">🔄 Reset Kamera</button>
       <button @click="toggleAnimation" class="btn btn-primary">
@@ -31,6 +40,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
 
 const props = defineProps({
   sensorData: {
@@ -58,6 +69,11 @@ let peopleIndicators = []
 let animationId = null
 let eventHandlers = {}
 let hoveredObject = null
+
+// Blender Model Variables
+let blenderModel = null
+const modelLoaded = ref(false)
+const loadingProgress = ref(0)
 
 onMounted(() => {
   // Wait for next tick to ensure DOM is ready
@@ -142,55 +158,81 @@ const initThreeJS = () => {
     camera.position.set(20, 15, 20)
     camera.lookAt(0, 0, 0)
 
-    // Renderer dengan enhanced quality
+    // Renderer dengan enhanced quality dan realism settings
     renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
       alpha: true,
-      powerPreference: "high-performance"
+      powerPreference: "high-performance",
+      logarithmicDepthBuffer: true // Better depth precision
     })
     renderer.setSize(width, height)
+    
+    // Enhanced shadow quality
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.shadowMap.autoUpdate = true
+    
+    // Better tone mapping untuk realism (penting!)
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.2
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.toneMappingExposure = 0.9 // Balanced - tidak terlalu terang atau gelap
+    
+    // Color management
     renderer.outputColorSpace = THREE.SRGBColorSpace
+    
+    // Pixel ratio untuk sharpness
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    
+    // Enable physically correct lighting (PENTING untuk realism!)
+    renderer.physicallyCorrectLights = true
+    
     container.value.appendChild(renderer.domElement)
   } catch (error) {
     console.error('Error initializing Three.js:', error)
     return
   }
 
-  // Enhanced lighting setup dengan multiple light sources
-  // Hemisphere light untuk natural ambient
-  const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8)
+  // Enhanced lighting setup mirip Blender Eevee untuk MAXIMUM REALISM
+  
+  // Ambient light untuk base illumination - balanced
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
+  scene.add(ambientLight)
+  
+  // Hemisphere light untuk natural sky/ground lighting
+  const hemisphereLight = new THREE.HemisphereLight(
+    0xffffff, // Sky color
+    0x444444, // Ground color
+    0.5
+  )
   hemisphereLight.position.set(0, 20, 0)
   scene.add(hemisphereLight)
 
-  // Main directional light dengan improved shadows
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5)
-  directionalLight.position.set(15, 25, 10)
+  // Main directional light (sun) dengan ultra-high-quality shadows
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.8) // Balanced intensity
+  directionalLight.position.set(20, 30, 15)
   directionalLight.castShadow = true
-  directionalLight.shadow.camera.left = -25
-  directionalLight.shadow.camera.right = 25
-  directionalLight.shadow.camera.top = 25
-  directionalLight.shadow.camera.bottom = -25
+  
+  // Ultra-high-quality shadow settings
+  directionalLight.shadow.camera.left = -30
+  directionalLight.shadow.camera.right = 30
+  directionalLight.shadow.camera.top = 30
+  directionalLight.shadow.camera.bottom = -30
   directionalLight.shadow.camera.near = 0.5
-  directionalLight.shadow.camera.far = 50
+  directionalLight.shadow.camera.far = 100
   directionalLight.shadow.mapSize.width = 4096
   directionalLight.shadow.mapSize.height = 4096
-  directionalLight.shadow.bias = -0.0001
-  directionalLight.shadow.normalBias = 0.02
+  directionalLight.shadow.bias = -0.00005
+  directionalLight.shadow.normalBias = 0.01
+  directionalLight.shadow.radius = 2 // Soft shadows
   scene.add(directionalLight)
 
-  // Fill light untuk mengurangi shadow yang terlalu gelap
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.4)
-  fillLight.position.set(-15, 10, -10)
+  // Fill light (bounce light dari dinding)
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.5)
+  fillLight.position.set(-20, 15, -15)
   scene.add(fillLight)
 
-  // Rim light untuk depth
+  // Rim light (edge lighting untuk depth)
   const rimLight = new THREE.DirectionalLight(0x88ccff, 0.6)
-  rimLight.position.set(-20, 5, 20)
+  rimLight.position.set(-25, 8, 25)
   scene.add(rimLight)
 
   // Accent point lights dengan better positioning
@@ -217,8 +259,11 @@ const initThreeJS = () => {
   raycaster = new THREE.Raycaster()
   mouse = new THREE.Vector2()
 
-  // Create room
-  createRoom()
+  // Setup environment untuk realistic reflections
+  setupEnvironment()
+  
+  // Load Blender Model (REPLACE createRoom)
+  loadBlenderModel()
 
   // Create sensors dengan detail lebih
   createSensors()
@@ -232,6 +277,154 @@ const initThreeJS = () => {
   // Handle window resize
   eventHandlers.onWindowResize = onWindowResize
   window.addEventListener('resize', onWindowResize)
+}
+
+// Setup Environment Map untuk Realistic Reflections
+const setupEnvironment = () => {
+  // Create environment map (procedural)
+  const pmremGenerator = new THREE.PMREMGenerator(renderer)
+  pmremGenerator.compileEquirectangularShader()
+  
+  // Create realistic gradient environment scene
+  const envScene = new THREE.Scene()
+  
+  // Sky gradient with more saturation
+  const skyGradient = new THREE.Color(0xb8d4ff) // More vibrant blue
+  envScene.background = skyGradient
+  
+  // Add hemisphere light to environment
+  const envHemi = new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.0)
+  envScene.add(envHemi)
+  
+  // Generate environment map
+  const envMap = pmremGenerator.fromScene(envScene).texture
+  scene.environment = envMap
+  
+  // Set scene background (bisa diubah sesuai dark/light mode)
+  scene.background = new THREE.Color(props.isDarkMode ? 0x1a1a2e : 0xf0f8ff)
+  
+  pmremGenerator.dispose()
+  
+  console.log('✅ Environment map setup complete')
+}
+
+// Load Blender Model
+const loadBlenderModel = () => {
+  const loader = new GLTFLoader()
+  
+  console.log('🏠 Loading 3D model dari Blender...')
+  
+  loader.load(
+    '/models/3d digital twin.glb',
+    
+    // onLoad - Success
+    (gltf) => {
+      blenderModel = gltf.scene
+      
+      // Setup posisi dan scale
+      blenderModel.position.set(0, 0, 0)
+      blenderModel.scale.set(1, 1, 1)
+      
+      // Enable shadows dan improve materials untuk MAXIMUM REALISM
+      blenderModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+          
+          // Improve material quality
+          if (child.material) {
+            child.material.needsUpdate = true
+            
+            // Enhanced material properties untuk realism
+            if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+              // Environment mapping untuk reflections (PENTING!)
+              if (scene.environment) {
+                child.material.envMap = scene.environment
+                child.material.envMapIntensity = 1.0 // Balanced - tidak terlalu glossy
+              }
+              
+              // Improve metalness & roughness
+              child.material.metalness = child.material.metalness || 0
+              child.material.roughness = Math.max(child.material.roughness || 0.5, 0.3)
+              
+              // Disable flat shading (penting untuk smooth surfaces)
+              child.material.flatShading = false
+              
+              // Ensure correct side rendering
+              child.material.side = THREE.FrontSide
+              
+              // Improve texture quality
+              if (child.material.map) {
+                child.material.map.colorSpace = THREE.SRGBColorSpace
+                child.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy()
+              }
+              
+              // Improve normal map
+              if (child.material.normalMap) {
+                child.material.normalScale.set(1, 1)
+              }
+            }
+          }
+          
+          // Log object names untuk debugging
+          if (child.name) {
+            console.log('📦 Object:', child.name, '| Material:', child.material?.type)
+          }
+        }
+      })
+      
+      // Tambahkan ke scene
+      scene.add(blenderModel)
+      
+      modelLoaded.value = true
+      loadingProgress.value = 100
+      
+      console.log('✅ Model 3D berhasil dimuat dari Blender!')
+      console.log('📊 Model info:', {
+        objects: blenderModel.children.length,
+        position: blenderModel.position,
+        scale: blenderModel.scale
+      })
+      
+      console.log('\n💡 TIPS untuk Realism:')
+      console.log('1. Di Blender: Gunakan EEVEE renderer sebelum export')
+      console.log('2. Di Blender: Enable Bloom, Screen Space Reflections, AO')
+      console.log('3. Materials: Gunakan Principled BSDF dengan proper values')
+      console.log('4. Export: GLB format dengan Draco compression')
+      console.log('5. Lighting: Minimal 3 light sources di Blender')
+      
+      console.log('\n🔍 DIAGNOSA REALISM:')
+      console.log('Apakah model terlihat flat/cartoonish?')
+      console.log('→ Check: Materials di Blender pakai Principled BSDF')
+      console.log('→ Check: Roughness tidak 0.0 atau 1.0 (use 0.3-0.8)')
+      console.log('→ Check: Export settings: Materials = Export (bukan None!)')
+      console.log('\nApakah terlalu gelap?')
+      console.log('→ Increase toneMappingExposure (line ~176)')
+      console.log('→ Atau increase ambient light intensity')
+      console.log('\nApakah tidak ada reflections?')
+      console.log('→ Enable Screen Space Reflections di Blender Eevee')
+      console.log('→ Materials: Roughness < 0.8, Metallic > 0 untuk metal\n')
+    },
+    
+    // onProgress
+    (progress) => {
+      if (progress.total > 0) {
+        loadingProgress.value = (progress.loaded / progress.total) * 100
+        console.log(`⏳ Loading: ${loadingProgress.value.toFixed(1)}%`)
+      }
+    },
+    
+    // onError
+    (error) => {
+      console.error('❌ Error loading 3D model:', error)
+      console.error('⚠️ Pastikan file ada di: /public/models/3d digital twin.glb')
+      
+      // Fallback: gunakan room procedural jika model gagal load
+      console.log('🔄 Fallback: Menggunakan room procedural')
+      createRoom()
+      modelLoaded.value = true
+    }
+  )
 }
 
 const createRoom = () => {
@@ -1487,6 +1680,45 @@ const cleanup = () => {
 .status-indicator.offline {
   background: #e74c3c;
   box-shadow: 0 0 8px #e74c3c;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.loading-spinner {
+  text-align: center;
+  color: white;
+}
+
+.loading-spinner p {
+  margin-top: 20px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #4ecdc4;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes fadeIn {
