@@ -4,7 +4,6 @@
       "type": "eventHubTrigger",
       "name": "eventHubMessages",
       "direction": "in",
-      "eventHubName": "samples-workitems",
       "connection": "IOT_HUB_CONNECTION_STRING",
       "cardinality": "many",
       "consumerGroup": "$Default"
