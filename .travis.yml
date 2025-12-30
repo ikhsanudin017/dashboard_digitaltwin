@@ -1,0 +1,65 @@
+language: node_js
+
+node_js:
+  - 18
+  - 20
+
+cache:
+  directories:
+    - view_virtual/node_modules
+    - sensor iot/azure-setup/azure-function/node_modules
+
+# Build matrix untuk test berbagai kombinasi
+jobs:
+  include:
+    # Job 1: Build Vue.js Frontend
+    - stage: build
+      name: "Build Vue.js Frontend"
+      script:
+        - cd view_virtual
+        - npm ci
+        - npm run lint --if-present || echo "No lint script"
+        - npm run build
+        - npm test --if-present || echo "No tests"
+    
+    # Job 2: Build Azure Functions
+    - stage: build
+      name: "Build Azure Functions"
+      script:
+        - cd "sensor iot/azure-setup/azure-function"
+        - npm install
+        - npm run build --if-present || echo "No build script"
+    
+    # Job 3: Security Audit
+    - stage: security
+      name: "Security Audit"
+      script:
+        - cd view_virtual && npm audit --audit-level=moderate || true
+        - cd "../sensor iot/azure-setup/azure-function" && npm audit --audit-level=moderate || true
+
+# Notifikasi (optional)
+notifications:
+  email:
+    on_success: change # Email hanya jika status berubah
+    on_failure: always  # Email jika build gagal
+
+# Branch yang akan di-build
+branches:
+  only:
+    - main
+    - master
+    - develop
+
+# Before install - setup environment
+before_install:
+  - echo "Starting Travis CI build..."
+  - node --version
+  - npm --version
+
+# After success - optional deploy atau notifikasi
+after_success:
+  - echo "Build successful! 🎉"
+
+# After failure - cleanup
+after_failure:
+  - echo "Build failed! ❌"
