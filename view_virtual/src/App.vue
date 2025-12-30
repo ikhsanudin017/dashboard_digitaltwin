@@ -109,7 +109,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import DigitalTwin3D from './components/DigitalTwin3D.vue'
+import DigitalTwin3D from './components/DigitalTwin3D_Babylon.vue'
 import SensorStatus from './components/SensorStatus.vue'
 import TemperatureChart from './components/TemperatureChart.vue'
 import ElectricityChart from './components/ElectricityChart.vue'

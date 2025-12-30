@@ -69,6 +69,7 @@ let peopleIndicators = []
 let animationId = null
 let eventHandlers = {}
 let hoveredObject = null
+let acParticleSystem = null // Particle system untuk efek udara dingin AC
 
 // Blender Model Variables
 let blenderModel = null
@@ -93,6 +94,7 @@ onUnmounted(() => {
 
 watch(() => props.sensorData, (newData) => {
   updateSensorVisualization(newData)
+  updateACParticles(newData) // Update partikel AC berdasarkan suhu
   // Update popup jika sedang terbuka
   if (selectedItem.value && clickedObjectData.value) {
     updateSelectedItem()
@@ -155,8 +157,9 @@ const initThreeJS = () => {
       0.1,
       1000
     )
-    camera.position.set(20, 15, 20)
-    camera.lookAt(0, 0, 0)
+    // Kamera fokus ke interior ruangan (inside building)
+    camera.position.set(5, 3, 8) // Lebih dekat, di dalam ruangan
+    camera.lookAt(0, 2, 0) // Fokus ke tengah ruangan
 
     // Renderer dengan enhanced quality dan realism settings
     renderer = new THREE.WebGLRenderer({ 
@@ -265,8 +268,8 @@ const initThreeJS = () => {
   // Load Blender Model (REPLACE createRoom)
   loadBlenderModel()
 
-  // Create sensors dengan detail lebih
-  createSensors()
+  // Sensors, AC, dan CCTV dibuat di createACAndSensors() setelah model load
+  // Tidak perlu dipanggil di sini
 
   // Setup controls
   setupControls()
@@ -308,14 +311,14 @@ const setupEnvironment = () => {
   console.log('✅ Environment map setup complete')
 }
 
-// Load Blender Model
+// Load 3D Model
 const loadBlenderModel = () => {
   const loader = new GLTFLoader()
   
-  console.log('🏠 Loading 3D model dari Blender...')
+  console.log('🏠 Loading floor plan model...')
   
   loader.load(
-    '/models/3d digital twin.glb',
+    '/models/floor_plan.glb',
     
     // onLoad - Success
     (gltf) => {
@@ -373,58 +376,102 @@ const loadBlenderModel = () => {
         }
       })
       
-      // Tambahkan ke scene
-      scene.add(blenderModel)
-      
-      modelLoaded.value = true
-      loadingProgress.value = 100
-      
-      console.log('✅ Model 3D berhasil dimuat dari Blender!')
-      console.log('📊 Model info:', {
-        objects: blenderModel.children.length,
-        position: blenderModel.position,
-        scale: blenderModel.scale
-      })
-      
-      console.log('\n💡 TIPS untuk Realism:')
-      console.log('1. Di Blender: Gunakan EEVEE renderer sebelum export')
-      console.log('2. Di Blender: Enable Bloom, Screen Space Reflections, AO')
-      console.log('3. Materials: Gunakan Principled BSDF dengan proper values')
-      console.log('4. Export: GLB format dengan Draco compression')
-      console.log('5. Lighting: Minimal 3 light sources di Blender')
-      
-      console.log('\n🔍 DIAGNOSA REALISM:')
-      console.log('Apakah model terlihat flat/cartoonish?')
-      console.log('→ Check: Materials di Blender pakai Principled BSDF')
-      console.log('→ Check: Roughness tidak 0.0 atau 1.0 (use 0.3-0.8)')
-      console.log('→ Check: Export settings: Materials = Export (bukan None!)')
-      console.log('\nApakah terlalu gelap?')
-      console.log('→ Increase toneMappingExposure (line ~176)')
-      console.log('→ Atau increase ambient light intensity')
-      console.log('\nApakah tidak ada reflections?')
-      console.log('→ Enable Screen Space Reflections di Blender Eevee')
-      console.log('→ Materials: Roughness < 0.8, Metallic > 0 untuk metal\n')
-    },
-    
-    // onProgress
-    (progress) => {
-      if (progress.total > 0) {
-        loadingProgress.value = (progress.loaded / progress.total) * 100
-        console.log(`⏳ Loading: ${loadingProgress.value.toFixed(1)}%`)
-      }
-    },
-    
-    // onError
-    (error) => {
-      console.error('❌ Error loading 3D model:', error)
-      console.error('⚠️ Pastikan file ada di: /public/models/3d digital twin.glb')
-      
-      // Fallback: gunakan room procedural jika model gagal load
-      console.log('🔄 Fallback: Menggunakan room procedural')
-      createRoom()
-      modelLoaded.value = true
+          // Tambahkan ke scene
+          scene.add(blenderModel)
+          
+          // Sensor dinonaktifkan sementara
+          // createACAndSensors()
+          
+          modelLoaded.value = true
+          loadingProgress.value = 100
+          
+          console.log('✅ Model 3D berhasil dimuat!')
+          console.log('📊 Model info:', {
+            objects: blenderModel.children.length,
+            position: blenderModel.position,
+            scale: blenderModel.scale
+          })
+        },
+        
+        // onProgress
+        (progress) => {
+          if (progress.total > 0) {
+            loadingProgress.value = (progress.loaded / progress.total) * 100
+            console.log(`⏳ Loading: ${loadingProgress.value.toFixed(1)}%`)
+          }
+        },
+        
+        // onError
+        (error) => {
+          console.error('❌ Error loading 3D model:', error)
+          console.error('⚠️ Pastikan file ada di: /public/models/3d_twin.glb')
+          
+          // Fallback: gunakan room procedural jika model gagal load
+          console.log('🔄 Fallback: Menggunakan room procedural')
+          createRoom()
+          modelLoaded.value = true
+        }
+      )
     }
-  )
+
+
+// Fungsi untuk membuat AC, Sensors, dan CCTV (dipanggil baik pakai Blender model atau procedural room)
+const createACAndSensors = () => {
+  console.log('🌬️ Creating AC unit with particles...')
+  
+  // Create AC Unit dengan partikel dingin (di DALAM ruangan building)
+  const acUnit = createACUnit()
+  // AC di dinding kiri, DI ATAS sensor DHT11
+  acUnit.position.set(-5.7, 4.5, 0) // MENEMPEL di dinding kiri, tinggi 4.5m (di atas sensor)
+  acUnit.rotation.y = Math.PI / 2 // Flat against left wall
+  acUnit.userData = {
+    type: 'device',
+    name: 'AC (Air Conditioner)',
+    deviceType: 'ac',
+    data: { 
+      status: 'on', 
+      temperature: props.sensorData.temperature,
+      mode: 'cooling'
+    }
+  }
+  scene.add(acUnit)
+  
+  // Create particle system untuk efek udara dingin
+  acParticleSystem = createACParticleSystem()
+  acParticleSystem.position.set(-5.4, 3.7, 0) // Di bawah AC, keluar dari dinding kiri
+  acParticleSystem.rotation.y = Math.PI / 2 // Sesuai orientasi AC
+  scene.add(acParticleSystem)
+  console.log('✅ AC unit and particles created!')
+  
+  // Create sensors di dinding interior
+  console.log('📡 Creating sensors...')
+  createSensors()
+  console.log('✅ Sensors created!')
+  
+  // Create CCTV Cameras (di dalam ruangan)
+  console.log('📹 Creating CCTV cameras...')
+  const cctvPositions = [
+    { x: -5, y: 5.8, z: -5, rotation: Math.PI / 4 },      // Pojok kiri belakang (ceiling)
+    { x: 5, y: 5.8, z: -5, rotation: -Math.PI / 4 },      // Pojok kanan belakang (ceiling)
+  ]
+
+  cctvPositions.forEach((pos, index) => {
+    const cctv = createCCTV()
+    cctv.position.set(pos.x, pos.y, pos.z)
+    cctv.rotation.y = pos.rotation
+    cctv.userData = {
+      type: 'device',
+      name: `CCTV Camera ${index + 1}`,
+      deviceType: 'cctv',
+      data: { 
+        status: 'recording', 
+        peopleDetected: props.peopleCount,
+        angle: index * 90
+      }
+    }
+    scene.add(cctv)
+  })
+  console.log('✅ CCTV cameras created!')
 }
 
 const createRoom = () => {
@@ -524,45 +571,8 @@ const createRoom = () => {
     }
   }
 
-  // Create AC Unit (di dinding belakang)
-  const acUnit = createACUnit()
-  acUnit.position.set(-10, 8, -14.9)
-  acUnit.userData = {
-    type: 'device',
-    name: 'AC (Air Conditioner)',
-    deviceType: 'ac',
-    data: { 
-      status: 'on', 
-      temperature: props.sensorData.temperature,
-      mode: 'cooling'
-    }
-  }
-  scene.add(acUnit)
-
-  // Create CCTV Cameras (4 kamera di setiap sudut)
-  const cctvPositions = [
-    { x: -12, y: 10, z: -12, rotation: Math.PI / 4 },      // Sudut kiri belakang
-    { x: 12, y: 10, z: -12, rotation: -Math.PI / 4 },       // Sudut kanan belakang
-    { x: -12, y: 10, z: 12, rotation: 3 * Math.PI / 4 },   // Sudut kiri depan
-    { x: 12, y: 10, z: 12, rotation: -3 * Math.PI / 4 }     // Sudut kanan depan
-  ]
-
-  cctvPositions.forEach((pos, index) => {
-    const cctv = createCCTV()
-    cctv.position.set(pos.x, pos.y, pos.z)
-    cctv.rotation.y = pos.rotation
-    cctv.userData = {
-      type: 'device',
-      name: `CCTV Camera ${index + 1}`,
-      deviceType: 'cctv',
-      data: { 
-        status: 'recording', 
-        peopleDetected: props.peopleCount,
-        angle: index * 90
-      }
-    }
-    scene.add(cctv)
-  })
+  // AC, Sensors, dan CCTV dibuat lewat createACAndSensors()
+  createACAndSensors()
 }
 
 const createCeilingLight = () => {
@@ -627,68 +637,134 @@ const createCeilingLight = () => {
 const createACUnit = () => {
   const group = new THREE.Group()
 
-  // AC Body (kotak besar di dinding)
-  const bodyGeometry = new THREE.BoxGeometry(4, 1.5, 0.3)
+  // Main AC body (realistis)
+  const bodyGeometry = new THREE.BoxGeometry(5, 1.8, 0.4)
   const bodyMaterial = new THREE.MeshStandardMaterial({ 
     color: 0xffffff,
-    metalness: 0.7,
-    roughness: 0.3
+    metalness: 0.6,
+    roughness: 0.2,
+    envMapIntensity: 1.0
   })
   const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
   body.castShadow = true
   group.add(body)
 
-  // AC Vents (lubang udara)
+  // Front panel (darker untuk depth)
+  const frontPanel = new THREE.Mesh(
+    new THREE.BoxGeometry(4.8, 1.6, 0.05),
+    new THREE.MeshStandardMaterial({ 
+      color: 0xe0e0e0,
+      metalness: 0.3,
+      roughness: 0.4
+    })
+  )
+  frontPanel.position.set(0, 0, 0.225)
+  group.add(frontPanel)
+
+  // Air vents (horizontal louvers)
   const ventMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x2c3e50,
-    metalness: 0.9,
-    roughness: 0.1
+    metalness: 0.8,
+    roughness: 0.2
   })
   
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 10; i++) {
     const vent = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.3, 0.1),
+      new THREE.BoxGeometry(4.5, 0.05, 0.1),
       ventMaterial
     )
-    vent.position.set(-1.5 + (i * 0.4), 0, 0.2)
+    vent.position.set(0, -0.6 + (i * 0.14), 0.25)
     group.add(vent)
   }
 
-  // AC Display Panel
-  const display = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.8, 0.3),
-    new THREE.MeshStandardMaterial({ 
-      color: 0x00ff00,
-      emissive: 0x00ff00,
-      emissiveIntensity: 0.8
-    })
-  )
-  display.position.set(1.2, 0.3, 0.16)
+  // Digital display panel (hijau)
+  const displayGeometry = new THREE.PlaneGeometry(1.2, 0.4)
+  const displayMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x00ff00,
+    emissive: 0x00ff00,
+    emissiveIntensity: 1.2,
+    transparent: true,
+    opacity: 0.9
+  })
+  const display = new THREE.Mesh(displayGeometry, displayMaterial)
+  display.position.set(1.5, 0.5, 0.26)
   group.add(display)
 
-  // AC Logo/Text
+  // Brand logo area
   const logo = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 0.4),
-    new THREE.MeshBasicMaterial({ color: 0x3498db })
+    new THREE.PlaneGeometry(1.5, 0.3),
+    new THREE.MeshStandardMaterial({ 
+      color: 0x3498db,
+      metalness: 0.5,
+      roughness: 0.3
+    })
   )
-  logo.position.set(0, -0.5, 0.16)
+  logo.position.set(-1.2, 0.6, 0.26)
   group.add(logo)
 
-  // Status indicator (LED)
+  // Power LED indicator (hijau = on)
   const led = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 8, 8),
+    new THREE.SphereGeometry(0.08, 16, 16),
     new THREE.MeshStandardMaterial({ 
       color: 0x00ff00,
       emissive: 0x00ff00,
-      emissiveIntensity: 1
+      emissiveIntensity: 2,
+      transparent: true,
+      opacity: 0.9
     })
   )
-  led.position.set(-1.5, 0.5, 0.16)
+  led.position.set(-2, 0.6, 0.26)
   group.add(led)
+
+  // LED glow effect
+  const ledGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 16, 16),
+    new THREE.MeshBasicMaterial({ 
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.3
+    })
+  )
+  ledGlow.position.set(-2, 0.6, 0.26)
+  group.add(ledGlow)
+
+  // Side panels untuk depth
+  const sideMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xf5f5f5,
+    metalness: 0.4,
+    roughness: 0.3
+  })
+  
+  const leftSide = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 1.8, 0.4),
+    sideMaterial
+  )
+  leftSide.position.set(-2.5, 0, 0)
+  group.add(leftSide)
+
+  const rightSide = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 1.8, 0.4),
+    sideMaterial
+  )
+  rightSide.position.set(2.5, 0, 0)
+  group.add(rightSide)
+
+  // Bottom air outlet (tempat partikel keluar)
+  const outlet = new THREE.Mesh(
+    new THREE.BoxGeometry(4.5, 0.2, 0.15),
+    new THREE.MeshStandardMaterial({ 
+      color: 0x1a1a1a,
+      metalness: 0.9,
+      roughness: 0.1
+    })
+  )
+  outlet.position.set(0, -0.95, 0.25)
+  group.add(outlet)
 
   // Store references untuk animasi
   group.userData.display = display
   group.userData.led = led
+  group.userData.ledGlow = ledGlow
 
   return group
 }
@@ -763,56 +839,41 @@ const createCCTV = () => {
 }
 
 const createSensors = () => {
-  // Sensor Suhu (DHT22) - dengan glow effect
-  const tempSensor = createAdvancedSensor(
+  // Sensor Suhu & Kelembaban (DHT11) - di dinding ruangan interior
+  const tempSensor = createWallMountedSensor(
     0xff6b6b, 
-    'Sensor Suhu',
+    'DHT11',
     'temperature',
     { temperature: props.sensorData.temperature, humidity: props.sensorData.humidity }
   )
-  tempSensor.position.set(-8, 1.5, -8)
+  tempSensor.position.set(-5.5, 2.5, 0) // MENEMPEL di dinding kiri
+  tempSensor.rotation.y = Math.PI / 2 // Flat against wall, menghadap kanan
   tempSensor.userData = {
     type: 'sensor',
-    name: 'Sensor Suhu (DHT22)',
+    name: 'Sensor Suhu & Kelembaban (DHT11)',
     sensorType: 'temperature',
     data: { temperature: props.sensorData.temperature, humidity: props.sensorData.humidity }
   }
   scene.add(tempSensor)
   sensors.push({ mesh: tempSensor, type: 'temperature' })
 
-  // Sensor Arus (SCT-013)
-  const currentSensor = createAdvancedSensor(
+  // Sensor Arus & Tegangan (ZMPT101B + SCT013) - di dinding interior
+  const powerSensor = createWallMountedSensor(
     0x4ecdc4, 
-    'Sensor Arus',
-    'current',
-    { current: props.sensorData.current }
+    'ZMPT+SCT',
+    'power',
+    { voltage: props.sensorData.voltage, current: props.sensorData.current }
   )
-  currentSensor.position.set(8, 1.5, -8)
-  currentSensor.userData = {
+  powerSensor.position.set(5.5, 3, 0) // MENEMPEL di dinding kanan (panel listrik)
+  powerSensor.rotation.y = -Math.PI / 2 // Flat against wall, menghadap kiri
+  powerSensor.userData = {
     type: 'sensor',
-    name: 'Sensor Arus (SCT-013)',
-    sensorType: 'current',
-    data: { current: props.sensorData.current }
+    name: 'Sensor Daya (ZMPT101B + SCT013)',
+    sensorType: 'power',
+    data: { voltage: props.sensorData.voltage, current: props.sensorData.current }
   }
-  scene.add(currentSensor)
-  sensors.push({ mesh: currentSensor, type: 'current' })
-
-  // Sensor Tegangan (ZMPT101B)
-  const voltageSensor = createAdvancedSensor(
-    0x95e1d3, 
-    'Sensor Tegangan',
-    'voltage',
-    { voltage: props.sensorData.voltage }
-  )
-  voltageSensor.position.set(0, 1.5, -8)
-  voltageSensor.userData = {
-    type: 'sensor',
-    name: 'Sensor Tegangan (ZMPT101B)',
-    sensorType: 'voltage',
-    data: { voltage: props.sensorData.voltage }
-  }
-  scene.add(voltageSensor)
-  sensors.push({ mesh: voltageSensor, type: 'voltage' })
+  scene.add(powerSensor)
+  sensors.push({ mesh: powerSensor, type: 'power' })
 
   // ESP32 Node
   const esp32Node = createDeviceNode(0xf39c12, 'ESP32', 'esp32')
@@ -966,6 +1027,150 @@ const createDeviceNode = (color, label, type) => {
   return group
 }
 
+// Sensor yang mounted di dinding (lebih compact)
+const createWallMountedSensor = (color, label, type, data) => {
+  const group = new THREE.Group()
+
+  // Sensor box (lebih tipis, menempel di dinding)
+  const geometry = new THREE.BoxGeometry(0.8, 1, 0.3)
+  const material = new THREE.MeshStandardMaterial({ 
+    color: 0xffffff,
+    metalness: 0.5,
+    roughness: 0.4,
+    envMapIntensity: 0.8
+  })
+  const box = new THREE.Mesh(geometry, material)
+  box.castShadow = true
+  group.add(box)
+
+  // Colored indicator panel
+  const indicatorPanel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 0.4, 0.05),
+    new THREE.MeshStandardMaterial({ 
+      color,
+      emissive: color,
+      emissiveIntensity: 0.8,
+      metalness: 0.7,
+      roughness: 0.2
+    })
+  )
+  indicatorPanel.position.set(0, 0.2, 0.18)
+  group.add(indicatorPanel)
+
+  // Status LED (hijau = active)
+  const led = new THREE.Mesh(
+    new THREE.SphereGeometry(0.06, 16, 16),
+    new THREE.MeshStandardMaterial({ 
+      color: 0x00ff00,
+      emissive: 0x00ff00,
+      emissiveIntensity: 2,
+      transparent: true,
+      opacity: 0.9
+    })
+  )
+  led.position.set(0, -0.3, 0.18)
+  group.add(led)
+
+  // LED glow
+  const ledGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 12, 12),
+    new THREE.MeshBasicMaterial({ 
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.4
+    })
+  )
+  ledGlow.position.set(0, -0.3, 0.18)
+  group.add(ledGlow)
+
+  // Mounting bracket (simulasi mounting ke dinding)
+  const bracket = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.1, 0.1),
+    new THREE.MeshStandardMaterial({ 
+      color: 0x2c3e50,
+      metalness: 0.9,
+      roughness: 0.2
+    })
+  )
+  bracket.position.set(0, 0.55, 0)
+  group.add(bracket)
+
+  // Store references
+  group.userData.led = led
+  group.userData.ledGlow = ledGlow
+  group.userData.indicatorPanel = indicatorPanel
+
+  return group
+}
+
+// Particle system untuk efek udara dingin AC
+const createACParticleSystem = () => {
+  const particleCount = 500
+  const geometry = new THREE.BufferGeometry()
+  const positions = []
+  const velocities = []
+
+  // Inisialisasi posisi dan kecepatan partikel
+  for (let i = 0; i < particleCount; i++) {
+    // Spread horizontal dari AC outlet
+    positions.push(
+      (Math.random() - 0.5) * 4, // X: -2 to 2 (lebar AC outlet)
+      Math.random() * 2, // Y: 0 to 2 (mulai dari outlet)
+      (Math.random() - 0.5) * 0.5 // Z: slight depth
+    )
+    
+    // Velocity untuk gerakan turun dan drift
+    velocities.push(
+      (Math.random() - 0.5) * 0.02, // X drift
+      -0.02 - Math.random() * 0.03, // Y turun (gravitasi)
+      (Math.random() - 0.5) * 0.01 // Z drift
+    )
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('velocity', new THREE.Float32BufferAttribute(velocities, 3))
+
+  // Material partikel (biru cyan transparan)
+  const material = new THREE.PointsMaterial({
+    color: 0x4dd0e1,
+    size: 0.08,
+    transparent: true,
+    opacity: 0.6,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  })
+
+  const particles = new THREE.Points(geometry, material)
+  particles.userData.particleCount = particleCount
+  
+  return particles
+}
+
+// Update partikel AC berdasarkan suhu
+const updateACParticles = (data) => {
+  if (!acParticleSystem) return
+  
+  const temperature = data.temperature || 25
+  
+  // Atur intensitas berdasarkan suhu
+  if (temperature < 25) {
+    // AC full blast (suhu rendah)
+    acParticleSystem.visible = true
+    acParticleSystem.material.opacity = 0.7
+    acParticleSystem.material.size = 0.1
+  } else if (temperature < 28) {
+    // AC sedang
+    acParticleSystem.visible = true
+    acParticleSystem.material.opacity = 0.5
+    acParticleSystem.material.size = 0.08
+  } else {
+    // AC ringan atau mati
+    acParticleSystem.visible = true
+    acParticleSystem.material.opacity = 0.3
+    acParticleSystem.material.size = 0.06
+  }
+}
+
 const updateSensorVisualization = (data) => {
   sensors.forEach(sensor => {
     const mesh = sensor.mesh
@@ -1005,6 +1210,17 @@ const updateSensorVisualization = (data) => {
       // Pastikan material adalah MeshStandardMaterial sebelum set emissiveIntensity
       if (mesh.children[0].material.type === 'MeshStandardMaterial') {
         mesh.children[0].material.emissiveIntensity = 0.3 + intensity * 0.7
+      }
+    } else if (sensor.type === 'power') {
+      // Update untuk sensor power (voltage + current)
+      mesh.userData.data = { 
+        voltage: data.voltage || 0, 
+        current: data.current || 0 
+      }
+      const voltage = data.voltage || 0
+      const intensity = Math.min(voltage / 220, 1)
+      if (mesh.userData.indicatorPanel && mesh.userData.indicatorPanel.material.type === 'MeshStandardMaterial') {
+        mesh.userData.indicatorPanel.material.emissiveIntensity = 0.5 + intensity * 0.5
       }
     }
   })
@@ -1363,9 +1579,27 @@ const animate = () => {
   // Enhanced sensor animations dengan smooth effects
   const time = Date.now() * 0.001
   sensors.forEach((sensor, index) => {
+    // Wall-mounted sensors - pulse LED glow
+    if (sensor.mesh.userData.ledGlow) {
+      const glowPulse = 0.3 + Math.sin(time * 3 + index) * 0.15
+      sensor.mesh.userData.ledGlow.material.opacity = glowPulse
+      const scale = 1 + Math.sin(time * 2 + index) * 0.15
+      sensor.mesh.userData.ledGlow.scale.set(scale, scale, scale)
+    }
+    // Pulse LED
+    if (sensor.mesh.userData.led && sensor.mesh.userData.led.material.type === 'MeshStandardMaterial') {
+      const intensity = 1.5 + Math.sin(time * 4 + index) * 0.5
+      sensor.mesh.userData.led.material.emissiveIntensity = intensity
+    }
+    // Pulse indicator panel
+    if (sensor.mesh.userData.indicatorPanel && sensor.mesh.userData.indicatorPanel.material.type === 'MeshStandardMaterial') {
+      const intensity = 0.6 + Math.sin(time * 2 + index) * 0.2
+      sensor.mesh.userData.indicatorPanel.material.emissiveIntensity = intensity
+    }
+    
+    // Old sensor animations (untuk sensor floating)
     if (sensor.mesh.userData.ring) {
       sensor.mesh.userData.ring.rotation.z += 0.015
-      // Pulse effect untuk ring
       const pulse = 1 + Math.sin(time * 2 + index) * 0.1
       sensor.mesh.userData.ring.scale.set(pulse, pulse, 1)
     }
@@ -1374,18 +1608,6 @@ const animate = () => {
       const pulse = 1 + Math.sin(time * 1.5 + index) * 0.15
       sensor.mesh.userData.outerRing.scale.set(pulse, pulse, 1)
     }
-    if (sensor.mesh.userData.indicatorGlow) {
-      const glowPulse = 0.3 + Math.sin(time * 3 + index) * 0.2
-      sensor.mesh.userData.indicatorGlow.material.opacity = glowPulse
-      sensor.mesh.userData.indicatorGlow.scale.set(
-        1 + Math.sin(time * 2 + index) * 0.2,
-        1 + Math.sin(time * 2 + index) * 0.2,
-        1 + Math.sin(time * 2 + index) * 0.2
-      )
-    }
-    sensor.mesh.rotation.y += 0.003
-    // Subtle floating animation
-    sensor.mesh.position.y = 1.5 + Math.sin(time + index) * 0.05
   })
 
   // Enhanced people animations dengan smooth movement
@@ -1398,13 +1620,18 @@ const animate = () => {
     person.rotation.x = Math.sin(peopleTime * 0.5 + index) * 0.05
   })
 
-  // Animate AC
+  // Animate AC dengan LED glow
   scene.children.forEach(child => {
     if (child.userData && child.userData.deviceType === 'ac') {
       // Pulse LED
       if (child.userData.led && child.userData.led.material.type === 'MeshStandardMaterial') {
-        const intensity = 0.5 + Math.sin(Date.now() * 0.003) * 0.5
+        const intensity = 1.5 + Math.sin(Date.now() * 0.003) * 0.5
         child.userData.led.material.emissiveIntensity = intensity
+      }
+      // Pulse LED glow
+      if (child.userData.ledGlow) {
+        const glowPulse = 0.3 + Math.sin(Date.now() * 0.004) * 0.1
+        child.userData.ledGlow.material.opacity = glowPulse
       }
       // Rotate display
       if (child.userData.display) {
@@ -1412,6 +1639,34 @@ const animate = () => {
       }
     }
   })
+  
+  // Animate AC particles (efek udara dingin)
+  if (acParticleSystem && acParticleSystem.visible) {
+    const positions = acParticleSystem.geometry.attributes.position.array
+    const velocities = acParticleSystem.geometry.attributes.velocity.array
+    
+    for (let i = 0; i < acParticleSystem.userData.particleCount; i++) {
+      const i3 = i * 3
+      
+      // Update posisi berdasarkan velocity
+      positions[i3] += velocities[i3] // X
+      positions[i3 + 1] += velocities[i3 + 1] // Y (turun)
+      positions[i3 + 2] += velocities[i3 + 2] // Z
+      
+      // Reset partikel yang sudah turun ke bawah
+      if (positions[i3 + 1] < -5) {
+        positions[i3] = (Math.random() - 0.5) * 4 // Reset X
+        positions[i3 + 1] = 0 // Reset Y ke atas
+        positions[i3 + 2] = (Math.random() - 0.5) * 0.5 // Reset Z
+      }
+      
+      // Drift horizontal (angin)
+      velocities[i3] += (Math.random() - 0.5) * 0.0005
+      velocities[i3] = Math.max(-0.02, Math.min(0.02, velocities[i3]))
+    }
+    
+    acParticleSystem.geometry.attributes.position.needsUpdate = true
+  }
 
   // Enhanced CCTV camera animations
   const cctvTime = Date.now() * 0.001
@@ -1458,7 +1713,7 @@ const animate = () => {
 const resetCamera = () => {
   // Smooth camera transition
   const startPos = camera.position.clone()
-  const targetPos = new THREE.Vector3(20, 15, 20)
+  const targetPos = new THREE.Vector3(5, 3, 8) // Interior view
   const startTime = Date.now()
   const duration = 1000 // 1 second
 
@@ -1472,7 +1727,7 @@ const resetCamera = () => {
       : 1 - Math.pow(-2 * progress + 2, 3) / 2
     
     camera.position.lerpVectors(startPos, targetPos, eased)
-    camera.lookAt(0, 0, 0)
+    camera.lookAt(0, 2, 0) // Fokus ke tengah ruangan interior
     
     if (progress < 1) {
       requestAnimationFrame(animateCamera)

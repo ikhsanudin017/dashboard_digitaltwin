@@ -9,9 +9,13 @@
     "vercel-build": "vite build"
   },
   "dependencies": {
+    "@babylonjs/core": "^8.43.0",
+    "@babylonjs/loaders": "^8.43.0",
     "@vueuse/core": "^10.7.0",
     "axios": "^1.6.0",
+    "canvas": "^3.2.0",
     "chart.js": "^4.4.0",
+    "jsdom": "^27.4.0",
     "mqtt": "^5.3.0",
     "three": "^0.160.0",
     "vue": "^3.4.0",
