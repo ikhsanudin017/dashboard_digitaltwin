@@ -69,8 +69,9 @@ jobs:
       run: npm audit --audit-level=moderate || true
     
     - name: 🔐 Security audit - Azure Functions
-      working-directory: './sensor iot/azure-setup/azure-function'
-      run: npm audit --audit-level=moderate || true
+      run: |
+        cd "sensor iot/azure-setup/azure-function"
+        npm audit --audit-level=moderate || true
       continue-on-error: true
   
   # Job untuk Azure Functions
@@ -86,16 +87,16 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 18
-        cache: 'npm'
-        cache-dependency-path: 'sensor iot/azure-setup/azure-function/package-lock.json'
     
     - name: 📦 Install dependencies
-      working-directory: './sensor iot/azure-setup/azure-function'
-      run: npm ci
+      run: |
+        cd "sensor iot/azure-setup/azure-function"
+        npm install
     
     - name: 🏗️ Build Functions
-      working-directory: './sensor iot/azure-setup/azure-function'
-      run: npm run build --if-present || echo "No build script, skipping..."
+      run: |
+        cd "sensor iot/azure-setup/azure-function"
+        npm run build --if-present || echo "No build script, skipping..."
     
     - name: 📊 Upload Functions artifacts
       uses: actions/upload-artifact@v4
