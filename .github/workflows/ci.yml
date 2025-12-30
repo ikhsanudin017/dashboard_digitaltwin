@@ -69,7 +69,7 @@ jobs:
       run: npm audit --audit-level=moderate || true
     
     - name: 🔐 Security audit - Azure Functions
-      working-directory: ./sensor iot/azure-setup/azure-function
+      working-directory: './sensor iot/azure-setup/azure-function'
       run: npm audit --audit-level=moderate || true
       continue-on-error: true
   
