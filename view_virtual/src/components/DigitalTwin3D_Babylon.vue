@@ -6,7 +6,14 @@
     <div v-if="!modelLoaded" class="loading-overlay">
       <div class="loading-spinner">
         <div class="spinner"></div>
-        <p>Loading 3D Model... {{ loadingProgress.toFixed(0) }}%</p>
+        <p class="loading-text">{{ loadingStatus }}</p>
+        <div class="progress-bar-container">
+          <div class="progress-bar" :style="{ width: loadingProgress + '%' }"></div>
+        </div>
+        <p class="loading-details">{{ loadingDetails }}</p>
+        <p v-if="loadingProgress > 0 && loadingProgress < 100" class="loading-tip">
+          💡 Loading 3D apartment model...
+        </p>
       </div>
     </div>
     
@@ -15,6 +22,13 @@
       <button @click="toggleAnimation" class="btn btn-primary">
         {{ isAnimating ? '⏸️ Pause' : '▶️ Play' }}
       </button>
+    </div>
+    
+    <!-- Hover Tooltip -->
+    <div v-if="hoveredMesh && !selectedItem" class="hover-tooltip">
+      <span class="tooltip-icon">{{ hoveredMesh.info?.icon || '📍' }}</span>
+      <span class="tooltip-text">{{ hoveredMesh.info?.name || hoveredMesh.name }}</span>
+      <span class="tooltip-hint">Klik untuk detail</span>
     </div>
     
     <!-- Popup Detail Item -->
@@ -60,13 +74,40 @@ const props = defineProps({
 const canvas = ref(null)
 const isAnimating = ref(true)
 const selectedItem = ref(null)
+const hoveredMesh = ref(null)
 
 let engine = null
 let scene = null
 let camera = null
 let blenderModel = null
+let highlightLayer = null
 const modelLoaded = ref(false)
 const loadingProgress = ref(0)
+const loadingStatus = ref('Initializing 3D Engine...')
+const loadingDetails = ref('')
+let loadStartTime = null
+let lastLoadedBytes = 0
+let downloadSpeed = 0
+
+// Mapping nama mesh ke informasi ruangan (sesuai scene.gltf)
+const roomMapping = {
+  // Ruangan utama dari scene.gltf
+  'LivingRoomWallper': { name: 'Living Room', type: 'living', icon: '🛋️' },
+  'KitchenTiles': { name: 'Kitchen', type: 'kitchen', icon: '🍳' },
+  'ToiletTiles': { name: 'Toilet', type: 'toilet', icon: '🚻' },
+  'ToiletFloorTiles': { name: 'Toilet Floor', type: 'toilet', icon: '🚻' },
+  'BedRoomWallper': { name: 'Bedroom', type: 'bedroom', icon: '🛏️' },
+  'DoorMaterial': { name: 'Pintu', type: 'structure', icon: '🚪' },
+  'WoodenFloor': { name: 'Lantai Kayu', type: 'structure', icon: '🪵' },
+  'JustWhite': { name: 'Dinding', type: 'structure', icon: '🧱' },
+  'Brick': { name: 'Dinding Bata', type: 'structure', icon: '🧱' },
+  // Fallback untuk mesh lain
+  'wall': { name: 'Dinding', type: 'structure', icon: '🧱' },
+  'floor': { name: 'Lantai', type: 'structure', icon: '⬛' },
+  'door': { name: 'Pintu', type: 'structure', icon: '🚪' },
+  'window': { name: 'Jendela', type: 'structure', icon: '🪟' },
+  'acBody': { name: 'AC Unit', type: 'equipment', icon: '❄️' },
+}
 
 onMounted(() => {
   setTimeout(() => {
@@ -190,6 +231,9 @@ const initBabylonJS = () => {
 
     console.log('✅ Babylon.js initialized')
 
+    // Setup mesh click detection (disabled for now)
+    // setupMeshInteraction()
+
     // Prevent page scroll/zoom when scrolling on canvas - only zoom 3D view
     canvas.value.addEventListener('wheel', (event) => {
       event.preventDefault()
@@ -215,17 +259,193 @@ const initBabylonJS = () => {
   }
 }
 
+const formatBytes = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const formatTime = (seconds) => {
+  if (seconds < 60) return `${Math.round(seconds)}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.round(seconds % 60)
+  return `${mins}m ${secs}s`
+}
+
+// Setup interaksi klik dan hover pada mesh
+const setupMeshInteraction = () => {
+  // Create highlight layer untuk efek hover
+  highlightLayer = new BABYLON.HighlightLayer("highlightLayer", scene)
+  highlightLayer.innerGlow = false
+  highlightLayer.outerGlow = true
+  
+  // Hover - highlight mesh saat mouse over
+  scene.onPointerMove = (evt, pickInfo) => {
+    // Remove previous highlight
+    if (hoveredMesh.value && hoveredMesh.value.mesh) {
+      highlightLayer.removeMesh(hoveredMesh.value.mesh)
+      hoveredMesh.value = null
+    }
+    
+    if (pickInfo.hit && pickInfo.pickedMesh) {
+      const mesh = pickInfo.pickedMesh
+      const meshName = mesh.name || ''
+      
+      // Skip jika mesh adalah particle atau effect
+      if (meshName.includes('particle') || meshName.includes('Particle')) return
+      
+      // Highlight mesh
+      highlightLayer.addMesh(mesh, new BABYLON.Color3(0.2, 0.6, 1)) // Blue highlight
+      
+      // Get room info
+      const roomInfo = getRoomInfo(meshName)
+      hoveredMesh.value = {
+        mesh: mesh,
+        name: meshName,
+        info: roomInfo
+      }
+      
+      // Change cursor
+      canvas.value.style.cursor = 'pointer'
+    } else {
+      canvas.value.style.cursor = 'grab'
+    }
+  }
+  
+  // Click - show popup with details
+  scene.onPointerDown = (evt, pickInfo) => {
+    if (pickInfo.hit && pickInfo.pickedMesh && evt.button === 0) {
+      const mesh = pickInfo.pickedMesh
+      const meshName = mesh.name || ''
+      
+      // Skip particle meshes
+      if (meshName.includes('particle') || meshName.includes('Particle')) return
+      
+      console.log('🖱️ Clicked mesh:', meshName)
+      
+      // Get room info and show popup
+      const roomInfo = getRoomInfo(meshName)
+      showMeshPopup(mesh, roomInfo)
+    }
+  }
+  
+  console.log('✅ Mesh interaction setup complete')
+}
+
+// Get room info based on mesh name
+const getRoomInfo = (meshName) => {
+  // Check exact match first
+  if (roomMapping[meshName]) {
+    return roomMapping[meshName]
+  }
+  
+  // Check partial match
+  const lowerName = meshName.toLowerCase()
+  for (const [key, value] of Object.entries(roomMapping)) {
+    if (lowerName.includes(key.toLowerCase())) {
+      return value
+    }
+  }
+  
+  // Default for unknown mesh
+  return {
+    name: meshName || 'Unknown Object',
+    type: 'other',
+    icon: '📍'
+  }
+}
+
+// Show popup when mesh is clicked
+const showMeshPopup = (mesh, roomInfo) => {
+  // Get sensor data based on room type
+  let sensorData = {}
+  let status = 'normal'
+  let statusText = 'Status Normal'
+  
+  switch (roomInfo.type) {
+    case 'living':
+    case 'bedroom':
+      sensorData = {
+        temperature: props.sensorData.temperature,
+        humidity: props.sensorData.humidity,
+        peopleCount: props.peopleCount
+      }
+      if (props.sensorData.temperature > 28) {
+        status = 'warning'
+        statusText = '⚠️ Suhu Tinggi'
+      }
+      break
+    case 'kitchen':
+      sensorData = {
+        temperature: props.sensorData.temperature,
+        humidity: props.sensorData.humidity,
+        power: props.sensorData.power
+      }
+      break
+    case 'toilet':
+      sensorData = {
+        humidity: props.sensorData.humidity,
+        status: 'Available'
+      }
+      break
+    case 'equipment':
+      sensorData = {
+        temperature: props.sensorData.temperature,
+        power: props.sensorData.power,
+        status: 'Active'
+      }
+      break
+    case 'structure':
+      sensorData = {
+        condition: 'Good',
+        lastCheck: new Date().toLocaleDateString('id-ID')
+      }
+      break
+    default:
+      sensorData = {
+        temperature: props.sensorData.temperature,
+        humidity: props.sensorData.humidity
+      }
+  }
+  
+  selectedItem.value = {
+    name: `${roomInfo.icon} ${roomInfo.name}`,
+    meshName: mesh.name,
+    type: roomInfo.type,
+    data: sensorData,
+    status: status,
+    statusText: statusText,
+    position: {
+      x: mesh.position?.x?.toFixed(2) || 0,
+      y: mesh.position?.y?.toFixed(2) || 0,
+      z: mesh.position?.z?.toFixed(2) || 0
+    }
+  }
+  
+  console.log('📊 Showing popup for:', roomInfo.name)
+}
+
 const loadModel = (shadowGenerator) => {
-  console.log('🏠 Loading floor plan model...')
+  console.log('🏠 Loading apartment model from local...')
+  loadingStatus.value = 'Loading 3D Model...'
+  loadStartTime = Date.now()
+  lastLoadedBytes = 0
+  
+  // Local model path - using 3d twin folder
+  const modelPath = "/models/3d twin/"
+  const modelFileName = "scene.gltf"
   
   BABYLON.SceneLoader.ImportMesh(
     "",
-    "/models/",
-    "floor_plan.glb",
+    modelPath,
+    modelFileName,
     scene,
     (meshes) => {
       console.log('✅ Model loaded successfully!')
       console.log('📦 Meshes loaded:', meshes.length)
+      loadingStatus.value = 'Processing 3D Model...'
       
       blenderModel = meshes[0]
       
@@ -254,9 +474,13 @@ const loadModel = (shadowGenerator) => {
       // Tambahkan AC unit di atas pintu
       createACUnit(shadowGenerator)
       
+      loadingStatus.value = '✅ Model Loaded!'
       modelLoaded.value = true
       loadingProgress.value = 100
+      loadingDetails.value = ''
       
+      const totalTime = (Date.now() - loadStartTime) / 1000
+      console.log(`📊 Model loaded in ${formatTime(totalTime)}`)
       console.log('📊 Model info:', {
         meshes: meshes.length,
         position: blenderModel.position
@@ -264,13 +488,35 @@ const loadModel = (shadowGenerator) => {
     },
     (event) => {
       if (event.lengthComputable) {
-        loadingProgress.value = (event.loaded / event.total) * 100
+        const loaded = event.loaded
+        const total = event.total
+        loadingProgress.value = (loaded / total) * 100
+        
+        // Calculate download speed
+        const currentTime = Date.now()
+        const elapsedTime = (currentTime - loadStartTime) / 1000
+        
+        if (elapsedTime > 0) {
+          downloadSpeed = loaded / elapsedTime // bytes per second
+          const remainingBytes = total - loaded
+          const estimatedTimeRemaining = remainingBytes / downloadSpeed
+          
+          loadingStatus.value = `Downloading 3D Model... ${loadingProgress.value.toFixed(0)}%`
+          loadingDetails.value = `${formatBytes(loaded)} / ${formatBytes(total)} • ${formatBytes(downloadSpeed)}/s • ~${formatTime(estimatedTimeRemaining)} remaining`
+        }
+        
         console.log(`⏳ Loading: ${loadingProgress.value.toFixed(1)}%`)
+      } else {
+        // If total size is unknown, show indeterminate progress
+        loadingStatus.value = 'Downloading 3D Model...'
+        loadingDetails.value = `${formatBytes(event.loaded)} downloaded`
       }
     },
     (scene, message, exception) => {
       console.error('❌ Error loading model:', message, exception)
-      console.error('⚠️ Pastikan file ada di: /public/models/floor_plan.glb')
+      console.error('⚠️ Pastikan file ada di: /models/floor_plan.glb')
+      loadingStatus.value = '❌ Error loading model'
+      loadingDetails.value = 'Check console for details'
       modelLoaded.value = true
     }
   )
@@ -547,29 +793,77 @@ const cleanup = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(5px);
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(8px);
   z-index: 10;
 }
 
 .loading-spinner {
   text-align: center;
   color: white;
+  max-width: 350px;
+  padding: 30px;
 }
 
 .spinner {
-  border: 4px solid rgba(255, 255, 255, 0.3);
+  border: 4px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  border-top: 4px solid white;
-  width: 50px;
-  height: 50px;
+  border-top: 4px solid #3b82f6;
+  border-right: 4px solid #8b5cf6;
+  width: 60px;
+  height: 60px;
   animation: spin 1s linear infinite;
-  margin: 0 auto 15px;
+  margin: 0 auto 20px;
 }
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #f8fafc;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
+  background-size: 200% 100%;
+  animation: progressGradient 2s linear infinite;
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+@keyframes progressGradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.loading-details {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.loading-tip {
+  font-size: 12px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 15px;
 }
 
 .controls {
@@ -708,5 +1002,52 @@ const cleanup = () => {
 
 .status-indicator.critical {
   background: #ef4444;
+}
+
+/* Hover Tooltip Styles */
+.hover-tooltip {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  padding: 12px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 50;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.tooltip-icon {
+  font-size: 24px;
+}
+
+.tooltip-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.tooltip-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  padding-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
 }
 </style>

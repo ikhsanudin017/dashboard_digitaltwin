@@ -318,7 +318,7 @@ const loadBlenderModel = () => {
   console.log('🏠 Loading floor plan model...')
   
   loader.load(
-    '/models/floor_plan.glb',
+    'https://stenergy750b783c.blob.core.windows.net/3dmodels/floor_plan.glb',
     
     // onLoad - Success
     (gltf) => {
@@ -404,7 +404,7 @@ const loadBlenderModel = () => {
         // onError
         (error) => {
           console.error('❌ Error loading 3D model:', error)
-          console.error('⚠️ Pastikan file ada di: /public/models/3d_twin.glb')
+          console.error('⚠️ Pastikan file ada di: https://stenergy750b783c.blob.core.windows.net/3dmodels/floor_plan.glb')
           
           // Fallback: gunakan room procedural jika model gagal load
           console.log('🔄 Fallback: Menggunakan room procedural')
