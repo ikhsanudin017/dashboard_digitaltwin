@@ -532,12 +532,12 @@ const createACUnit = (shadowGenerator) => {
     depth: 0.35
   }, scene)
   
-  // Posisi AC: MENEMPEL di dinding DARI DALAM RUANGAN, di atas pintu
-  // X = 0 (sejajar dengan pintu coklat)
-  // Y = 2.5 (di atas pintu)
-  // Z = -4.5 (DI DALAM ruangan, menempel ke dinding yang ada di -5)
-  acBody.position = new BABYLON.Vector3(0, 2.5, -2.3)
-  acBody.rotation.y = 0 // Face ke dalam ruangan
+  // Posisi AC: DI DALAM RUANGAN, menempel di dinding SAMPING KIRI
+  // X = -2.3 (dimajukan supaya tidak tertutup dinding)
+  // Y = 2.5 (tinggi standar AC)
+  // Z = -3.5 (posisi horizontal)
+  acBody.position = new BABYLON.Vector3(-2.3, 2.5, -3.5)
+  acBody.rotation.y = Math.PI / 2 // Face ke kanan (ke dalam ruangan)
   
   // Material AC
   const acMaterial = new BABYLON.StandardMaterial("acMaterial", scene)
