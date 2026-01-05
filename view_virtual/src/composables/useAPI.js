@@ -165,7 +165,7 @@ export function useAPI() {
   }
 
   const fetchFromAzure = async () => {
-    console.log('🔵 Mengambil data dari Azure Storage (stenergy750b783c)...')
+    console.log('🔵 Mengambil data dari Azure Storage (mlsuhu0426140346)...')
     
     try {
       // Ambil data dari Azure Storage Table melalui Azure Function
@@ -228,7 +228,7 @@ export function useAPI() {
           
           console.log(`   ✓ Suhu: ${temperatureData.value.values.length} data point`)
           console.log(`   ✓ Listrik: ${electricityData.value.values.length} hari`)
-          console.log('   📍 Sumber: Azure Storage Table (stenergy750b783c)')
+          console.log('   📍 Sumber: Azure Storage Table (mlsuhu0426140346)')
           
           return true
         } else {
