@@ -24,3 +24,5 @@ sensor iot/bridge/query-latest.js
 # OS
 .DS_Store
 Thumbs.db
+view_virtual/public/models/*.blend
+view_virtual/public/models/*.glb

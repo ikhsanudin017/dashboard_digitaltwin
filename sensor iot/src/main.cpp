@@ -4,18 +4,28 @@
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
+#include <base64.h>
+#include <mbedtls/md.h>
+#include <time.h>
 
 // ===== KONFIGURASI WiFi =====
 const char* ssid = "TOKO BERAS";
 const char* password = "sumberagung5758";
 
-// ===== KONFIGURASI MQTT HiveMQ Cloud =====
-const char* mqtt_server = "aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud";
-const int mqtt_port = 8883;  // Port TLS
-const char* mqtt_username = "digitaltwin";  // Ganti dengan username dari Access Management
-const char* mqtt_password = "Digitaltwin1";  // Ganti dengan password dari Access Management
-String mqtt_client_id = "ESP32_DHT11_" + String((uint32_t)ESP.getEfuseMac(), HEX);  // Client ID unik
-const char* mqtt_topic = "sensor/dht11/data";  // Topic untuk data JSON
+// ===== KONFIGURASI AZURE IoT Hub =====
+// INSTRUKSI: Dapatkan nilai-nilai ini dari Azure Portal:
+// 1. IoT Hub Name: Nama IoT Hub Anda (contoh: "myiothub")
+// 2. Device ID: ID device yang sudah dibuat di IoT Hub
+// 3. Device Key: Primary/Secondary key dari device
+const char* iotHubName = "iothub-energymonitor-ef753d74";  // Ganti dengan nama IoT Hub (tanpa .azure-devices.net)
+const char* deviceId = "ESP32_DHT11_Sensor";  // Ganti dengan Device ID Anda
+const char* deviceKey = "BWXR6jkv47igiyslSf/B5dHBBqYF8NG9bf8caquEzHg=";  // Ganti dengan Device Key dari Azure Portal
+
+// MQTT Configuration untuk Azure IoT Hub
+String mqtt_server = String(iotHubName) + ".azure-devices.net";
+const int mqtt_port = 8883;  // Port MQTT over TLS
+String mqtt_username = mqtt_server + "/" + String(deviceId) + "/?api-version=2021-04-12";
+String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/";
 
 // ===== KONFIGURASI DHT11 =====
 #define DHTPIN 4          // Pin data DHT11 terhubung ke GPIO 4
@@ -48,10 +58,14 @@ const char* mqtt_topic = "sensor/dht11/data";  // Topic untuk data JSON
 #define CURRENT_THRESHOLD_MIN 0.1  // Arus minimum untuk dianggap ada beban (0.1A = ~22W)
 #define DISABLE_CURRENT_SENSOR false  // ENABLED: Sensor arus aktif (nilai mungkin belum akurat)
 
-// Inisialisasi objekx
+// Inisialisasi objek
 DHT dht(DHTPIN, DHTTYPE);
 WiFiClientSecure espClient;  // Gunakan WiFiClientSecure untuk TLS
 PubSubClient client(espClient);
+
+// Variabel untuk SAS Token
+String sasToken = "";
+unsigned long sasTokenExpiry = 0;
 
 // Variabel untuk timing
 unsigned long lastMsg = 0;
@@ -207,23 +221,76 @@ void setupWiFi() {
   Serial.println(WiFi.localIP());
 }
 
-// Fungsi untuk koneksi ulang ke MQTT
+// Fungsi untuk generate SAS Token untuk Azure IoT Hub
+String generateSasToken(const char* key, String url, long expiry) {
+  // URL encode
+  url.toLowerCase();
+  String stringToSign = url + "\n" + String(expiry);
+  
+  // Decode Base64 key
+  int keyLength = strlen(key);
+  int decodedKeyLength = base64_dec_len(key, keyLength);
+  char decodedKey[decodedKeyLength];
+  base64_decode(decodedKey, key, keyLength);
+  
+  // HMAC-SHA256
+  byte hmacResult[32];
+  mbedtls_md_context_t ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+  
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 1);
+  mbedtls_md_hmac_starts(&ctx, (const unsigned char*)decodedKey, decodedKeyLength);
+  mbedtls_md_hmac_update(&ctx, (const unsigned char*)stringToSign.c_str(), stringToSign.length());
+  mbedtls_md_hmac_finish(&ctx, hmacResult);
+  mbedtls_md_free(&ctx);
+  
+  // Encode result to Base64
+  String signature = base64::encode(hmacResult, 32);
+  
+  // URL encode signature
+  signature.replace("+", "%2B");
+  signature.replace("=", "%3D");
+  signature.replace("/", "%2F");
+  
+  // Create SAS token
+  String sasToken = "SharedAccessSignature sr=" + url + "&sig=" + signature + "&se=" + String(expiry);
+  
+  return sasToken;
+}
+
+// Fungsi untuk koneksi ulang ke Azure IoT Hub
 void reconnectMQTT() {
   while (!client.connected()) {
-    Serial.print("Menghubungkan ke MQTT Broker HiveMQ Cloud...");
-    Serial.print("Username: ");
-    Serial.print(mqtt_username);
-    Serial.print(" | Client ID: ");
-    Serial.println(mqtt_client_id);
+    Serial.println("\nMenghubungkan ke Azure IoT Hub...");
+    Serial.print("Hub: ");
+    Serial.println(mqtt_server);
+    Serial.print("Device ID: ");
+    Serial.println(deviceId);
     
-    // Koneksi dengan username dan password
-    if (client.connect(mqtt_client_id.c_str(), mqtt_username, mqtt_password)) {
-      Serial.println("✓ Terhubung ke MQTT!");
+    // Generate SAS Token jika expired atau belum ada
+    unsigned long currentTime = time(nullptr);
+    if (sasToken == "" || currentTime >= sasTokenExpiry) {
+      Serial.println("Generating new SAS Token...");
+      sasTokenExpiry = currentTime + 3600; // Token valid untuk 1 jam
+      String resourceUri = mqtt_server + "/devices/" + String(deviceId);
+      sasToken = generateSasToken(deviceKey, resourceUri, sasTokenExpiry);
+      Serial.println("✓ SAS Token generated");
+    }
+    
+    // Koneksi dengan SAS Token
+    if (client.connect(deviceId, mqtt_username.c_str(), sasToken.c_str())) {
+      Serial.println("✓ Terhubung ke Azure IoT Hub!");
     } else {
       Serial.print("✗ Gagal, rc=");
       Serial.print(client.state());
-      Serial.println(" | Periksa username/password di HiveMQ Cloud");
-      Serial.println("  Coba lagi dalam 5 detik...");
+      Serial.println(" | Periksa konfigurasi IoT Hub");
+      Serial.println("  Error codes:");
+      Serial.println("  -4: Connection timeout");
+      Serial.println("  -3: Connection lost");
+      Serial.println("  -2: Connect failed");
+      Serial.println("   5: Connection refused (bad credentials)");
+      Serial.println("\n  Coba lagi dalam 5 detik...");
       delay(5000);
     }
   }
@@ -259,19 +326,41 @@ void setup() {
   // Koneksi WiFi
   setupWiFi();
   
+  // Sinkronisasi waktu dengan NTP (diperlukan untuk SAS Token)
+  Serial.println("\n⏰ Sinkronisasi waktu dengan NTP...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  time_t now = time(nullptr);
+  int retry = 0;
+  while (now < 8 * 3600 * 2 && retry < 15) {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+    retry++;
+  }
+  if (now < 8 * 3600 * 2) {
+    Serial.println("\n✗ Gagal sinkronisasi waktu!");
+    Serial.println("  Restart ESP32 atau periksa koneksi internet");
+  } else {
+    Serial.println("\n✓ Waktu tersinkronisasi");
+    Serial.print("  Current time: ");
+    Serial.println(ctime(&now));
+  }
+  
   // Konfigurasi TLS (tidak verifikasi sertifikat untuk kesederhanaan)
   espClient.setInsecure();
   
   // Konfigurasi MQTT dengan buffer size lebih besar
-  client.setServer(mqtt_server, mqtt_port);
+  client.setServer(mqtt_server.c_str(), mqtt_port);
   client.setBufferSize(512);  // Increase buffer size
   client.setKeepAlive(60);    // Keep alive 60 detik
   
-  Serial.println("\n📡 Konfigurasi MQTT selesai");
-  Serial.print("   Server: ");
+  Serial.println("\n📡 Konfigurasi Azure IoT Hub selesai");
+  Serial.print("   IoT Hub: ");
   Serial.println(mqtt_server);
   Serial.print("   Port: ");
   Serial.println(mqtt_port);
+  Serial.print("   Device ID: ");
+  Serial.println(deviceId);
   
   Serial.println("\n🔧 STATUS KALIBRASI:");
   Serial.println("   TEGANGAN (ZMPT101B):");
@@ -397,12 +486,13 @@ void loop() {
     Serial.print("JSON: ");
     Serial.println(jsonBuffer);
     
-    // Publish data ke MQTT
-    if (client.publish(mqtt_topic, jsonBuffer)) {
-      Serial.println("✓ Data terkirim ke MQTT");
-
+    // Publish data ke Azure IoT Hub
+    if (client.publish(mqtt_topic.c_str(), jsonBuffer)) {
+      Serial.println("✓ Data terkirim ke Azure IoT Hub");
     } else {
-      Serial.println("✗ Gagal mengirim data ke MQTT");
+      Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
+      Serial.print("   MQTT State: ");
+      Serial.println(client.state());
     }
     
     Serial.println("=================================");

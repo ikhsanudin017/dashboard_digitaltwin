@@ -8,7 +8,7 @@ set -e
 # ===== KONFIGURASI - EDIT DI SINI =====
 RESOURCE_GROUP="rg-digitaltwin-energymonitor"
 FUNCTION_APP_NAME="func-energymonitor-7d2e5be2"
-STORAGE_ACCOUNT="stenergy750b783c"
+STORAGE_ACCOUNT="mlsuhu0426140346"
 # ======================================
 
 echo "============================================"

@@ -1,0 +1,27 @@
+# Azure IoT Hub Configuration
+# Generated: Tue Dec 30 17:54:04 WIB 2025
+
+========================================
+AZURE FUNCTION APP SETTINGS
+========================================
+
+IOT_HUB_CONNECTION_STRING=HostName=iothub-energymonitor-ef753d74.azure-devices.net;SharedAccessKeyName=service;SharedAccessKey=l/DZhkMb0BQIiQtDRSEJCyLLd7bljTpC1AIoTBwsyrg=
+
+========================================
+ESP32 CONFIGURATION (Already in main.cpp)
+========================================
+
+IoT Hub Name: iothub-energymonitor-ef753d74
+Device ID: ESP32_DHT11_Sensor  
+Device Key: BWXR6jkv47igiyslSf/B5dHBBqYF8NG9bf8caquEzHg
+
+========================================
+FULL CONNECTION STRINGS
+========================================
+
+Event Hub Connection String (for Function):
+HostName=iothub-energymonitor-ef753d74.azure-devices.net;SharedAccessKeyName=service;SharedAccessKey=l/DZhkMb0BQIiQtDRSEJCyLLd7bljTpC1AIoTBwsyrg=
+
+Device Connection String (for ESP32):
+HostName=iothub-energymonitor-ef753d74.azure-devices.net;DeviceId=ESP32_DHT11_Sensor;SharedAccessKey=BWXR6jkv47igiyslSf/B5dHBBqYF8NG9bf8caquEzHg=
+
