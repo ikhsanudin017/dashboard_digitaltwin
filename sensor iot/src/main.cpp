@@ -4,13 +4,13 @@
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
-#include <base64.h>
 #include <mbedtls/md.h>
+#include <mbedtls/base64.h>
 #include <time.h>
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "TOKO BERAS";
-const char* password = "sumberagung5758";
+const char* ssid = "Rosa Resti";
+const char* password = "Embuh Ganti Paling";
 
 // ===== KONFIGURASI AZURE IoT Hub =====
 // INSTRUKSI: Dapatkan nilai-nilai ini dari Azure Portal:
@@ -42,8 +42,8 @@ String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/";
 // Perhitungan: 220V / 0.38V = 579
 #define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi untuk PLN 220V (DIKALIBRASI ULANG!)
 
-#define RMS_THRESHOLD 0.15  // Threshold minimum RMS untuk deteksi sinyal valid (150mV)
-#define VOLTAGE_THRESHOLD 100.0  // Threshold minimum tegangan output (100V) untuk dianggap terhubung ke 220V
+#define RMS_THRESHOLD 0.25  // Threshold minimum RMS untuk deteksi sinyal valid (250mV) - dinaikkan untuk filter noise floating ADC
+#define VOLTAGE_THRESHOLD 150.0  // Threshold minimum tegangan output (150V) untuk dianggap terhubung ke 220V
 
 // ===== KONFIGURASI SCT013-000 (Sensor Arus AC 100A/50mA) =====
 #define SCT013_PIN 32     // Pin analog untuk sensor arus (GPIO 32 / ADC1_CH4 - Kompatibel dengan WiFi)
@@ -186,8 +186,14 @@ CurrentReading readACCurrent() {
   result.rms = rmsVoltage;
   result.adcRaw = avgADC;
   
-  // Validasi: Periksa apakah RMS cukup besar (bukan noise) DAN arus > threshold minimum
-  if (rmsVoltage > CURRENT_RMS_THRESHOLD && rmsCurrent > CURRENT_THRESHOLD_MIN) {
+  // Validasi: Periksa kondisi sensor
+  // ADC saturasi (>4090) menandakan sensor tidak terhubung dengan benar atau floating
+  // RMS > 3.0V juga menandakan ADC saturasi (noise karena pin floating)
+  if (avgADC > 4090 || rmsVoltage > 3.0) {
+    // ADC saturasi = pin floating / tidak terhubung
+    result.current = 0.0;
+    result.isConnected = false;
+  } else if (rmsVoltage > CURRENT_RMS_THRESHOLD && rmsCurrent > CURRENT_THRESHOLD_MIN) {
     result.current = rmsCurrent;
     result.isConnected = true;
   } else {
@@ -227,26 +233,33 @@ String generateSasToken(const char* key, String url, long expiry) {
   url.toLowerCase();
   String stringToSign = url + "\n" + String(expiry);
   
-  // Decode Base64 key
-  int keyLength = strlen(key);
-  int decodedKeyLength = base64_dec_len(key, keyLength);
-  char decodedKey[decodedKeyLength];
-  base64_decode(decodedKey, key, keyLength);
+  // Decode Base64 key menggunakan mbedtls
+  size_t keyLength = strlen(key);
+  size_t decodedKeyLength = 0;
+  unsigned char decodedKey[64];
+  
+  mbedtls_base64_decode(decodedKey, sizeof(decodedKey), &decodedKeyLength, 
+                        (const unsigned char*)key, keyLength);
   
   // HMAC-SHA256
-  byte hmacResult[32];
+  unsigned char hmacResult[32];
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
   mbedtls_md_init(&ctx);
   mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 1);
-  mbedtls_md_hmac_starts(&ctx, (const unsigned char*)decodedKey, decodedKeyLength);
+  mbedtls_md_hmac_starts(&ctx, decodedKey, decodedKeyLength);
   mbedtls_md_hmac_update(&ctx, (const unsigned char*)stringToSign.c_str(), stringToSign.length());
   mbedtls_md_hmac_finish(&ctx, hmacResult);
   mbedtls_md_free(&ctx);
   
-  // Encode result to Base64
-  String signature = base64::encode(hmacResult, 32);
+  // Encode result to Base64 menggunakan mbedtls
+  unsigned char encodedSignature[64];
+  size_t encodedLength = 0;
+  mbedtls_base64_encode(encodedSignature, sizeof(encodedSignature), &encodedLength, 
+                        hmacResult, 32);
+  
+  String signature = String((char*)encodedSignature);
   
   // URL encode signature
   signature.replace("+", "%2B");
