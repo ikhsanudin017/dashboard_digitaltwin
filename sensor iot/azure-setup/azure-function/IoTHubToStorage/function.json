@@ -1,0 +1,12 @@
+{
+  "bindings": [
+    {
+      "type": "eventHubTrigger",
+      "name": "eventHubMessages",
+      "direction": "in",
+      "connection": "IOT_HUB_CONNECTION_STRING",
+      "cardinality": "many",
+      "consumerGroup": "$Default"
+    }
+  ]
+}

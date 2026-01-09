@@ -46,21 +46,14 @@
 
     <main class="main">
       <div class="container">
-        <!-- Row 1: 3D Visualization dan Status Sensor -->
-        <div class="grid grid-2" style="margin-bottom: 20px;">
-          <div class="card">
-            <h2>🎯 Digital Twin 3D</h2>
-            <DigitalTwin3D 
-              :sensor-data="sensorData"
-              :people-count="peopleCount"
-              :is-dark-mode="isDarkMode"
-            />
-          </div>
-          
-          <div class="card">
-            <h2>📊 Status Sensor Real-time</h2>
-            <SensorStatus :sensor-data="sensorData" />
-          </div>
+        <!-- Row 1: 3D Visualization dengan Icon Sensor -->
+        <div class="card" style="margin-bottom: 20px;">
+          <h2>🎯 Digital Twin 3D <span style="font-size: 0.8em; opacity: 0.7;">- Klik icon sensor untuk melihat data</span></h2>
+          <DigitalTwin3D 
+            :sensor-data="sensorData"
+            :people-count="peopleCount"
+            :is-dark-mode="isDarkMode"
+          />
         </div>
 
         <!-- Row 1.5: Camera Stream -->
@@ -109,7 +102,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import DigitalTwin3D from './components/DigitalTwin3D.vue'
+import DigitalTwin3D from './components/DigitalTwin3D_Babylon.vue'
 import SensorStatus from './components/SensorStatus.vue'
 import TemperatureChart from './components/TemperatureChart.vue'
 import ElectricityChart from './components/ElectricityChart.vue'

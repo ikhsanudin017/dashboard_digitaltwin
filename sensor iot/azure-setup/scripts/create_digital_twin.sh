@@ -5,7 +5,7 @@ set -e
 RESOURCE_GROUP="rg-digitaltwin-energymonitor"
 LOCATION="southeastasia"
 IOT_HUB_NAME="iothub-energymonitor-ef753d74"
-STORAGE_ACCOUNT_NAME="stenergy750b783c"  # From previous run
+STORAGE_ACCOUNT_NAME="mlsuhu0426140346"  # ML Storage Account
 FUNCTION_APP_NAME="func-energymonitor-c9001a7e"  # From previous run
 ADT_INSTANCE_NAME="adt-energymonitor-$(openssl rand -hex 4)"
 DEVICE_ID="ESP32_ENERGY_MONITOR_001"
