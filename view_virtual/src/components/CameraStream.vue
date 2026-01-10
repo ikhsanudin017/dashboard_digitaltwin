@@ -69,7 +69,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const raspberryPiIp = ref(localStorage.getItem('raspberryPiIp') || '192.168.1.14')
+const raspberryPiIp = ref(localStorage.getItem('raspberryPiIp') || '192.168.1.8')
 const streamUrl = ref(null)
 const isLoading = ref(false)
 const isStreamActive = ref(false)
