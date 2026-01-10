@@ -281,7 +281,8 @@ function getMetricLabel(metric) {
 }
 
 function formatEnergy(wh) {
-  if (!wh) return 'N/A'
+  if (wh === null || wh === undefined) return 'N/A'
+  if (wh < 0) return '0 Wh' // Prevent negative values
   if (wh >= 1000) {
     return `${(wh / 1000).toFixed(2)} kWh`
   }

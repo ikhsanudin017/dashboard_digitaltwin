@@ -200,15 +200,25 @@ export function useHistoricalData() {
     }
     
     // Calculate total energy (Wh)
-    const powerData = data.filter(d => d.power !== null)
+    const powerData = data.filter(d => d.power !== null && d.power >= 0)
+    
+    // Sort by timestamp to ensure correct order
+    powerData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+    
     if (powerData.length > 1) {
       let totalEnergy = 0
       for (let i = 1; i < powerData.length; i++) {
         const timeDiff = (new Date(powerData[i].timestamp) - new Date(powerData[i - 1].timestamp)) / 3600000
+        
+        // Skip if time difference is negative or too large (>24 hours)
+        if (timeDiff <= 0 || timeDiff > 24) continue
+        
         const avgPower = (powerData[i].power + powerData[i - 1].power) / 2
         totalEnergy += avgPower * timeDiff
       }
-      stats.totalEnergy = totalEnergy
+      stats.totalEnergy = Math.max(0, totalEnergy) // Ensure non-negative
+    } else {
+      stats.totalEnergy = 0
     }
     
     return stats
