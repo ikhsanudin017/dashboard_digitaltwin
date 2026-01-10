@@ -69,7 +69,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const raspberryPiIp = ref(localStorage.getItem('raspberryPiIp') || '192.168.1.8')
+const raspberryPiIp = ref('192.168.1.8')
 const streamUrl = ref(null)
 const isLoading = ref(false)
 const isStreamActive = ref(false)
@@ -78,13 +78,6 @@ const errorMessage = ref('')
 const hasError = ref(false)
 
 const updateStream = () => {
-  if (!raspberryPiIp.value) {
-    alert('Please enter Raspberry Pi IP address')
-    return
-  }
-  
-  localStorage.setItem('raspberryPiIp', raspberryPiIp.value)
-  
   // Use MJPEG stream directly in img tag
   hasError.value = false
   streamUrl.value = `http://${raspberryPiIp.value}:${streamPort.value}/video_feed?t=${Date.now()}`
