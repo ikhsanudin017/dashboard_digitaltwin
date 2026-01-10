@@ -71,8 +71,8 @@
           <div class="stat-icon">👥</div>
           <div class="stat-info">
             <p class="stat-label">People Count</p>
-            <p class="stat-value">{{ statistics.peopleCount.avg !== null ? statistics.peopleCount.avg.toFixed(0) : '0' }}</p>
-            <p class="stat-range">{{ statistics.peopleCount.min !== null ? statistics.peopleCount.min : '0' }} - {{ statistics.peopleCount.max !== null ? statistics.peopleCount.max : '0' }}</p>
+            <p class="stat-value">{{ currentPeopleCount }}</p>
+            <p class="stat-range">Real-time dari kamera</p>
           </div>
         </div>
         
@@ -141,7 +141,11 @@ import { useHistoricalData } from '../composables/useHistoricalData'
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
 const props = defineProps({
-  isDarkMode: Boolean
+  isDarkMode: Boolean,
+  currentPeopleCount: {
+    type: Number,
+    default: 0
+  }
 })
 
 const { historicalData, isLoading, loadHistoricalData, getDataByDateRange, getAggregatedData, exportToCSV, getStatistics } = useHistoricalData()

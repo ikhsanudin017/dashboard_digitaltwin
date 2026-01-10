@@ -67,7 +67,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, defineEmits } from 'vue'
+
+const emit = defineEmits(['peopleCountUpdate'])
 
 const raspberryPiIp = ref('192.168.1.8')
 const streamUrl = ref(null)
@@ -76,6 +78,24 @@ const isStreamActive = ref(false)
 const streamPort = ref(5000)
 const errorMessage = ref('')
 const hasError = ref(false)
+let peopleCountInterval = null
+
+// Fetch people count dari Raspberry Pi setiap 2 detik
+const fetchPeopleCount = async () => {
+  if (!raspberryPiIp.value || hasError.value) return
+  
+  try {
+    const response = await fetch(`http://${raspberryPiIp.value}:${streamPort.value}/count`, {
+      method: 'GET',
+      mode: 'cors'
+    })
+    const data = await response.json()
+    console.log('👥 People count from Raspberry Pi:', data.count)
+    emit('peopleCountUpdate', data.count)
+  } catch (error) {
+    console.error('Failed to fetch people count:', error.message)
+  }
+}
 
 const updateStream = () => {
   // Use MJPEG stream directly in img tag
@@ -85,6 +105,11 @@ const updateStream = () => {
   isStreamActive.value = false
   
   console.log('Starting MJPEG stream:', streamUrl.value)
+  
+  // Start polling people count
+  if (peopleCountInterval) clearInterval(peopleCountInterval)
+  peopleCountInterval = setInterval(fetchPeopleCount, 2000)
+  fetchPeopleCount() // Fetch immediately
 }
 
 const refreshStream = () => {
@@ -120,6 +145,13 @@ onMounted(() => {
   console.log('🎥 CameraStream mounted, starting stream...')
   console.log('📍 Raspberry Pi IP:', raspberryPiIp.value)
   updateStream()
+})
+
+onUnmounted(() => {
+  if (peopleCountInterval) {
+    clearInterval(peopleCountInterval)
+    peopleCountInterval = null
+  }
 })
 </script>
 

@@ -59,7 +59,7 @@
         <!-- Row 1.5: Camera Stream -->
         <div class="card" style="margin-bottom: 20px;">
           <h2>📹 Live Camera Stream - People Counter</h2>
-          <CameraStream />
+          <CameraStream @people-count-update="handlePeopleCountUpdate" />
         </div>
 
         <!-- Row 2: Grafik Data Historis -->
@@ -101,7 +101,7 @@
         <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" />
 
         <!-- Historical Analytics -->
-        <HistoricalAnalytics :is-dark-mode="isDarkMode" />
+        <HistoricalAnalytics :is-dark-mode="isDarkMode" :current-people-count="peopleCount" />
       </div>
     </main>
   </div>
@@ -176,6 +176,14 @@ let lastSaveTimestamp = 0
 const SAVE_INTERVAL = 30000 // 30 seconds
 
 const currentTime = ref(new Date())
+
+// Handle people count update from CameraStream (Raspberry Pi)
+const handlePeopleCountUpdate = (count) => {
+  console.log('📊 People count received from Raspberry Pi:', count)
+  peopleCount.value = count
+  sensorData.value.peopleCount = count
+  addChartDataPoint(peopleData, count)
+}
 
 const formattedDate = computed(() => {
   const options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
