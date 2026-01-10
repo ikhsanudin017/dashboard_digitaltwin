@@ -71,8 +71,8 @@
           <div class="stat-icon">👥</div>
           <div class="stat-info">
             <p class="stat-label">People Count</p>
-            <p class="stat-value">{{ statistics.peopleCount.avg?.toFixed(0) || 'N/A' }}</p>
-            <p class="stat-range">{{ statistics.peopleCount.min }} - {{ statistics.peopleCount.max }}</p>
+            <p class="stat-value">{{ statistics.peopleCount.avg !== null ? statistics.peopleCount.avg.toFixed(0) : '0' }}</p>
+            <p class="stat-range">{{ statistics.peopleCount.min !== null ? statistics.peopleCount.min : '0' }} - {{ statistics.peopleCount.max !== null ? statistics.peopleCount.max : '0' }}</p>
           </div>
         </div>
         

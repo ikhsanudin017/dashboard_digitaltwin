@@ -80,18 +80,6 @@
           </div>
         </div>
 
-        <!-- Energy Management -->
-        <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" />
-
-        <!-- ML-Based AC Recommendation -->
-        <div class="card" style="margin-top: 20px;">
-          <ACRecommendation 
-            :sensor-data="sensorData"
-            :people-count="peopleCount"
-            :is-dark-mode="isDarkMode"
-          />
-        </div>
-
         <!-- Row 3: Detail Data -->
         <div class="card" style="margin-top: 20px;">
           <h2>📋 Detail Data Sensor</h2>
@@ -101,6 +89,16 @@
             :total-energy="totalEnergyWh"
           />
         </div>
+
+        <!-- ML-Based AC Recommendation -->
+        <ACRecommendation 
+          :sensor-data="sensorData"
+          :people-count="peopleCount"
+          :is-dark-mode="isDarkMode"
+        />
+
+        <!-- Energy Management -->
+        <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" />
 
         <!-- Historical Analytics -->
         <HistoricalAnalytics :is-dark-mode="isDarkMode" />

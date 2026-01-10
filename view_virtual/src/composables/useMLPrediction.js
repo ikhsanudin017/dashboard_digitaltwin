@@ -130,23 +130,50 @@ export function useMLPrediction() {
     const monthlyCostIDR = monthlyKwh * 1444.70
     
     // AC recommendation using simple logic
-    let baseTemp = 24
-    if (jumlahOrang > 0) baseTemp -= jumlahOrang / 20
-    if (suhu > 25) baseTemp -= (suhu - 25) * 0.3
-    if (kelembaban > 60) baseTemp -= 0.5
-    if (hour >= 8 && hour <= 17) baseTemp -= 0.3
+    // Suhu dasar optimal: 24-26°C
+    let baseTemp = 25
     
-    const recommendedTemp = Math.max(18, Math.min(28, baseTemp))
+    // Faktor suhu ruangan (paling penting)
+    if (suhu > 28) {
+      baseTemp = 22  // Ruangan panas → AC dingin
+    } else if (suhu > 26) {
+      baseTemp = 23  // Ruangan hangat → AC sejuk
+    } else if (suhu < 22) {
+      baseTemp = 26  // Ruangan dingin → AC hangat/hemat energi
+    }
     
+    // Penyesuaian berdasarkan jumlah orang
+    if (jumlahOrang >= 5) {
+      baseTemp -= 1  // Banyak orang → butuh lebih dingin
+    } else if (jumlahOrang >= 3) {
+      baseTemp -= 0.5
+    }
+    
+    // Penyesuaian kelembaban
+    if (kelembaban > 70) {
+      baseTemp -= 1  // Lembab → lebih dingin
+    } else if (kelembaban < 40) {
+      baseTemp += 1  // Kering → bisa lebih hangat
+    }
+    
+    // Penyesuaian waktu (jam kerja lebih dingin)
+    if (hour >= 10 && hour <= 15) {
+      baseTemp -= 0.5  // Jam panas siang hari
+    }
+    
+    // Round to nearest whole number and ensure reasonable range
+    const recommendedTemp = Math.round(Math.max(20, Math.min(27, baseTemp)))
+    
+    // Tentukan action berdasarkan perbandingan dengan suhu ruangan
     let action, mode
-    if (recommendedTemp < suhu - 2) {
-      action = 'Turunkan suhu AC'
+    if (suhu > 27) {
+      action = 'Ruangan panas, turunkan suhu AC untuk pendinginan'
       mode = 'cooling'
-    } else if (recommendedTemp > suhu + 2) {
-      action = 'Naikkan suhu AC untuk hemat energi'
+    } else if (suhu < 23) {
+      action = 'Ruangan sudah sejuk, naikkan suhu AC untuk hemat energi'
       mode = 'eco'
     } else {
-      action = 'Pertahankan suhu AC'
+      action = 'Suhu ruangan nyaman, pertahankan setting AC'
       mode = 'maintain'
     }
     

@@ -26,13 +26,14 @@ export function useHistoricalData() {
             temperature: item.suhu || null,
             humidity: item.kelembaban || null,
             voltage: item.tegangan || null,
-            current: item.arus || null,
-            power: item.daya || null,
-            peopleCount: null // Will be loaded separately if available
+            current: item.arus || null,    // Current (A) - Ampere
+            power: item.daya || null,      // Power (W) - Watt
+            peopleCount: item.jumlahOrang !== undefined ? parseInt(item.jumlahOrang) || 0 : 0
           }))
           
           historicalData.value = azureData
           console.log('✅ Azure Storage data loaded:', historicalData.value.length, 'records')
+          console.log('👥 People count data included:', azureData.filter(d => d.peopleCount > 0).length, 'non-zero records')
           
           // Simpan ke localStorage sebagai cache
           saveHistoricalData()
