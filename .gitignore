@@ -1,5 +1,4 @@
 # IDE
-
 .idea/
 
 # PlatformIO
@@ -10,6 +9,14 @@
 # Node modules
 node_modules/
 package-lock.json
+
+# Azure Functions local storage
+__blobstorage__/
+__queuestorage__/
+
+# Utility scripts & data exports
+scripts/
+*.csv
 
 # Bridge files dengan API keys (jangan push)
 sensor iot/bridge/bridge.js
@@ -24,5 +31,7 @@ sensor iot/bridge/query-latest.js
 # OS
 .DS_Store
 Thumbs.db
+
+# 3D models (large files)
 view_virtual/public/models/*.blend
 view_virtual/public/models/*.glb

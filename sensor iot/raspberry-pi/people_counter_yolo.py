@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 USB Webcam dengan People Detection AKURAT
-Menggunakan YOLO v4-tiny (State-of-the-art object detection)
+Menggunakan YOLO v3-tiny (Ringan untuk Raspberry Pi)
 """
 
 import cv2
@@ -33,7 +33,8 @@ MQTT_CLIENT_ID = "RASPBERRY_PI_CAMERA_001"
 CONFIDENCE_THRESHOLD = 0.5  # 50% confidence minimum
 NMS_THRESHOLD = 0.4  # Non-maximum suppression
 PUBLISH_INTERVAL = 5
-INPUT_SIZE = 224  # Input size untuk YOLO (kecil untuk speed)
+INPUT_SIZE = 160  # Input size untuk YOLO (lebih kecil = lebih cepat)
+SKIP_FRAMES = 5  # Proses YOLO setiap 5 frame untuk kurangi lag
 
 # ===== INISIALISASI =====
 app = Flask(__name__)
@@ -49,13 +50,13 @@ output_layers = None
 classes = None
 
 def download_yolo_files():
-    """Download YOLO v4-tiny files"""
+    """Download YOLO v3-tiny files (lebih ringan untuk Raspberry Pi)"""
     import os
     import urllib.request
     
     files = {
-        'yolov4-tiny.cfg': 'https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4-tiny.cfg',
-        'yolov4-tiny.weights': 'https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v4_pre/yolov4-tiny.weights',
+        'yolov3-tiny.cfg': 'https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg',
+        'yolov3-tiny.weights': 'https://pjreddie.com/media/files/yolov3-tiny.weights',
         'coco.names': 'https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names'
     }
     
@@ -72,18 +73,18 @@ def download_yolo_files():
     return True
 
 def init_yolo():
-    """Inisialisasi YOLO v4-tiny"""
+    """Inisialisasi YOLO v3-tiny (lebih ringan)"""
     global net, output_layers, classes
     
-    print("🤖 Initializing YOLO v4-tiny detector...")
+    print("🤖 Initializing YOLO v3-tiny detector...")
     
     if not download_yolo_files():
         print("✗ Failed to download YOLO files")
         return False
     
     try:
-        # Load YOLO
-        net = cv2.dnn.readNet("yolov4-tiny.weights", "yolov4-tiny.cfg")
+        # Load YOLO v3-tiny
+        net = cv2.dnn.readNet("yolov3-tiny.weights", "yolov3-tiny.cfg")
         
         # Set backend and target
         net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
@@ -97,7 +98,7 @@ def init_yolo():
         with open("coco.names", "r") as f:
             classes = [line.strip() for line in f.readlines()]
         
-        print("✓ YOLO v4-tiny loaded successfully")
+        print("✓ YOLO v3-tiny loaded successfully")
         print(f"  Classes: {len(classes)}")
         print(f"  Output layers: {len(output_layers)}")
         return True
@@ -176,7 +177,7 @@ def init_camera():
     return True
 
 def detect_people_yolo(frame):
-    """Deteksi orang dengan YOLO v4-tiny"""
+    """Deteksi orang dengan YOLO v3-tiny"""
     if net is None:
         return 0, frame
     
@@ -250,6 +251,7 @@ def capture_frames():
     frame_count = 0
     start_time = time.time()
     last_publish = time.time()
+    last_detected_frame = None  # Cache frame dengan detection
     
     while True:
         try:
@@ -261,9 +263,14 @@ def capture_frames():
             frame_count += 1
             current_time = time.time()
             
-            # Perform detection SETIAP FRAME agar boxes smooth mengikuti pergerakan
-            count, frame = detect_people_yolo(frame)
-            people_count = count
+            # Perform detection setiap SKIP_FRAMES frame untuk kurangi lag
+            if frame_count % SKIP_FRAMES == 0:
+                count, detected_frame = detect_people_yolo(frame)
+                people_count = count
+                last_detected_frame = detected_frame
+            else:
+                # Gunakan frame tanpa detection untuk smooth streaming
+                last_detected_frame = frame
             
             # Calculate FPS (only for tracking, not displayed)
             elapsed = current_time - start_time
@@ -277,7 +284,7 @@ def capture_frames():
                 last_publish = current_time
             
             with lock:
-                output_frame = frame.copy()
+                output_frame = last_detected_frame.copy() if last_detected_frame is not None else frame.copy()
             
             if frame_count >= 1000:
                 frame_count = 0
@@ -294,7 +301,7 @@ def generate_stream():
             if output_frame is None:
                 continue
             # Lower JPEG quality untuk streaming lebih lancar
-            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
             if not flag:
                 continue
         
@@ -328,12 +335,12 @@ def index():
         </script>
     </head>
     <body>
-        <h1>🎥 YOLO v4-tiny People Counter</h1>
+        <h1>🎥 YOLO v3-tiny People Counter</h1>
         <p class="status">● LIVE | People: <span id="count">0</span></p>
         <img src="/video_feed">
         <div class="info">
             <h3>📌 Info</h3>
-            <p><strong>Detection:</strong> YOLO v4-tiny (State-of-the-art)</p>
+            <p><strong>Detection:</strong> YOLO v3-tiny (Lightweight)</p>
             <p><strong>Confidence:</strong> {CONFIDENCE_THRESHOLD*100:.0f}%</p>
             <p><strong>MQTT:</strong> {MQTT_TOPIC}</p>
         </div>
@@ -347,7 +354,7 @@ def status():
         'status': 'online',
         'people_count': people_count,
         'mqtt_connected': mqtt_connected,
-        'detection': 'YOLO v4-tiny',
+        'detection': 'YOLO v3-tiny',
         'confidence_threshold': CONFIDENCE_THRESHOLD
     }
 
@@ -357,7 +364,7 @@ def count():
 
 def main():
     print("\n" + "="*60)
-    print("YOLO v4-tiny PEOPLE COUNTER - HIGH ACCURACY")
+    print("YOLO v3-tiny PEOPLE COUNTER - LIGHTWEIGHT")
     print("="*60)
     
     if not init_yolo():
@@ -389,7 +396,7 @@ def main():
     print(f"📡 Stream: http://192.168.1.14:{STREAM_PORT}/video_feed")
     print(f"🏠 Home: http://192.168.1.14:{STREAM_PORT}/")
     print(f"👥 Count API: http://192.168.1.14:{STREAM_PORT}/count")
-    print("\n💡 YOLO v4-tiny active - High accuracy people detection!")
+    print("\n💡 YOLO v3-tiny active - Lightweight people detection!")
     print("="*60 + "\n")
     
     try:

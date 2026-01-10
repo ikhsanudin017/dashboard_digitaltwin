@@ -4,59 +4,78 @@
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
-#include <base64.h>
 #include <mbedtls/md.h>
+#include <mbedtls/base64.h>
 #include <time.h>
 
+// ===== AZURE IoT Hub ROOT CERTIFICATE =====
+// DigiCert Global Root G2 - Required for Azure IoT Hub TLS
+const char* azure_root_ca = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
+MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI
+2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx
+1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ
+q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz
+tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ
+vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP
+BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV
+5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY
+1Yl9PMCcit2BnLWsKjaSi2cEMoH0KVLJ8DP/vACgRqAeq0wDVnQHlPv+l3F5nGL6
+ibHn/g9d7VoTvZ/gMZJedj7evkS6fLvNf/R3PG1kLCwLEomJMzBfOKx8TWSPXpLn
+dS8ongPpfOPi4/fOHNBwPHAYw/TLKHDip3LyN3t/DAHI+QyH0EQNF7xR9HHQGP23
+m0ao57w+czK/tz5WLnSH9wiWD18lPMPdmY+j3PCn93wdYdGU3GcLfoxJZ5Cb5FDk
+tvALPBOjks61ihRdDLXgQy/wr+H+Km8RpFVXiJHH/t9DAggndkuYB8RgHny3DnGx
+p1U=
+-----END CERTIFICATE-----
+)EOF";
+
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "TOKO BERAS";
-const char* password = "sumberagung5758";
+const char* ssid = "Rosa Resti";
+const char* password = "Embuh Ganti Paling";
 
 // ===== KONFIGURASI AZURE IoT Hub =====
-// INSTRUKSI: Dapatkan nilai-nilai ini dari Azure Portal:
-// 1. IoT Hub Name: Nama IoT Hub Anda (contoh: "myiothub")
-// 2. Device ID: ID device yang sudah dibuat di IoT Hub
-// 3. Device Key: Primary/Secondary key dari device
-const char* iotHubName = "iothub-energymonitor-ef753d74";  // Ganti dengan nama IoT Hub (tanpa .azure-devices.net)
-const char* deviceId = "ESP32_DHT11_Sensor";  // Ganti dengan Device ID Anda
-const char* deviceKey = "BWXR6jkv47igiyslSf/B5dHBBqYF8NG9bf8caquEzHg=";  // Ganti dengan Device Key dari Azure Portal
+// Dapatkan nilai-nilai ini dari Azure Portal > IoT Hub > Devices
+const char* iotHubName = "iothub-energymonitor-ef753d74";  // Nama IoT Hub (tanpa .azure-devices.net)
+const char* deviceId = "ESP32_ENERGY_MONITOR_001";         // Device ID yang terdaftar di IoT Hub
+const char* deviceKey = "EmgoME1KbuITQSZQj55Y0tLy66ONmo/d46qnyYQsdk0=";  // Primary Key device
 
 // MQTT Configuration untuk Azure IoT Hub
 String mqtt_server = String(iotHubName) + ".azure-devices.net";
-const int mqtt_port = 8883;  // Port MQTT over TLS
+const int mqtt_port = 8883;  // Port MQTT over TLS (wajib untuk Azure)
 String mqtt_username = mqtt_server + "/" + String(deviceId) + "/?api-version=2021-04-12";
-String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/";
+// Topic dengan properties: content-type = application/json
+String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/$.ct=application%2Fjson&$.ce=utf-8";
 
 // ===== KONFIGURASI DHT11 =====
-#define DHTPIN 4          // Pin data DHT11 terhubung ke GPIO 4
+#define DHTPIN 4     // Pin data DHT11 terhubung ke GPIO 4
 #define DHTTYPE DHT11     // Tipe sensor DHT11
 
-// ===== KONFIGURASI ZMPT101B (Sensor Tegangan AC) =====
-#define ZMPT101B_PIN 35   // Pin analog untuk sensor tegangan (GPIO 35 / ADC1_CH7 - Kompatibel dengan WiFi)
-#define ADC_BITS 12       // Resolusi ADC ESP32 (12-bit)
-#define ADC_COUNTS 4096   // 2^12 = 4096
-#define VREF 3.3          // Tegangan referensi ESP32 (3.3V)
+// ===== SENSOR TEGANGAN ZMPT101B =====
+// Pin: GPIO 35 (ADC1_CH7) - Kompatibel dengan WiFi
+// Kalibrasi: 220V PLN Indonesia
+#define ZMPT101B_PIN 35
+#define ADC_BITS 12
+#define ADC_COUNTS 4096       // 2^12 = 4096
+#define VREF 3.3              // Tegangan referensi ESP32
+#define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi (220V / 0.38V RMS)
+#define RMS_THRESHOLD 0.25    // Threshold minimum RMS (filter noise)
+#define VOLTAGE_THRESHOLD 150.0  // Minimum tegangan valid
 
-// KALIBRASI: Dikalibrasi untuk PLN 220V Indonesia
-// Berdasarkan pengukuran: RMS mentah = 0.38V saat PLN 220V
-// Perhitungan: 220V / 0.38V = 579
-#define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi untuk PLN 220V (DIKALIBRASI ULANG!)
-
-#define RMS_THRESHOLD 0.15  // Threshold minimum RMS untuk deteksi sinyal valid (150mV)
-#define VOLTAGE_THRESHOLD 100.0  // Threshold minimum tegangan output (100V) untuk dianggap terhubung ke 220V
-
-// ===== KONFIGURASI SCT013-000 (Sensor Arus AC 100A/50mA) =====
-#define SCT013_PIN 32     // Pin analog untuk sensor arus (GPIO 32 / ADC1_CH4 - Kompatibel dengan WiFi)
-#define BURDEN_RESISTOR 1000.0  // Burden resistor 1kΩ (sesuai hardware fisik Anda)
-// SCT013-000: 100A primary -> 50mA secondary (ratio 2000:1)
-// Dengan burden resistor 1kΩ: Output = 50mA × 1000Ω = 50V peak (saturasi ADC!)
-// SOLUSI: Gunakan faktor kalibrasi yang disesuaikan dengan resistor 1kΩ
-// Rangkaian TANPA bias voltage: Merah->Resistor->GPIO32, Hitam->GND
-// ADC hanya baca setengah gelombang AC (rectified)
-#define CURRENT_CALIBRATION 300.0  // Faktor kalibrasi disesuaikan untuk burden 1kΩ (turun dari 2000)
-#define CURRENT_RMS_THRESHOLD 0.01  // Threshold minimum RMS untuk deteksi arus valid (10mV)
-#define CURRENT_THRESHOLD_MIN 0.1  // Arus minimum untuk dianggap ada beban (0.1A = ~22W)
-#define DISABLE_CURRENT_SENSOR false  // ENABLED: Sensor arus aktif (nilai mungkin belum akurat)
+// ===== SENSOR ARUS SCT013-000 (100A/50mA) =====
+// Pin: GPIO 32 (ADC1_CH4) - Kompatibel dengan WiFi
+// Rangkaian: Merah->Resistor 1kΩ->GPIO32, Hitam->GND (tanpa bias)
+#define SCT013_PIN 32
+#define BURDEN_RESISTOR 1000.0    // 1kΩ burden resistor
+#define CURRENT_CALIBRATION 300.0 // Faktor kalibrasi untuk burden 1kΩ
+#define CURRENT_RMS_THRESHOLD 0.01  // Threshold minimum RMS arus
+#define CURRENT_THRESHOLD_MIN 0.1   // Arus minimum (0.1A = ~22W)
+#define DISABLE_CURRENT_SENSOR false
 
 // Inisialisasi objek
 DHT dht(DHTPIN, DHTTYPE);
@@ -70,6 +89,10 @@ unsigned long sasTokenExpiry = 0;
 // Variabel untuk timing
 unsigned long lastMsg = 0;
 const long interval = 5000; // Kirim data setiap 5 detik
+
+// Counter untuk statistik
+unsigned long successCount = 0;
+unsigned long failCount = 0;
 
 // Struktur untuk hasil pembacaan tegangan
 struct VoltageReading {
@@ -186,8 +209,14 @@ CurrentReading readACCurrent() {
   result.rms = rmsVoltage;
   result.adcRaw = avgADC;
   
-  // Validasi: Periksa apakah RMS cukup besar (bukan noise) DAN arus > threshold minimum
-  if (rmsVoltage > CURRENT_RMS_THRESHOLD && rmsCurrent > CURRENT_THRESHOLD_MIN) {
+  // Validasi: Periksa kondisi sensor
+  // ADC saturasi (>4090) menandakan sensor tidak terhubung dengan benar atau floating
+  // RMS > 3.0V juga menandakan ADC saturasi (noise karena pin floating)
+  if (avgADC > 4090 || rmsVoltage > 3.0) {
+    // ADC saturasi = pin floating / tidak terhubung
+    result.current = 0.0;
+    result.isConnected = false;
+  } else if (rmsVoltage > CURRENT_RMS_THRESHOLD && rmsCurrent > CURRENT_THRESHOLD_MIN) {
     result.current = rmsCurrent;
     result.isConnected = true;
   } else {
@@ -227,26 +256,33 @@ String generateSasToken(const char* key, String url, long expiry) {
   url.toLowerCase();
   String stringToSign = url + "\n" + String(expiry);
   
-  // Decode Base64 key
-  int keyLength = strlen(key);
-  int decodedKeyLength = base64_dec_len(key, keyLength);
-  char decodedKey[decodedKeyLength];
-  base64_decode(decodedKey, key, keyLength);
+  // Decode Base64 key menggunakan mbedtls
+  size_t keyLength = strlen(key);
+  size_t decodedKeyLength = 0;
+  unsigned char decodedKey[64];
+  
+  mbedtls_base64_decode(decodedKey, sizeof(decodedKey), &decodedKeyLength, 
+                        (const unsigned char*)key, keyLength);
   
   // HMAC-SHA256
-  byte hmacResult[32];
+  unsigned char hmacResult[32];
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   
   mbedtls_md_init(&ctx);
   mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 1);
-  mbedtls_md_hmac_starts(&ctx, (const unsigned char*)decodedKey, decodedKeyLength);
+  mbedtls_md_hmac_starts(&ctx, decodedKey, decodedKeyLength);
   mbedtls_md_hmac_update(&ctx, (const unsigned char*)stringToSign.c_str(), stringToSign.length());
   mbedtls_md_hmac_finish(&ctx, hmacResult);
   mbedtls_md_free(&ctx);
   
-  // Encode result to Base64
-  String signature = base64::encode(hmacResult, 32);
+  // Encode result to Base64 menggunakan mbedtls
+  unsigned char encodedSignature[64];
+  size_t encodedLength = 0;
+  mbedtls_base64_encode(encodedSignature, sizeof(encodedSignature), &encodedLength, 
+                        hmacResult, 32);
+  
+  String signature = String((char*)encodedSignature);
   
   // URL encode signature
   signature.replace("+", "%2B");
@@ -267,6 +303,33 @@ void reconnectMQTT() {
     Serial.println(mqtt_server);
     Serial.print("Device ID: ");
     Serial.println(deviceId);
+    
+    // Test DNS resolution
+    IPAddress ip;
+    Serial.print("📡 Resolving DNS... ");
+    if (WiFi.hostByName(mqtt_server.c_str(), ip)) {
+      Serial.print("OK! IP: ");
+      Serial.println(ip);
+    } else {
+      Serial.println("GAGAL! DNS tidak bisa di-resolve");
+      Serial.println("  Coba lagi dalam 5 detik...");
+      delay(5000);
+      continue;
+    }
+    
+    // Test TCP connection ke port 8883
+    Serial.print("🔌 Testing TCP port 8883... ");
+    WiFiClient testClient;
+    if (testClient.connect(mqtt_server.c_str(), 8883)) {
+      Serial.println("OK! Port terbuka");
+      testClient.stop();
+    } else {
+      Serial.println("GAGAL! Port 8883 diblokir atau timeout");
+      Serial.println("  Kemungkinan firewall/router memblokir koneksi IoT");
+      Serial.println("  Coba lagi dalam 5 detik...");
+      delay(5000);
+      continue;
+    }
     
     // Generate SAS Token jika expired atau belum ada
     unsigned long currentTime = time(nullptr);
@@ -346,13 +409,17 @@ void setup() {
     Serial.println(ctime(&now));
   }
   
-  // Konfigurasi TLS (tidak verifikasi sertifikat untuk kesederhanaan)
-  espClient.setInsecure();
+  // Konfigurasi TLS dengan Root CA Certificate Azure IoT Hub
+  Serial.println("🔐 Mengkonfigurasi TLS dengan Azure Root CA...");
+  espClient.setCACert(azure_root_ca);
+  espClient.setTimeout(30);    // TLS timeout 30 detik (untuk slow networks)
+  espClient.setHandshakeTimeout(30); // TLS handshake timeout
   
-  // Konfigurasi MQTT dengan buffer size lebih besar
+  // Konfigurasi MQTT dengan buffer size lebih besar untuk Azure IoT Hub
   client.setServer(mqtt_server.c_str(), mqtt_port);
-  client.setBufferSize(512);  // Increase buffer size
-  client.setKeepAlive(60);    // Keep alive 60 detik
+  client.setBufferSize(1024);  // Buffer lebih besar untuk JSON + overhead
+  client.setKeepAlive(60);     // Keep alive 60 detik (lebih responsif)
+  client.setSocketTimeout(60); // Socket timeout 60 detik (lebih toleran)
   
   Serial.println("\n📡 Konfigurasi Azure IoT Hub selesai");
   Serial.print("   IoT Hub: ");
@@ -377,14 +444,23 @@ void setup() {
   Serial.println("   4. Jika tidak akurat, sesuaikan: BURDEN_RESISTOR = (RMS_mentah × 2000) / Arus_sebenarnya");
   Serial.println("   5. Contoh: RMS=0.014V, Arus=0.45A -> R = (0.014×2000)/0.45 = 62Ω\n");
   
+  // Koneksi awal ke MQTT
+  reconnectMQTT();
+  
   delay(100);
 }
 
 void loop() {
-  // Pastikan koneksi MQTT tetap aktif
+  // Maintain koneksi MQTT - panggil loop() sesering mungkin
+  client.loop();
+  
+  // Cek koneksi hanya jika terputus
   if (!client.connected()) {
+    Serial.println("\n⚠️ Koneksi MQTT terputus, reconnecting...");
     reconnectMQTT();
   }
+  
+  // Panggil client.loop() lagi untuk process incoming messages
   client.loop();
   
   unsigned long now = millis();
@@ -393,14 +469,32 @@ void loop() {
   if (now - lastMsg > interval) {
     lastMsg = now;
     
-    // Baca sensor DHT11
-    float kelembaban = dht.readHumidity();
-    float suhuCelsius = dht.readTemperature();
-    float suhuFahrenheit = dht.readTemperature(true);
+    // Baca sensor DHT11 dengan retry
+    float kelembaban = NAN;
+    float suhuCelsius = NAN;
+    float suhuFahrenheit = NAN;
     
-    // Cek apakah pembacaan gagal
+    // Retry hingga 3x jika gagal baca
+    for (int retry = 0; retry < 3; retry++) {
+      kelembaban = dht.readHumidity();
+      suhuCelsius = dht.readTemperature();
+      suhuFahrenheit = dht.readTemperature(true);
+      
+      if (!isnan(kelembaban) && !isnan(suhuCelsius)) {
+        break;  // Berhasil baca, keluar dari loop
+      }
+      delay(500);  // Tunggu 500ms sebelum retry
+    }
+    
+    // Cek apakah pembacaan gagal setelah retry
     if (isnan(kelembaban) || isnan(suhuCelsius) || isnan(suhuFahrenheit)) {
-      Serial.println("Gagal membaca dari sensor DHT!");
+      Serial.println("⚠️ Gagal membaca DHT11! Cek:");
+      Serial.println("   1. Kabel DATA di GPIO 4");
+      Serial.println("   2. VCC ke 3.3V atau 5V");
+      Serial.println("   3. GND ke GND");
+      Serial.println("   4. Pull-up resistor 10kΩ (DATA-VCC)");
+      Serial.print("   Pin DHT: GPIO ");
+      Serial.println(DHTPIN);
       return;
     }
     
@@ -486,10 +580,28 @@ void loop() {
     Serial.print("JSON: ");
     Serial.println(jsonBuffer);
     
+    // Pastikan koneksi masih aktif sebelum publish
+    if (!client.connected()) {
+      Serial.println("⚠️ Koneksi terputus, reconnecting sebelum kirim...");
+      reconnectMQTT();
+    }
+    
     // Publish data ke Azure IoT Hub
-    if (client.publish(mqtt_topic.c_str(), jsonBuffer)) {
-      Serial.println("✓ Data terkirim ke Azure IoT Hub");
+    if (client.publish(mqtt_topic.c_str(), jsonBuffer, false)) {
+      successCount++;
+      Serial.print("✓ Data terkirim! (Total sukses: ");
+      Serial.print(successCount);
+      Serial.print(", Gagal: ");
+      Serial.print(failCount);
+      Serial.println(")");
+      
+      // Maintain connection setelah publish - panggil loop() beberapa kali
+      for (int i = 0; i < 10; i++) {
+        client.loop();
+        delay(50);
+      }
     } else {
+      failCount++;
       Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
       Serial.print("   MQTT State: ");
       Serial.println(client.state());
@@ -497,4 +609,8 @@ void loop() {
     
     Serial.println("=================================");
   }
+  
+  // Maintain MQTT connection saat idle
+  client.loop();
+  delay(100);
 }

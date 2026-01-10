@@ -1,0 +1,10 @@
+{
+  "name": "digitaltwin-export",
+  "version": "1.0.0",
+  "description": "Export sensor data from Azure Table Storage",
+  "main": "export_sensor_data.js",
+  "dependencies": {
+    "@azure/data-tables": "^13.3.2",
+    "dotenv": "^17.2.3"
+  }
+}
