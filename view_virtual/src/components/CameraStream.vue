@@ -39,30 +39,6 @@
         <p>Menghubungkan ke kamera...</p>
       </div>
     </div>
-    
-    <div class="stream-controls">
-      <input 
-        v-model="raspberryPiIp" 
-        type="text" 
-        placeholder="Raspberry Pi IP (e.g., 192.168.1.14)"
-        class="ip-input"
-        @keyup.enter="updateStream"
-      />
-      <button @click="updateStream" class="btn-update">
-        🔄 Hubungkan
-      </button>
-      <button @click="refreshStream" class="btn-refresh" :disabled="!streamUrl">
-        ↻ Refresh
-      </button>
-      <button @click="openInNewTab" class="btn-test" :disabled="!streamUrl">
-        🔗 Test
-      </button>
-    </div>
-    <div class="debug-info">
-      <small v-if="streamUrl && !hasError" style="color: green;">Stream aktif: {{ streamUrl }}</small>
-      <small v-else-if="hasError" style="color: red;">Gagal terhubung ke {{ raspberryPiIp }}:{{ streamPort }}</small>
-      <small v-else style="color: orange;">Raspberry Pi IP: {{ raspberryPiIp }} (belum terhubung)</small>
-    </div>
   </div>
 </template>
 
