@@ -139,14 +139,37 @@
 
 <script>
 import { useAPI } from '../composables/useAPI';
+import { useMLPrediction } from '../composables/useMLPrediction';
 
 export default {
   name: 'ACRecommendation',
+  props: {
+    sensorData: {
+      type: Object,
+      default: () => ({
+        temperature: 25,
+        humidity: 60,
+        voltage: 220,
+        current: 0.5,
+        power: 100
+      })
+    },
+    peopleCount: {
+      type: Number,
+      default: 0
+    },
+    isDarkMode: {
+      type: Boolean,
+      default: false
+    }
+  },
   setup() {
     const { fetchData } = useAPI();
+    const mlPrediction = useMLPrediction();
 
     return {
-      fetchData
+      fetchData,
+      mlPrediction
     };
   },
   data() {
@@ -156,8 +179,16 @@ export default {
       isExpanded: true,
       error: null,
       lastUpdateTime: null,
-      isDarkMode: false,
-      refreshInterval: null
+      refreshInterval: null,
+      localSensorData: {
+        suhu: 25,
+        kelembaban: 60,
+        tegangan: 220,
+        arus: 0.5,
+        daya: 100,
+        jumlahOrang: 0
+      },
+      mlModelInfo: null
     };
   },
   computed: {
@@ -165,12 +196,48 @@ export default {
       return this.recommendation?.recommendedTemp || 24;
     }
   },
+  watch: {
+    // Update local sensor data when props change
+    sensorData: {
+      handler(newData) {
+        if (newData) {
+          this.localSensorData = {
+            suhu: newData.temperature || newData.suhu || 25,
+            kelembaban: newData.humidity || newData.kelembaban || 60,
+            tegangan: newData.voltage || newData.tegangan || 220,
+            arus: newData.current || newData.arus || 0.5,
+            daya: newData.power || newData.daya || 100,
+            jumlahOrang: this.peopleCount || 0
+          };
+          // Auto refresh prediction when sensor data changes significantly
+          this.fetchRecommendation();
+        }
+      },
+      deep: true
+    },
+    peopleCount(newCount) {
+      this.localSensorData.jumlahOrang = newCount || 0;
+    }
+  },
   mounted() {
+    // Initialize with props data
+    if (this.sensorData) {
+      this.localSensorData = {
+        suhu: this.sensorData.temperature || this.sensorData.suhu || 25,
+        kelembaban: this.sensorData.humidity || this.sensorData.kelembaban || 60,
+        tegangan: this.sensorData.voltage || this.sensorData.tegangan || 220,
+        arus: this.sensorData.current || this.sensorData.arus || 0.5,
+        daya: this.sensorData.power || this.sensorData.daya || 100,
+        jumlahOrang: this.peopleCount || 0
+      };
+    }
+    
     this.fetchRecommendation();
-    // Auto refresh every 5 minutes
+    this.getMLModelInfo();
+    // Auto refresh every 2 minutes untuk update prediction
     this.refreshInterval = setInterval(() => {
       this.fetchRecommendation();
-    }, 5 * 60 * 1000);
+    }, 2 * 60 * 1000);
   },
   beforeUnmount() {
     if (this.refreshInterval) {
@@ -183,6 +250,86 @@ export default {
         this.isLoading = true;
         this.error = null;
 
+        // PRIORITAS 1: Fetch data sensor terbaru dari Azure
+        await this.fetchLatestSensorData();
+        
+        // PRIORITAS 2: Get ML prediction
+        const mlResult = await this.mlPrediction.getPrediction(this.localSensorData);
+        
+        if (mlResult.success) {
+          // Format recommendation dari ML prediction
+          const ac = this.mlPrediction.acRecommendation.value;
+          const energy = this.mlPrediction.energyPrediction.value;
+          
+          this.recommendation = {
+            recommendedTemp: ac.recommendedTemp,
+            emoji: this.getEmoji(ac.mode),
+            comfortLevel: this.getComfortLevel(ac.mode),
+            reason: ac.action,
+            energySavingPercent: this.calculateSaving(ac.recommendedTemp),
+            confidence: ac.confidence / 100,
+            factors: {
+              ambient_temp: this.localSensorData.suhu,
+              humidity: this.localSensorData.kelembaban,
+              people_count: this.localSensorData.jumlahOrang || 0,
+              power_consumption: (this.localSensorData.daya / 1000).toFixed(2),
+              current_hour: new Date().getHours()
+            },
+            mlSource: mlResult.source,
+            energyPrediction: {
+              watt: energy.predictedWatt,
+              dailyKwh: energy.dailyKwh,
+              monthlyCost: energy.monthlyCostIDR
+            }
+          };
+          
+          this.updateLastUpdateTime();
+          console.log('[AC] ML Prediction loaded from:', mlResult.source);
+        } else {
+          // Fallback ke Azure Function langsung
+          await this.fetchFromAzureFunction();
+        }
+      } catch (err) {
+        this.error = `Error: ${err.message || 'Failed to fetch data'}`;
+        console.error('AC Recommendation error:', err);
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    
+    async fetchLatestSensorData() {
+      try {
+        // Ambil data sensor terbaru dari window.latestSensorData (dari MQTT)
+        if (window.latestSensorData) {
+          this.localSensorData = { ...this.localSensorData, ...window.latestSensorData };
+        }
+        
+        // Atau fetch dari Azure Function
+        const response = await fetch(
+          (import.meta.env.VITE_AZURE_FUNCTION_URL || '') + '/telemetry/latest',
+          { timeout: 5000 }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            this.localSensorData = {
+              suhu: parseFloat(data.data.suhu) || this.localSensorData.suhu,
+              kelembaban: parseFloat(data.data.kelembaban) || this.localSensorData.kelembaban,
+              tegangan: parseFloat(data.data.tegangan) || this.localSensorData.tegangan,
+              arus: parseFloat(data.data.arus) || this.localSensorData.arus,
+              daya: parseFloat(data.data.daya) || this.localSensorData.daya,
+              jumlahOrang: parseInt(data.data.jumlahOrang) || 0
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch latest sensor data:', err.message);
+      }
+    },
+    
+    async fetchFromAzureFunction() {
+      try {
         const response = await this.fetchData(
           '/api/ac-recommendation/latest-with-recommendation',
           {
@@ -198,10 +345,32 @@ export default {
           this.error = response.error || 'Failed to fetch recommendation';
         }
       } catch (err) {
-        this.error = `Error: ${err.message || 'Failed to fetch data'}`;
-        console.error('AC Recommendation error:', err);
-      } finally {
-        this.isLoading = false;
+        throw err;
+      }
+    },
+    
+    getEmoji(mode) {
+      if (mode === 'cooling') return '❄️';
+      if (mode === 'eco') return '🌱';
+      return '✅';
+    },
+    
+    getComfortLevel(mode) {
+      if (mode === 'cooling') return 'Perlu Pendinginan';
+      if (mode === 'eco') return 'Mode Hemat Energi';
+      return 'Nyaman';
+    },
+    
+    calculateSaving(temp) {
+      // Setiap 1 derajat naik dari 24°C hemat ~6% energi
+      const saving = Math.max(0, (temp - 24) * 6);
+      return Math.min(30, Math.round(saving));
+    },
+    
+    async getMLModelInfo() {
+      const result = await this.mlPrediction.getModelInfo();
+      if (result.success) {
+        this.mlModelInfo = result.data;
       }
     },
     adjustTemp(delta) {

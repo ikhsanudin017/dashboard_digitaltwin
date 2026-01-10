@@ -2,7 +2,7 @@
   <div class="camera-stream">
     <div class="stream-container">
       <img 
-        v-if="streamUrl" 
+        v-if="streamUrl && !hasError" 
         :src="streamUrl" 
         alt="Camera Stream"
         @error="handleError"
@@ -10,28 +10,33 @@
         class="stream-image"
       />
       
-      <div v-if="!streamUrl" class="stream-placeholder">
+      <!-- Raspberry Pi Offline State -->
+      <div v-if="!streamUrl || hasError" class="stream-placeholder">
         <div class="placeholder-content">
           <span class="icon">📹</span>
-          <p>Waiting for camera stream...</p>
-          <p class="url-hint">Configure Raspberry Pi IP in settings</p>
+          <p class="main-message">{{ hasError ? 'Raspberry Pi Offline' : 'Kamera Belum Terhubung' }}</p>
+          <p class="sub-message">{{ hasError ? 'Tidak dapat terhubung ke kamera' : 'Masukkan IP Raspberry Pi untuk melihat stream' }}</p>
+          <div class="offline-info">
+            <p>Pastikan:</p>
+            <ul>
+              <li>Raspberry Pi sudah menyala</li>
+              <li>Script people_counter_yolo.py sudah berjalan</li>
+              <li>Raspberry Pi dan komputer dalam jaringan yang sama</li>
+            </ul>
+          </div>
         </div>
       </div>
       
-      <div v-if="!isLoading && streamUrl" class="stream-overlay">
+      <div v-if="isStreamActive && !hasError" class="stream-overlay">
         <div class="stream-info">
-          <span class="status-indicator" :class="{ active: isStreamActive }"></span>
-          <span class="status-text">{{ isStreamActive ? 'LIVE' : 'OFFLINE' }}</span>
+          <span class="status-indicator active"></span>
+          <span class="status-text">LIVE</span>
         </div>
       </div>
       
-      <div v-if="isLoading" class="loading-overlay">
+      <div v-if="isLoading && !hasError" class="loading-overlay">
         <div class="spinner"></div>
-        <p>Connecting to camera...</p>
-      </div>
-      
-      <div v-if="errorMessage" class="error-overlay">
-        <p>{{ errorMessage }}</p>
+        <p>Menghubungkan ke kamera...</p>
       </div>
     </div>
     
@@ -44,18 +49,19 @@
         @keyup.enter="updateStream"
       />
       <button @click="updateStream" class="btn-update">
-        🔄 Update Stream
+        🔄 Hubungkan
       </button>
       <button @click="refreshStream" class="btn-refresh" :disabled="!streamUrl">
         ↻ Refresh
       </button>
       <button @click="openInNewTab" class="btn-test" :disabled="!streamUrl">
-        🔗 Test in New Tab
+        🔗 Test
       </button>
     </div>
     <div class="debug-info">
-      <small v-if="streamUrl">Stream URL: {{ streamUrl }}</small>
-      <small v-else style="color: orange;">Stream not initialized. IP: {{ raspberryPiIp }}</small>
+      <small v-if="streamUrl && !hasError" style="color: green;">Stream aktif: {{ streamUrl }}</small>
+      <small v-else-if="hasError" style="color: red;">Gagal terhubung ke {{ raspberryPiIp }}:{{ streamPort }}</small>
+      <small v-else style="color: orange;">Raspberry Pi IP: {{ raspberryPiIp }} (belum terhubung)</small>
     </div>
   </div>
 </template>
@@ -69,6 +75,7 @@ const isLoading = ref(false)
 const isStreamActive = ref(false)
 const streamPort = ref(5000)
 const errorMessage = ref('')
+const hasError = ref(false)
 
 const updateStream = () => {
   if (!raspberryPiIp.value) {
@@ -79,11 +86,12 @@ const updateStream = () => {
   localStorage.setItem('raspberryPiIp', raspberryPiIp.value)
   
   // Use MJPEG stream directly in img tag
+  hasError.value = false
   streamUrl.value = `http://${raspberryPiIp.value}:${streamPort.value}/video_feed?t=${Date.now()}`
   isLoading.value = true
   isStreamActive.value = false
   
-  console.log('🚀 Starting MJPEG stream:', streamUrl.value)
+  console.log('Starting MJPEG stream:', streamUrl.value)
 }
 
 const refreshStream = () => {
@@ -95,24 +103,17 @@ const refreshStream = () => {
 const handleLoad = () => {
   isLoading.value = false
   isStreamActive.value = true
-  console.log('✅ Stream loaded successfully')
+  hasError.value = false
+  console.log('Stream loaded successfully')
 }
 
 const handleError = (event) => {
   isLoading.value = false
   isStreamActive.value = false
+  hasError.value = true
   errorMessage.value = 'Cannot load stream. Check if Raspberry Pi server is running.'
-  console.error('❌ Stream error:', event)
+  console.error('Stream error:', event)
   console.error('Stream URL:', streamUrl.value)
-  
-  // Retry after 5 seconds
-  setTimeout(() => {
-    if (streamUrl.value) {
-      console.log('🔄 Retrying stream...')
-      errorMessage.value = ''
-      refreshStream()
-    }
-  }, 5000)
 }
 
 const openInNewTab = () => {
@@ -169,6 +170,7 @@ onMounted(() => {
 .placeholder-content {
   text-align: center;
   color: var(--text-secondary);
+  padding: 20px;
 }
 
 .placeholder-content .icon {
@@ -177,8 +179,41 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.placeholder-content p {
+.placeholder-content .main-message {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 8px 0;
+  color: var(--text-primary);
+}
+
+.placeholder-content .sub-message {
+  font-size: 14px;
+  margin: 4px 0 16px 0;
+  opacity: 0.7;
+}
+
+.placeholder-content .offline-info {
+  text-align: left;
+  background: var(--bg-secondary);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.placeholder-content .offline-info p {
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.placeholder-content .offline-info ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.placeholder-content .offline-info li {
   margin: 4px 0;
+  opacity: 0.8;
 }
 
 .url-hint {

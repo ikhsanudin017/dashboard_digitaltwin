@@ -83,6 +83,15 @@
         <!-- Energy Management -->
         <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" />
 
+        <!-- ML-Based AC Recommendation -->
+        <div class="card" style="margin-top: 20px;">
+          <ACRecommendation 
+            :sensor-data="sensorData"
+            :people-count="peopleCount"
+            :is-dark-mode="isDarkMode"
+          />
+        </div>
+
         <!-- Row 3: Detail Data -->
         <div class="card" style="margin-top: 20px;">
           <h2>📋 Detail Data Sensor</h2>
@@ -111,6 +120,7 @@ import DataTable from './components/DataTable.vue'
 import CameraStream from './components/CameraStream.vue'
 import HistoricalAnalytics from './components/HistoricalAnalytics.vue'
 import EnergyManagement from './components/EnergyManagement.vue'
+import ACRecommendation from './components/ACRecommendation.vue'
 import { useMQTT } from './composables/useMQTT'
 import { useHistoricalData } from './composables/useHistoricalData'
 
