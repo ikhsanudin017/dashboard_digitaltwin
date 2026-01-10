@@ -116,66 +116,6 @@
           </div>
         </div>
 
-        <!-- Sensor Data Statistics -->
-        <div class="stats-section">
-          <h3>📊 Data Sensor Saat Ini</h3>
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-icon">🌡️</div>
-              <div class="stat-info">
-                <p class="stat-label">Suhu Ruangan</p>
-                <p class="stat-value">{{ parseFloat(recommendation.factors.ambient_temp).toFixed(1) }}°C</p>
-                <p class="stat-range">{{ getTempStatus(recommendation.factors.ambient_temp) }}</p>
-              </div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-icon">💧</div>
-              <div class="stat-info">
-                <p class="stat-label">Kelembaban</p>
-                <p class="stat-value">{{ parseFloat(recommendation.factors.humidity).toFixed(1) }}%</p>
-                <p class="stat-range">{{ getHumidityStatus(recommendation.factors.humidity) }}</p>
-              </div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-icon">👥</div>
-              <div class="stat-info">
-                <p class="stat-label">Jumlah Orang</p>
-                <p class="stat-value">{{ recommendation.factors.people_count }}</p>
-                <p class="stat-range">{{ getOccupancyLevel(recommendation.factors.people_count) }}</p>
-              </div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-icon">⚡</div>
-              <div class="stat-info">
-                <p class="stat-label">Konsumsi Daya</p>
-                <p class="stat-value">{{ parseFloat(recommendation.factors.power_consumption).toFixed(2) }} kW</p>
-                <p class="stat-range">{{ getPowerStatus(recommendation.factors.power_consumption) }}</p>
-              </div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-icon">🕐</div>
-              <div class="stat-info">
-                <p class="stat-label">Waktu</p>
-                <p class="stat-value">{{ String(recommendation.factors.current_hour).padStart(2, '0') }}:00</p>
-                <p class="stat-range">{{ getTimeOfDay(recommendation.factors.current_hour) }}</p>
-              </div>
-            </div>
-            
-            <div class="stat-card">
-              <div class="stat-icon">📅</div>
-              <div class="stat-info">
-                <p class="stat-label">Terakhir Update</p>
-                <p class="stat-value">{{ getTimeAgo() }}</p>
-                <p class="stat-range">{{ lastUpdateTime }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Refresh Info -->
         <div class="refresh-info">
           <p>Data sensor dianalisis secara real-time untuk memberikan rekomendasi terbaik</p>
