@@ -92,10 +92,13 @@ export function useHistoricalData() {
     const start = new Date(startDate).getTime()
     const end = new Date(endDate).getTime()
     
-    return historicalData.value.filter(item => {
+    const filtered = historicalData.value.filter(item => {
       const timestamp = new Date(item.timestamp).getTime()
       return timestamp >= start && timestamp <= end
     })
+    
+    // Sort by timestamp ascending (oldest to newest)
+    return filtered.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
   }
   
   const getAggregatedData = (startDate, endDate, interval = 'hourly') => {
@@ -157,15 +160,18 @@ export function useHistoricalData() {
       return
     }
     
+    // Reverse untuk export (newest first - data terbaru di atas)
+    const sortedData = [...data].reverse()
+    
     const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)', 'Voltage (V)', 'Current (A)', 'Power (W)', 'People Count']
-    const rows = data.map(item => [
-      new Date(item.timestamp).toLocaleString('id-ID'),
-      item.temperature?.toFixed(2) || '',
-      item.humidity?.toFixed(2) || '',
-      item.voltage?.toFixed(2) || '',
-      item.current?.toFixed(2) || '',
-      item.power?.toFixed(2) || '',
-      item.peopleCount || ''
+    const rows = sortedData.map(item => [
+      new Date(item.timestamp).toLocaleString('id-ID'), // Timestamp
+      item.temperature?.toFixed(2) || '',                 // Temperature (°C)
+      item.humidity?.toFixed(2) || '',                    // Humidity (%)
+      item.voltage?.toFixed(2) || '',                     // Voltage (V)
+      item.current?.toFixed(2) || '',                     // Current (A) - ARUS
+      item.power?.toFixed(2) || '',                       // Power (W) - DAYA
+      item.peopleCount || ''                              // People Count
     ])
     
     const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
@@ -181,7 +187,7 @@ export function useHistoricalData() {
     link.click()
     document.body.removeChild(link)
     
-    console.log('✅ Data exported:', data.length, 'records')
+    console.log('✅ Data exported:', sortedData.length, 'records (newest first)')
   }
   
   const getStatistics = (startDate, endDate) => {
