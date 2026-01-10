@@ -125,7 +125,7 @@ fetch('http://[RASPBERRY_PI_IP]:5000/status')
 Edit file `webcam_stream.py` untuk mengubah:
 
 ```python
-WEBCAM_PORT = 0       # Port USB webcam (0, 1, 2, dst)
+WEBCAM_PORT = 2       # Port USB webcam (0, 1, 2, dst)
 STREAM_PORT = 5000    # Port Flask server
 STREAM_FPS = 15       # Frame per second
 FRAME_WIDTH = 640     # Lebar frame
