@@ -1,8 +1,16 @@
 import { ref, watch } from 'vue'
-import axios from 'axios'
+import mqtt from 'mqtt'
 
 const STORAGE_KEY = 'sensor_last_data'
-const POLLING_INTERVAL = 5000 // Poll Azure setiap 5 detik
+
+// HiveMQ Cloud Configuration
+const MQTT_BROKER_URL = import.meta.env.VITE_MQTT_BROKER_URL || 'wss://aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud:8884/mqtt'
+const MQTT_USERNAME = import.meta.env.VITE_MQTT_USERNAME || 'digitaltwin'
+const MQTT_PASSWORD = import.meta.env.VITE_MQTT_PASSWORD || 'Digitaltwin1'
+
+// Topics to subscribe
+const SENSOR_TOPIC = 'sensor/dht11/data'
+const PEOPLE_TOPIC = 'sensor/camera/people'
 
 // Simpan data ke localStorage sebagai backup
 const saveLastData = (data) => {
@@ -40,55 +48,52 @@ export function useMQTT() {
     lastPeopleUpdate: null
   })
   
+  let client = null
+  
   // Auto-save ke localStorage setiap ada perubahan data
   watch(sensorData, (newData) => {
     saveLastData(newData)
   }, { deep: true })
-  
-  let pollingInterval = null
-  
-  // Fetch latest data from Azure Storage Table via Azure Function
-  const fetchLatestFromAzure = async () => {
-    const azureUrl = import.meta.env.VITE_AZURE_FUNCTION_URL
-    if (!azureUrl) {
-      console.log('⚠️ Azure Function URL not configured, using localStorage')
-      const cached = loadLastData()
-      if (cached) {
-        sensorData.value = cached
-        console.log('💾 Loaded from localStorage')
-      }
-      return false
-    }
-    
+
+  // Handle incoming MQTT messages
+  const handleMessage = (topic, message) => {
     try {
-      console.log('☁️ Fetching latest data from Azure IoT Hub Storage...')
-      const response = await axios.get(`${azureUrl}/telemetry/latest`, {
-        timeout: 10000
-      })
+      const data = JSON.parse(message.toString())
+      console.log(`📨 MQTT message on ${topic}:`, data)
       
-      const result = response.data
+      const nextData = { ...sensorData.value }
       
-      if (result.success && result.data) {
-        const data = result.data
-        console.log('✅ Got latest data from Azure:', data)
-        
-        const nextData = { ...sensorData.value }
-        
-        // Update sensor data
+      if (topic === SENSOR_TOPIC || topic.includes('dht11') || topic.includes('sensor')) {
+        // ESP32 Sensor Data
         if (data.suhu !== undefined) {
           nextData.temperature = parseFloat(data.suhu) || 0
+        }
+        if (data.temperature !== undefined) {
+          nextData.temperature = parseFloat(data.temperature) || 0
         }
         if (data.kelembaban !== undefined) {
           nextData.humidity = parseFloat(data.kelembaban) || 0
         }
+        if (data.humidity !== undefined) {
+          nextData.humidity = parseFloat(data.humidity) || 0
+        }
         if (data.tegangan !== undefined) {
           nextData.voltage = parseFloat(data.tegangan) || 0
+        }
+        if (data.voltage !== undefined) {
+          nextData.voltage = parseFloat(data.voltage) || 0
         }
         if (data.arus !== undefined) {
           nextData.current = parseFloat(data.arus) || 0
         }
+        if (data.current !== undefined) {
+          nextData.current = parseFloat(data.current) || 0
+        }
         if (data.daya !== undefined) {
           nextData.power = parseFloat(data.daya) || 0
+        }
+        if (data.power !== undefined) {
+          nextData.power = parseFloat(data.power) || 0
         }
         if (data.status_tegangan) {
           nextData.voltageStatus = data.status_tegangan
@@ -97,72 +102,121 @@ export function useMQTT() {
           nextData.currentStatus = data.status_arus
         }
         
-        // Handle people counter data
-        if (data.jumlahOrang !== undefined) {
-          nextData.peopleCount = parseInt(data.jumlahOrang) || 0
-          nextData.lastPeopleUpdate = data.timestamp || new Date().toLocaleTimeString()
-        }
-        
         // Compute power if not provided
-        if ((!data.daya || nextData.power === 0) && nextData.voltage > 0 && nextData.current > 0) {
+        if (nextData.power === 0 && nextData.voltage > 0 && nextData.current > 0) {
           nextData.power = parseFloat((nextData.voltage * nextData.current).toFixed(1))
         }
         
-        sensorData.value = nextData
+        console.log('🌡️ Sensor data updated:', {
+          temperature: nextData.temperature,
+          humidity: nextData.humidity,
+          voltage: nextData.voltage,
+          current: nextData.current,
+          power: nextData.power
+        })
+      }
+      
+      if (topic === PEOPLE_TOPIC || topic.includes('people') || topic.includes('camera')) {
+        // Raspberry Pi People Counter Data
+        if (data.jumlahOrang !== undefined) {
+          nextData.peopleCount = parseInt(data.jumlahOrang) || 0
+        }
+        if (data.count !== undefined) {
+          nextData.peopleCount = parseInt(data.count) || 0
+        }
+        if (data.peopleCount !== undefined) {
+          nextData.peopleCount = parseInt(data.peopleCount) || 0
+        }
+        nextData.lastPeopleUpdate = data.timestamp || new Date().toLocaleTimeString()
+        
+        console.log('👥 People count updated:', nextData.peopleCount)
+      }
+      
+      sensorData.value = nextData
+      
+    } catch (error) {
+      console.error('❌ Error parsing MQTT message:', error)
+    }
+  }
+
+  // Connect to MQTT broker
+  const connectMQTT = () => {
+    console.log('🔌 Connecting to HiveMQ MQTT broker...')
+    console.log('📡 Broker:', MQTT_BROKER_URL)
+    
+    // Load cached data first
+    const cached = loadLastData()
+    if (cached) {
+      sensorData.value = cached
+      console.log('💾 Loaded cached data from localStorage')
+    }
+    
+    try {
+      client = mqtt.connect(MQTT_BROKER_URL, {
+        username: MQTT_USERNAME,
+        password: MQTT_PASSWORD,
+        clientId: `dashboard_${Math.random().toString(16).substr(2, 8)}`,
+        clean: true,
+        reconnectPeriod: 5000,
+        connectTimeout: 30000,
+        rejectUnauthorized: true
+      })
+      
+      client.on('connect', () => {
+        console.log('✅ Connected to HiveMQ MQTT broker!')
         mqttConnected.value = true
         
-        console.log('📊 Dashboard updated with Azure IoT Hub data')
-        console.log('🕐 Last update:', data.timestamp || new Date().toLocaleTimeString())
-        return true
-      } else {
-        console.log('⚠️ No data from Azure, trying localStorage')
-        const cached = loadLastData()
-        if (cached) {
-          sensorData.value = cached
-          console.log('💾 Loaded from localStorage')
-        }
-      }
+        // Subscribe to topics
+        client.subscribe([SENSOR_TOPIC, PEOPLE_TOPIC, 'sensor/#'], { qos: 1 }, (err) => {
+          if (err) {
+            console.error('❌ Subscribe error:', err)
+          } else {
+            console.log('📬 Subscribed to topics:', [SENSOR_TOPIC, PEOPLE_TOPIC, 'sensor/#'])
+          }
+        })
+      })
       
-      return false
+      client.on('message', handleMessage)
+      
+      client.on('error', (error) => {
+        console.error('❌ MQTT Error:', error.message)
+        mqttConnected.value = false
+      })
+      
+      client.on('close', () => {
+        console.log('⚠️ MQTT connection closed')
+        mqttConnected.value = false
+      })
+      
+      client.on('reconnect', () => {
+        console.log('🔄 Reconnecting to MQTT broker...')
+      })
+      
+      client.on('offline', () => {
+        console.log('📴 MQTT client offline')
+        mqttConnected.value = false
+      })
+      
     } catch (error) {
-      console.error('❌ Failed to fetch from Azure:', error.message)
+      console.error('❌ Failed to connect to MQTT:', error)
       mqttConnected.value = false
-      
-      // Fallback ke localStorage
-      const cached = loadLastData()
-      if (cached) {
-        sensorData.value = cached
-        console.log('💾 Loaded from localStorage (Azure error)')
-      }
-      return false
     }
   }
 
-  // Connect = Start polling Azure IoT Hub data
-  const connectMQTT = () => {
-    console.log('🔌 Connecting to Azure IoT Hub...')
-    
-    // Fetch immediately on connect
-    fetchLatestFromAzure()
-    
-    // Start polling every 5 seconds for real-time updates
-    pollingInterval = setInterval(() => {
-      fetchLatestFromAzure()
-    }, POLLING_INTERVAL)
-    
-    console.log(`✅ Azure IoT Hub polling started (every ${POLLING_INTERVAL/1000}s)`)
-    console.log('📡 Data source: ESP32 → Azure IoT Hub → Azure Storage → Dashboard')
-  }
-
-  // Disconnect = Stop polling
+  // Disconnect from MQTT broker
   const disconnectMQTT = () => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval)
-      pollingInterval = null
+    if (client) {
+      client.end(true)
+      client = null
     }
     mqttConnected.value = false
-    console.log('⚠️ Azure IoT Hub polling stopped')
-    console.log('💾 Keeping last known data on dashboard')
+    console.log('⚠️ Disconnected from MQTT broker')
+  }
+
+  // For compatibility with existing code
+  const fetchLatestFromAzure = async () => {
+    // This is now handled by MQTT real-time updates
+    return mqttConnected.value
   }
 
   return {
