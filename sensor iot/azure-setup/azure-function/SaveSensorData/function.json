@@ -1,16 +1,12 @@
 {
   "bindings": [
     {
-      "authLevel": "anonymous",
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": [
-        "get",
-        "post",
-        "options"
-      ],
-      "route": "ac-recommendation/{action}"
+      "methods": ["post"],
+      "authLevel": "anonymous",
+      "route": "sensor/save"
     },
     {
       "type": "http",

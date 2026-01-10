@@ -62,14 +62,23 @@ module.exports = async function (context, req) {
     }
 };
 
+// Fungsi untuk konversi UTC ke WIB
+function toWIB(utcDateString) {
+    const date = new Date(utcDateString);
+    const wibOffset = 7 * 60 * 60 * 1000;
+    const wibDate = new Date(date.getTime() + wibOffset);
+    return wibDate.toISOString().replace('T', ' ').replace('Z', ' WIB').substring(0, 23) + ' WIB';
+}
+
 async function handleLatest(context, tableClient) {
+    // Support kedua device ID
     const entities = tableClient.listEntities({
-        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001'" }
+        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor'" }
     });
 
     let latest = null;
     for await (const entity of entities) {
-        if (!latest || new Date(entity.timestamp) > new Date(latest.timestamp)) {
+        if (!latest || new Date(entity.timestamp || entity.receivedAt) > new Date(latest.timestamp || latest.receivedAt)) {
             latest = entity;
         }
     }
@@ -79,7 +88,7 @@ async function handleLatest(context, tableClient) {
         context.res.body = {
             success: true,
             data: {
-                timestamp: latest.timestamp,
+                timestamp: toWIB(latest.timestamp || latest.receivedAt),
                 suhu: latest.suhu,
                 kelembaban: latest.kelembaban,
                 tegangan: latest.tegangan,
@@ -96,8 +105,9 @@ async function handleLatest(context, tableClient) {
 
 async function handleHistory(context, tableClient, hours, limit) {
     const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+    // Support kedua device ID
     const entities = tableClient.listEntities({
-        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001'" }
+        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor'" }
     });
 
     const data = [];
@@ -129,8 +139,9 @@ async function handleHistory(context, tableClient, hours, limit) {
 
 async function handleStats(context, tableClient, hours) {
     const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+    // Support kedua device ID
     const entities = tableClient.listEntities({
-        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001'" }
+        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor'" }
     });
 
     let count = 0;

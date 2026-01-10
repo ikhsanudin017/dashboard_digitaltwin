@@ -4,6 +4,7 @@
       "type": "eventHubTrigger",
       "name": "eventHubMessages",
       "direction": "in",
+      "eventHubName": "iothub-ehub-iothub-ene-57693366-1db8b5a081",
       "connection": "IOT_HUB_CONNECTION_STRING",
       "cardinality": "many",
       "consumerGroup": "$Default"

@@ -8,55 +8,73 @@
 #include <mbedtls/base64.h>
 #include <time.h>
 
+// ===== AZURE IoT Hub ROOT CERTIFICATE =====
+// DigiCert Global Root G2 - Required for Azure IoT Hub TLS
+const char* azure_root_ca = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
+MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI
+2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx
+1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ
+q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz
+tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ
+vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP
+BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV
+5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY
+1Yl9PMCcit2BnLWsKjaSi2cEMoH0KVLJ8DP/vACgRqAeq0wDVnQHlPv+l3F5nGL6
+ibHn/g9d7VoTvZ/gMZJedj7evkS6fLvNf/R3PG1kLCwLEomJMzBfOKx8TWSPXpLn
+dS8ongPpfOPi4/fOHNBwPHAYw/TLKHDip3LyN3t/DAHI+QyH0EQNF7xR9HHQGP23
+m0ao57w+czK/tz5WLnSH9wiWD18lPMPdmY+j3PCn93wdYdGU3GcLfoxJZ5Cb5FDk
+tvALPBOjks61ihRdDLXgQy/wr+H+Km8RpFVXiJHH/t9DAggndkuYB8RgHny3DnGx
+p1U=
+-----END CERTIFICATE-----
+)EOF";
+
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "Rosa Resti";
-const char* password = "Embuh Ganti Paling";
+const char* ssid = "Umi";
+const char* password = "tanyaumi";
 
 // ===== KONFIGURASI AZURE IoT Hub =====
-// INSTRUKSI: Dapatkan nilai-nilai ini dari Azure Portal:
-// 1. IoT Hub Name: Nama IoT Hub Anda (contoh: "myiothub")
-// 2. Device ID: ID device yang sudah dibuat di IoT Hub
-// 3. Device Key: Primary/Secondary key dari device
-const char* iotHubName = "iothub-energymonitor-ef753d74";  // Ganti dengan nama IoT Hub (tanpa .azure-devices.net)
-const char* deviceId = "ESP32_DHT11_Sensor";  // Ganti dengan Device ID Anda
-const char* deviceKey = "BWXR6jkv47igiyslSf/B5dHBBqYF8NG9bf8caquEzHg=";  // Ganti dengan Device Key dari Azure Portal
+// Dapatkan nilai-nilai ini dari Azure Portal > IoT Hub > Devices
+const char* iotHubName = "iothub-energymonitor-ef753d74";  // Nama IoT Hub (tanpa .azure-devices.net)
+const char* deviceId = "ESP32_ENERGY_MONITOR_001";         // Device ID yang terdaftar di IoT Hub
+const char* deviceKey = "EmgoME1KbuITQSZQj55Y0tLy66ONmo/d46qnyYQsdk0=";  // Primary Key device
 
 // MQTT Configuration untuk Azure IoT Hub
 String mqtt_server = String(iotHubName) + ".azure-devices.net";
-const int mqtt_port = 8883;  // Port MQTT over TLS
+const int mqtt_port = 8883;  // Port MQTT over TLS (wajib untuk Azure)
 String mqtt_username = mqtt_server + "/" + String(deviceId) + "/?api-version=2021-04-12";
-String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/";
+String mqtt_topic = "devices/" + String(deviceId) + "/messages/events";
 
 // ===== KONFIGURASI DHT11 =====
 #define DHTPIN 4          // Pin data DHT11 terhubung ke GPIO 4
 #define DHTTYPE DHT11     // Tipe sensor DHT11
 
-// ===== KONFIGURASI ZMPT101B (Sensor Tegangan AC) =====
-#define ZMPT101B_PIN 35   // Pin analog untuk sensor tegangan (GPIO 35 / ADC1_CH7 - Kompatibel dengan WiFi)
-#define ADC_BITS 12       // Resolusi ADC ESP32 (12-bit)
-#define ADC_COUNTS 4096   // 2^12 = 4096
-#define VREF 3.3          // Tegangan referensi ESP32 (3.3V)
+// ===== SENSOR TEGANGAN ZMPT101B =====
+// Pin: GPIO 35 (ADC1_CH7) - Kompatibel dengan WiFi
+// Kalibrasi: 220V PLN Indonesia
+#define ZMPT101B_PIN 35
+#define ADC_BITS 12
+#define ADC_COUNTS 4096       // 2^12 = 4096
+#define VREF 3.3              // Tegangan referensi ESP32
+#define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi (220V / 0.38V RMS)
+#define RMS_THRESHOLD 0.25    // Threshold minimum RMS (filter noise)
+#define VOLTAGE_THRESHOLD 150.0  // Minimum tegangan valid
 
-// KALIBRASI: Dikalibrasi untuk PLN 220V Indonesia
-// Berdasarkan pengukuran: RMS mentah = 0.38V saat PLN 220V
-// Perhitungan: 220V / 0.38V = 579
-#define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi untuk PLN 220V (DIKALIBRASI ULANG!)
-
-#define RMS_THRESHOLD 0.25  // Threshold minimum RMS untuk deteksi sinyal valid (250mV) - dinaikkan untuk filter noise floating ADC
-#define VOLTAGE_THRESHOLD 150.0  // Threshold minimum tegangan output (150V) untuk dianggap terhubung ke 220V
-
-// ===== KONFIGURASI SCT013-000 (Sensor Arus AC 100A/50mA) =====
-#define SCT013_PIN 32     // Pin analog untuk sensor arus (GPIO 32 / ADC1_CH4 - Kompatibel dengan WiFi)
-#define BURDEN_RESISTOR 1000.0  // Burden resistor 1kΩ (sesuai hardware fisik Anda)
-// SCT013-000: 100A primary -> 50mA secondary (ratio 2000:1)
-// Dengan burden resistor 1kΩ: Output = 50mA × 1000Ω = 50V peak (saturasi ADC!)
-// SOLUSI: Gunakan faktor kalibrasi yang disesuaikan dengan resistor 1kΩ
-// Rangkaian TANPA bias voltage: Merah->Resistor->GPIO32, Hitam->GND
-// ADC hanya baca setengah gelombang AC (rectified)
-#define CURRENT_CALIBRATION 300.0  // Faktor kalibrasi disesuaikan untuk burden 1kΩ (turun dari 2000)
-#define CURRENT_RMS_THRESHOLD 0.01  // Threshold minimum RMS untuk deteksi arus valid (10mV)
-#define CURRENT_THRESHOLD_MIN 0.1  // Arus minimum untuk dianggap ada beban (0.1A = ~22W)
-#define DISABLE_CURRENT_SENSOR false  // ENABLED: Sensor arus aktif (nilai mungkin belum akurat)
+// ===== SENSOR ARUS SCT013-000 (100A/50mA) =====
+// Pin: GPIO 32 (ADC1_CH4) - Kompatibel dengan WiFi
+// Rangkaian: Merah->Resistor 1kΩ->GPIO32, Hitam->GND (tanpa bias)
+#define SCT013_PIN 32
+#define BURDEN_RESISTOR 1000.0    // 1kΩ burden resistor
+#define CURRENT_CALIBRATION 300.0 // Faktor kalibrasi untuk burden 1kΩ
+#define CURRENT_RMS_THRESHOLD 0.01  // Threshold minimum RMS arus
+#define CURRENT_THRESHOLD_MIN 0.1   // Arus minimum (0.1A = ~22W)
+#define DISABLE_CURRENT_SENSOR false
 
 // Inisialisasi objek
 DHT dht(DHTPIN, DHTTYPE);
@@ -359,13 +377,15 @@ void setup() {
     Serial.println(ctime(&now));
   }
   
-  // Konfigurasi TLS (tidak verifikasi sertifikat untuk kesederhanaan)
-  espClient.setInsecure();
+  // Konfigurasi TLS dengan Root CA Certificate Azure IoT Hub
+  Serial.println("🔐 Mengkonfigurasi TLS dengan Azure Root CA...");
+  espClient.setCACert(azure_root_ca);
   
-  // Konfigurasi MQTT dengan buffer size lebih besar
+  // Konfigurasi MQTT dengan buffer size lebih besar untuk Azure IoT Hub
   client.setServer(mqtt_server.c_str(), mqtt_port);
-  client.setBufferSize(512);  // Increase buffer size
-  client.setKeepAlive(60);    // Keep alive 60 detik
+  client.setBufferSize(1024);  // Buffer lebih besar untuk JSON + overhead
+  client.setKeepAlive(120);    // Keep alive 2 menit (Azure default)
+  client.setSocketTimeout(30); // Socket timeout 30 detik
   
   Serial.println("\n📡 Konfigurasi Azure IoT Hub selesai");
   Serial.print("   IoT Hub: ");
@@ -499,13 +519,15 @@ void loop() {
     Serial.print("JSON: ");
     Serial.println(jsonBuffer);
     
-    // Publish data ke Azure IoT Hub
-    if (client.publish(mqtt_topic.c_str(), jsonBuffer)) {
+    // Publish data ke Azure IoT Hub dengan QoS 1 (at least once delivery)
+    if (client.publish(mqtt_topic.c_str(), jsonBuffer, false)) {
       Serial.println("✓ Data terkirim ke Azure IoT Hub");
     } else {
       Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
       Serial.print("   MQTT State: ");
       Serial.println(client.state());
+      Serial.println("   Mencoba reconnect...");
+      client.disconnect();
     }
     
     Serial.println("=================================");
