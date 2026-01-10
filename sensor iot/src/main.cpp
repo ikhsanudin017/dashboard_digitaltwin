@@ -36,8 +36,8 @@ p1U=
 )EOF";
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "Umi";
-const char* password = "tanyaumi";
+const char* ssid = "Rosa Resti";
+const char* password = "Embuh Ganti Paling";
 
 // ===== KONFIGURASI AZURE IoT Hub =====
 // Dapatkan nilai-nilai ini dari Azure Portal > IoT Hub > Devices
@@ -49,10 +49,11 @@ const char* deviceKey = "EmgoME1KbuITQSZQj55Y0tLy66ONmo/d46qnyYQsdk0=";  // Prim
 String mqtt_server = String(iotHubName) + ".azure-devices.net";
 const int mqtt_port = 8883;  // Port MQTT over TLS (wajib untuk Azure)
 String mqtt_username = mqtt_server + "/" + String(deviceId) + "/?api-version=2021-04-12";
-String mqtt_topic = "devices/" + String(deviceId) + "/messages/events";
+// Topic dengan properties: content-type = application/json
+String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/$.ct=application%2Fjson&$.ce=utf-8";
 
 // ===== KONFIGURASI DHT11 =====
-#define DHTPIN 4          // Pin data DHT11 terhubung ke GPIO 4
+#define DHTPIN 4     // Pin data DHT11 terhubung ke GPIO 4
 #define DHTTYPE DHT11     // Tipe sensor DHT11
 
 // ===== SENSOR TEGANGAN ZMPT101B =====
@@ -88,6 +89,10 @@ unsigned long sasTokenExpiry = 0;
 // Variabel untuk timing
 unsigned long lastMsg = 0;
 const long interval = 5000; // Kirim data setiap 5 detik
+
+// Counter untuk statistik
+unsigned long successCount = 0;
+unsigned long failCount = 0;
 
 // Struktur untuk hasil pembacaan tegangan
 struct VoltageReading {
@@ -299,6 +304,33 @@ void reconnectMQTT() {
     Serial.print("Device ID: ");
     Serial.println(deviceId);
     
+    // Test DNS resolution
+    IPAddress ip;
+    Serial.print("📡 Resolving DNS... ");
+    if (WiFi.hostByName(mqtt_server.c_str(), ip)) {
+      Serial.print("OK! IP: ");
+      Serial.println(ip);
+    } else {
+      Serial.println("GAGAL! DNS tidak bisa di-resolve");
+      Serial.println("  Coba lagi dalam 5 detik...");
+      delay(5000);
+      continue;
+    }
+    
+    // Test TCP connection ke port 8883
+    Serial.print("🔌 Testing TCP port 8883... ");
+    WiFiClient testClient;
+    if (testClient.connect(mqtt_server.c_str(), 8883)) {
+      Serial.println("OK! Port terbuka");
+      testClient.stop();
+    } else {
+      Serial.println("GAGAL! Port 8883 diblokir atau timeout");
+      Serial.println("  Kemungkinan firewall/router memblokir koneksi IoT");
+      Serial.println("  Coba lagi dalam 5 detik...");
+      delay(5000);
+      continue;
+    }
+    
     // Generate SAS Token jika expired atau belum ada
     unsigned long currentTime = time(nullptr);
     if (sasToken == "" || currentTime >= sasTokenExpiry) {
@@ -380,12 +412,14 @@ void setup() {
   // Konfigurasi TLS dengan Root CA Certificate Azure IoT Hub
   Serial.println("🔐 Mengkonfigurasi TLS dengan Azure Root CA...");
   espClient.setCACert(azure_root_ca);
+  espClient.setTimeout(30);    // TLS timeout 30 detik (untuk slow networks)
+  espClient.setHandshakeTimeout(30); // TLS handshake timeout
   
   // Konfigurasi MQTT dengan buffer size lebih besar untuk Azure IoT Hub
   client.setServer(mqtt_server.c_str(), mqtt_port);
   client.setBufferSize(1024);  // Buffer lebih besar untuk JSON + overhead
-  client.setKeepAlive(120);    // Keep alive 2 menit (Azure default)
-  client.setSocketTimeout(30); // Socket timeout 30 detik
+  client.setKeepAlive(60);     // Keep alive 60 detik (lebih responsif)
+  client.setSocketTimeout(60); // Socket timeout 60 detik (lebih toleran)
   
   Serial.println("\n📡 Konfigurasi Azure IoT Hub selesai");
   Serial.print("   IoT Hub: ");
@@ -410,14 +444,23 @@ void setup() {
   Serial.println("   4. Jika tidak akurat, sesuaikan: BURDEN_RESISTOR = (RMS_mentah × 2000) / Arus_sebenarnya");
   Serial.println("   5. Contoh: RMS=0.014V, Arus=0.45A -> R = (0.014×2000)/0.45 = 62Ω\n");
   
+  // Koneksi awal ke MQTT
+  reconnectMQTT();
+  
   delay(100);
 }
 
 void loop() {
-  // Pastikan koneksi MQTT tetap aktif
+  // Maintain koneksi MQTT - panggil loop() sesering mungkin
+  client.loop();
+  
+  // Cek koneksi hanya jika terputus
   if (!client.connected()) {
+    Serial.println("\n⚠️ Koneksi MQTT terputus, reconnecting...");
     reconnectMQTT();
   }
+  
+  // Panggil client.loop() lagi untuk process incoming messages
   client.loop();
   
   unsigned long now = millis();
@@ -426,14 +469,32 @@ void loop() {
   if (now - lastMsg > interval) {
     lastMsg = now;
     
-    // Baca sensor DHT11
-    float kelembaban = dht.readHumidity();
-    float suhuCelsius = dht.readTemperature();
-    float suhuFahrenheit = dht.readTemperature(true);
+    // Baca sensor DHT11 dengan retry
+    float kelembaban = NAN;
+    float suhuCelsius = NAN;
+    float suhuFahrenheit = NAN;
     
-    // Cek apakah pembacaan gagal
+    // Retry hingga 3x jika gagal baca
+    for (int retry = 0; retry < 3; retry++) {
+      kelembaban = dht.readHumidity();
+      suhuCelsius = dht.readTemperature();
+      suhuFahrenheit = dht.readTemperature(true);
+      
+      if (!isnan(kelembaban) && !isnan(suhuCelsius)) {
+        break;  // Berhasil baca, keluar dari loop
+      }
+      delay(500);  // Tunggu 500ms sebelum retry
+    }
+    
+    // Cek apakah pembacaan gagal setelah retry
     if (isnan(kelembaban) || isnan(suhuCelsius) || isnan(suhuFahrenheit)) {
-      Serial.println("Gagal membaca dari sensor DHT!");
+      Serial.println("⚠️ Gagal membaca DHT11! Cek:");
+      Serial.println("   1. Kabel DATA di GPIO 4");
+      Serial.println("   2. VCC ke 3.3V atau 5V");
+      Serial.println("   3. GND ke GND");
+      Serial.println("   4. Pull-up resistor 10kΩ (DATA-VCC)");
+      Serial.print("   Pin DHT: GPIO ");
+      Serial.println(DHTPIN);
       return;
     }
     
@@ -519,17 +580,37 @@ void loop() {
     Serial.print("JSON: ");
     Serial.println(jsonBuffer);
     
-    // Publish data ke Azure IoT Hub dengan QoS 1 (at least once delivery)
+    // Pastikan koneksi masih aktif sebelum publish
+    if (!client.connected()) {
+      Serial.println("⚠️ Koneksi terputus, reconnecting sebelum kirim...");
+      reconnectMQTT();
+    }
+    
+    // Publish data ke Azure IoT Hub
     if (client.publish(mqtt_topic.c_str(), jsonBuffer, false)) {
-      Serial.println("✓ Data terkirim ke Azure IoT Hub");
+      successCount++;
+      Serial.print("✓ Data terkirim! (Total sukses: ");
+      Serial.print(successCount);
+      Serial.print(", Gagal: ");
+      Serial.print(failCount);
+      Serial.println(")");
+      
+      // Maintain connection setelah publish - panggil loop() beberapa kali
+      for (int i = 0; i < 10; i++) {
+        client.loop();
+        delay(50);
+      }
     } else {
+      failCount++;
       Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
       Serial.print("   MQTT State: ");
       Serial.println(client.state());
-      Serial.println("   Mencoba reconnect...");
-      client.disconnect();
     }
     
     Serial.println("=================================");
   }
+  
+  // Maintain MQTT connection saat idle
+  client.loop();
+  delay(100);
 }
