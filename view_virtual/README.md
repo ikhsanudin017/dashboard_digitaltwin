@@ -1,80 +1,178 @@
-# 🏢 Digital Twin Dashboard
+# Digital Twin Dashboard
 
-Dashboard interaktif untuk visualisasi Digital Twin menggunakan Vue.js dan Three.js.
+## Overview
 
-## 🚀 Quick Start
+Dashboard interaktif untuk visualisasi Digital Twin menggunakan Vue.js dan Three.js/Babylon.js.
+
+## Tech Stack
+
+- Vue.js 3: Framework frontend
+- Three.js/Babylon.js: 3D visualization
+- Chart.js: Grafik data
+- MQTT.js: Real-time data via MQTT
+- Axios: HTTP client
+- Vite: Build tool
+- Vitest: Unit testing
+
+## Instalasi
 
 ```bash
-# Install dependencies
 npm install
+```
 
-# Jalankan development server
+## Development
+
+```bash
 npm run dev
 ```
 
-Server akan berjalan di `http://localhost:3000`
+Server berjalan di http://localhost:3000
 
-## ✨ Fitur
+## Build Production
 
-- **Visualisasi 3D Digital Twin** - Model 3D ruangan dengan sensor dan indikator real-time
-- **Data Real-time via MQTT** - Koneksi langsung ke MQTT Broker untuk data sensor
-- **Grafik Data Historis** - Visualisasi data suhu, listrik, dan jumlah orang
-- **Status Sensor** - Monitoring status semua sensor secara real-time
-- **Responsive Design** - Tampilan optimal di desktop dan mobile
+```bash
+npm run build
+```
 
-## 📦 Teknologi
+Output di folder dist/
 
-- **Vue.js 3** - Framework frontend
-- **Three.js** - Library 3D visualization
-- **Chart.js** - Library untuk grafik
-- **MQTT.js** - Client MQTT untuk real-time data
-- **Axios** - HTTP client untuk REST API
-- **Vite** - Build tool
+## Konfigurasi
 
-## 🔧 Konfigurasi
+### Environment Variables
 
-1. Copy file environment:
+Copy env.example.txt ke .env:
+
 ```bash
 cp env.example.txt .env
 ```
 
-2. Edit file `.env` dan isi konfigurasi MQTT dan API:
-```
-VITE_MQTT_BROKER_URL=wss://your-broker.hivemq.cloud:8884/mqtt
-VITE_MQTT_USERNAME=your-username
-VITE_MQTT_PASSWORD=your-password
-VITE_API_BASE_URL=http://localhost:3000/api
-```
-
-## 📁 Struktur Proyek
+Edit .env:
 
 ```
-dashboard_digitaltwin/
+VITE_MQTT_BROKER_URL=wss://[broker].hivemq.cloud:8884/mqtt
+VITE_MQTT_USERNAME=[username]
+VITE_MQTT_PASSWORD=[password]
+VITE_API_BASE_URL=https://[function-app].azurewebsites.net/api
+VITE_DEMO_MODE=false
+```
+
+### Demo Mode
+
+Set VITE_DEMO_MODE=true untuk menggunakan dummy data tanpa koneksi ke backend.
+
+## Struktur Folder
+
+```
+view_virtual/
 ├── src/
-│   ├── components/          # Komponen Vue
-│   │   ├── DigitalTwin3D.vue
-│   │   ├── SensorStatus.vue
-│   │   ├── TemperatureChart.vue
-│   │   ├── ElectricityChart.vue
-│   │   ├── PeopleChart.vue
-│   │   └── DataTable.vue
-│   ├── composables/         # Composables Vue
-│   │   ├── useMQTT.js
-│   │   └── useAPI.js
-│   ├── App.vue              # Komponen utama
-│   ├── main.js              # Entry point
-│   └── style.css            # Global styles
+│   ├── components/
+│   │   ├── DigitalTwin3D.vue      # Visualisasi 3D
+│   │   ├── SensorStatus.vue       # Status sensor
+│   │   ├── TemperatureChart.vue   # Grafik suhu
+│   │   ├── ElectricityChart.vue   # Grafik listrik
+│   │   ├── PeopleChart.vue        # Grafik jumlah orang
+│   │   ├── ACRecommendation.vue   # Rekomendasi AC
+│   │   ├── CameraStream.vue       # Video dari Raspberry Pi
+│   │   └── DataTable.vue          # Tabel data historis
+│   ├── composables/
+│   │   ├── useMQTT.js             # MQTT connection
+│   │   └── useAPI.js              # API calls
+│   ├── App.vue
+│   ├── main.js
+│   └── style.css
+├── public/
+│   └── models/                    # 3D model files
 ├── index.html
 ├── package.json
-└── vite.config.js
+├── vite.config.js
+└── vitest.config.js
 ```
 
-## 🚀 Deploy
+## Fitur
 
-Lihat [DEPLOY.md](./DEPLOY.md) untuk panduan lengkap deployment ke Vercel.
+- Visualisasi 3D Digital Twin dengan indikator sensor realtime
+- Data realtime via MQTT (suhu, kelembaban, listrik)
+- Grafik historis (24 jam terakhir)
+- Status semua sensor
+- Video stream dari Raspberry Pi
+- Rekomendasi AC berdasarkan kondisi ruangan
+- Responsive design
 
-## 📝 Catatan
+## Testing
 
-- Dashboard menggunakan dummy data jika API belum tersedia
-- Pastikan kredensial MQTT sudah benar untuk koneksi real-time
-- Visualisasi 3D memerlukan browser yang mendukung WebGL
+### Run All Tests
+
+```bash
+npm test
+```
+
+### Run Tests dengan Coverage
+
+```bash
+npm run test:coverage
+```
+
+### Run Tests Watch Mode
+
+```bash
+npm run test:watch
+```
+
+### Test Manual di Browser
+
+1. Jalankan development server:
+```bash
+npm run dev
+```
+
+2. Buka http://localhost:3000
+
+3. Verifikasi:
+   - 3D model terload
+   - Data sensor muncul (atau dummy data jika demo mode)
+   - Grafik menampilkan data
+   - Video stream tersambung (jika Raspberry Pi aktif)
+
+## Deployment
+
+### Deploy ke Vercel
+
+1. Login ke Vercel:
+```bash
+vercel login
+```
+
+2. Deploy:
+```bash
+vercel --prod
+```
+
+3. Set environment variables di Vercel dashboard.
+
+### Deploy via Vercel Dashboard
+
+1. Buka vercel.com
+2. Import project dari GitHub
+3. Set environment variables
+4. Deploy
+
+## Troubleshooting
+
+### MQTT Connection Failed
+
+Verifikasi credentials di .env. Pastikan broker URL menggunakan wss:// untuk WebSocket Secure.
+
+### 3D Model Tidak Muncul
+
+Pastikan file model ada di public/models/ atau URL Azure Blob Storage benar.
+
+### Build Failed
+
+Jalankan lint dan fix:
+```bash
+npm run lint -- --fix
+```
+
+### API Error
+
+Verifikasi VITE_API_BASE_URL benar dan Azure Function berjalan.

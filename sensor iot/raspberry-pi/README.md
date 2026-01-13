@@ -1,262 +1,266 @@
-# 🎥 Raspberry Pi USB Webcam Streaming
+# Raspberry Pi People Counter
 
-Sistem streaming USB webcam sederhana untuk Dashboard Digital Twin.
+## Overview
 
-## 📋 Requirements
+Sistem people detection menggunakan USB webcam dan YOLO v3-tiny untuk menghitung jumlah orang dalam ruangan.
 
-### Hardware:
+## Requirements
+
+### Hardware
+
 - Raspberry Pi 3/4/5
 - USB Webcam (V4L2 compatible)
-- Memory minimal 2GB RAM
+- Minimal 2GB RAM
 
-### Software:
-- Raspberry Pi OS (Bullseye or later)
+### Software
+
+- Raspberry Pi OS (Bullseye atau lebih baru)
 - Python 3.7+
-- Flask
 - OpenCV
+- Flask
+- paho-mqtt
 
-## 🚀 Quick Setup
+## Instalasi
 
-### 1. Connect to Raspberry Pi via SSH
+### 1. Copy File ke Raspberry Pi
 
 ```bash
-ssh digitaltwin@digitaltwin
-# Password: raihanalfarizi
+scp people_counter_yolo.py [user]@[raspberry_pi_ip]:~/
+scp requirements.txt [user]@[raspberry_pi_ip]:~/
 ```
 
-### 2. Copy Files to Raspberry Pi
-
-Dari Mac Anda:
+### 2. Install Dependencies
 
 ```bash
-# Copy file utama
-scp "sensor iot/raspberry-pi/webcam_stream.py" digitaltwin@digitaltwin:~/
-
-# Copy requirements
-scp "sensor iot/raspberry-pi/requirements.txt" digitaltwin@digitaltwin:~/
-```
-
-### 3. Install Dependencies
-
-Di Raspberry Pi:
-
-```bash
-# Install Python packages
+ssh [user]@[raspberry_pi_ip]
 pip3 install -r requirements.txt
 ```
 
-This will:
-- Update system packages
-- Install Python dependencies (opencv-python, paho-mqtt)
-### 4. Test Webcam
+### 3. Verifikasi Webcam
 
 ```bash
-# Cek device video tersedia
 ls /dev/video*
-
-# Test dengan v4l2
 v4l2-ctl --list-devices
 ```
 
-## 🚀 Running
+## Konfigurasi
 
-### Jalankan Webcam Stream:
+Edit file people_counter_yolo.py untuk mengubah:
+
+```python
+# Port webcam (0 = default)
+WEBCAM_PORT = 0
+
+# Port server streaming
+STREAM_PORT = 5000
+
+# Resolusi frame
+FRAME_WIDTH = 320
+FRAME_HEIGHT = 240
+
+# MQTT Broker
+MQTT_BROKER = "your-broker.hivemq.cloud"
+MQTT_PORT = 8883
+MQTT_USERNAME = "your-username"
+MQTT_PASSWORD = "your-password"
+MQTT_TOPIC = "sensor/camera/people"
+
+# Detection settings
+CONFIDENCE_THRESHOLD = 0.5
+PUBLISH_INTERVAL = 5
+```
+
+## Menjalankan
+
+### Foreground Mode
 
 ```bash
-python3 webcam_stream.py
+python3 people_counter_yolo.py
 ```
 
-Server akan berjalan di `http://[RASPBERRY_PI_IP]:5000`
-
-### Test di Browser:
-
-```
-# Halaman preview
-http://[RASPBERRY_PI_IP]:5000/
-
-# Video stream endpoint  
-http://[RASPBERRY_PI_IP]:5000/video_feed
-
-# Status check
-http://[RASPBERRY_PI_IP]:5000/status
-```
-
-### Background Run:
+### Background Mode
 
 ```bash
-# Run in background
-nohup python3 webcam_stream.py > webcam.log 2>&1 &
-
-# Check logs
-tail -f webcam.log
+nohup python3 people_counter_yolo.py > webcam.log 2>&1 &
 ```
 
-## 📊 Data Flow
+### Sebagai Service (Autostart)
 
-```
-Raspberry Pi Camera
-    ↓
-YOLO Object Detection (detect people)
-    ↓
-Count People
-    ↓
-MQTT Publish (every 5 seconds)
-    ↓
-HiveMQ Cloud
-    ↓
-Bridge Script (bridge.js)
-    ├─→ Azure Storage Table
-    ├─→ Azure Function
-    └─→ Digital Twins
-         ↓
-    Dashboard
+Buat file /etc/systemd/system/people-counter.service:
+
+```ini
+[Unit]
+Description=People Counter YOLO
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/[user]/people_counter_yolo.py
+WorkingDirectory=/home/[user]
+Restart=always
+User=[user]
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-## 📡 MQTT Topic
+Aktifkan:
+
+```bash
+sudo systemctl enable people-counter
+sudo systemctl start people-counter
+```
+
+## Endpoints
+
+### Video Stream
 
 ```
-Topic: sensor/camera/people
+http://[raspberry_pi_ip]:5000/video_feed
+```
 
-Payload:
+Format MJPEG, bisa langsung digunakan di tag img HTML.
+
+### Status
+
+```
+http://[raspberry_pi_ip]:5000/status
+```
+
+Response JSON:
+```json
 {
-  "devStreaming Flow
-
-```
-USB Webcam (Raspberry Pi)
-    ↓
-OpenCV Capture
-    ↓
-Flask HTTP Server
-    ↓
-MJPEG StrWebcam:
-
-```bash
-# Install fswebcam untuk test
-sudo apt install fswebcam
-
-# Capture test image
-fswebcam test.jpg
-
-# List available cameras
-ls -l /dev/video*
-```
-
-### Test dengan Python:
-
-```python
-import cv2
-
-# Test buka webcam
-cap = cv2.VideoCapture(0)
-ret, frame = cap.read()
-
-if ret:
-    cv2.imwrite('test.jpg', frame)
-    print("✅ Webcam working!")
-else:
-    print("❌ Webcam not working")
-
-cap.release()
-```
-
-### Test Stream dari Browser:
-Konfigurasi
-
-Edit `webcam_stream.py` untuk customize:
-
-```python
-WEBCAM_PORT = 0       # Port USB webcam (0, 1, 2...)
-STREAM_PORT = 5000    # Port Flask server
-STREAM_FPS = 15       # Frame per second
-FRAME_WIDTH = 640     # Lebar frame video
-FRAME_HEIGHT = 480    # Tinggi frame video
-# Publishing frequency
-PUBLISH_INTERVAL = 5  # seconds
-
-# Camera resolution
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-```
-
-## 🐛 Troubleshooting
-
-### Webcam tidak terdeteksi:
-
-```bash
-# Cek permission
-sudo usermod -a -G video $USER
-
-# Cek USB webcam
-lsusb | grep -i camera
-
-# Test capture
-fswebcam test.jpg
-```
-
-### Error: "Cannot open camera"
-
-```bash
-# Cek proses yang menggunakan webcam
-sudo fuser /dev/video0
-
-# Kill proses jika ada
-sudo fuser -k /dev/video0
-```
-
-### Low FPS / Lag:
-
-- Turunkan resolusi: `FRAME_WIDTH = 320`, `FRAME_HEIGHT = 240`
-- Turunkan FPS: `STREAM_FPS = 10`
-- Pastikan bandwidth jaringan cukup
-- Cek CPU usage: `htop`
-
-### Flask server tidak bisa diakses:
-
-```bash
-# Cek firewall
-sudo ufw status
-
-# Allow port 5000
-sudo ufw allow 5000
-
-# Cek service berjalan
-ps aux | grep webcam_stream
-```
-
-## 🔗 Integrasi dengan Dashboard
-
-Update file `view_virtual/src/components/CameraStream.vue`:
-
-```vue
-<template>
-  <div class="camera-container">
-    <h3>📹 Live Camera Feed</h3>
-    <img 
-      :src="streamUrl" 
-      alt="Webcam Stream"
-      @error="onStreamError"
-    />
-  </div>
-</template>
-
-<script setup>
-import { ref } from 'vue'
-
-// Ganti dengan IP Raspberry Pi Anda
-const streamUrl = ref('http://192.168.1.100:5000/video_feed')
-
-const onStreamError = () => {
-  console.error('Stream error - cek Raspberry Pi')
+  "status": "online",
+  "people_count": 3,
+  "mqtt_connected": true,
+  "detection": "YOLO v3-tiny"
 }
-</script>
 ```
 
-## 📝 Next Steps
+### Count API
 
-1. ✅ Setup Raspberry Pi dengan webcam
-2. ✅ Test streaming di browser
-3. 🔲 Integrasikan ke Dashboard Vue.js
-4. 🔲 (Optional) Tambahkan people counting nanti
-5. 🔲 (Optional) Tambahkan motion detection
+```
+http://[raspberry_pi_ip]:5000/count
+```
 
-**Lihat:** `WEBCAM_SETUP.md` untuk panduan detail integrasi.
+Response JSON:
+```json
+{
+  "count": 3,
+  "mqtt": true
+}
+```
+
+### Preview Page
+
+```
+http://[raspberry_pi_ip]:5000/
+```
+
+Halaman HTML dengan video stream dan counter realtime.
+
+## Testing
+
+### Test 1: Verifikasi Webcam
+
+```bash
+ls /dev/video*
+```
+
+Output: /dev/video0 atau serupa
+
+### Test 2: Jalankan Script
+
+```bash
+python3 people_counter_yolo.py
+```
+
+Output yang diharapkan:
+```
+Initializing YOLO v3-tiny detector...
+YOLO v3-tiny loaded successfully
+Initializing camera...
+Camera initialized
+MQTT connected
+Server running on port 5000
+```
+
+### Test 3: Akses Video Stream
+
+Buka browser:
+```
+http://[raspberry_pi_ip]:5000/video_feed
+```
+
+Harus terlihat video stream dengan bounding box hijau di setiap orang.
+
+### Test 4: Verifikasi MQTT
+
+Check MQTT client atau dashboard apakah menerima data:
+```json
+{
+  "deviceId": "RASPBERRY_PI_CAMERA_001",
+  "jumlahOrang": 2,
+  "timestamp": "2026-01-13T10:30:00",
+  "location": "Ruang Server"
+}
+```
+
+### Test 5: Test API
+
+```bash
+curl http://[raspberry_pi_ip]:5000/status
+curl http://[raspberry_pi_ip]:5000/count
+```
+
+## Troubleshooting
+
+### Webcam Tidak Terdeteksi
+
+Cek koneksi USB dan jalankan:
+```bash
+lsusb
+v4l2-ctl --list-devices
+```
+
+### YOLO Download Gagal
+
+Download manual:
+```bash
+wget https://pjreddie.com/media/files/yolov3-tiny.weights
+wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg
+wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
+```
+
+### MQTT Tidak Connect
+
+Verifikasi credentials dan broker URL. Pastikan port 8883 tidak diblokir firewall.
+
+### High CPU Usage
+
+Kurangi resolusi atau tingkatkan SKIP_FRAMES di konfigurasi.
+
+## Portable Setup
+
+Untuk menggunakan di berbagai lokasi tanpa setup ulang network:
+
+1. Konfigurasi multiple WiFi di /etc/wpa_supplicant/wpa_supplicant.conf:
+
+```conf
+country=ID
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+network={
+    ssid="WiFi_Lokasi_1"
+    psk="password1"
+    priority=1
+}
+
+network={
+    ssid="Hotspot_HP"
+    psk="passwordhp"
+    priority=10
+}
+```
+
+2. Atau gunakan kabel Ethernet untuk koneksi langsung ke router.
