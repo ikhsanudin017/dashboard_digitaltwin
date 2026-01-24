@@ -36,14 +36,14 @@ p1U=
 )EOF";
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "Rosa Resti";
-const char* password = "Embuh Ganti Paling";
+const char* ssid = "TOKO BERAS";
+const char* password = "sumberagung5758";
 
 // ===== KONFIGURASI AZURE IoT Hub =====
 // Dapatkan nilai-nilai ini dari Azure Portal > IoT Hub > Devices
-const char* iotHubName = "iothub-energymonitor-ef753d74";  // Nama IoT Hub (tanpa .azure-devices.net)
+const char* iotHubName = "iothub-digitaltwin-2026";        // Nama IoT Hub (tanpa .azure-devices.net)
 const char* deviceId = "ESP32_ENERGY_MONITOR_001";         // Device ID yang terdaftar di IoT Hub
-const char* deviceKey = "EmgoME1KbuITQSZQj55Y0tLy66ONmo/d46qnyYQsdk0=";  // Primary Key device
+const char* deviceKey = "PgTM+KsKJtOWWNruP44afGCZbvQg/u5VxL1+L4zJXSg=";  // Primary Key device
 
 // MQTT Configuration untuk Azure IoT Hub
 String mqtt_server = String(iotHubName) + ".azure-devices.net";
