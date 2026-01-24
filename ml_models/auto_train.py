@@ -20,10 +20,14 @@ import os
 import json
 from datetime import datetime
 from azure.data.tables import TableClient
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ===== CONFIG =====
-STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=mlsuhu0426140346;AccountKey=rXAJv7ylfoFPmPoRDneA9ywyo6jfp7uv1BfKK5Vnr1GzzdQES6CMgiOif2eVno1fz3rmmXZgUQad+AStA76ZCA=="
-TABLE_NAME = "SensorTelemetry"
+STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
+TABLE_NAME = os.getenv("AZURE_TABLE_NAME", "SensorTelemetry")
 MODEL_DIR = "./models"
 MIN_RECORDS_FOR_TRAINING = 100  # Minimal records untuk training
 RETRAIN_THRESHOLD = 50  # Retrain jika ada 50+ records baru

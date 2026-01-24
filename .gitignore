@@ -35,3 +35,4 @@ Thumbs.db
 # 3D models (large files)
 view_virtual/public/models/*.blend
 view_virtual/public/models/*.glb
+ml_models/.env

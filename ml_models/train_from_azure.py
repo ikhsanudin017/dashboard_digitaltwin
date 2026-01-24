@@ -1,6 +1,6 @@
 """
 Training ML Models dengan Data Real dari Azure Storage
-Mengambil data langsung dari Azure Table Storage (mlsuhu0426140346)
+Mengambil data langsung dari Azure Table Storage
 """
 
 import pandas as pd
@@ -13,10 +13,14 @@ import pickle
 import os
 from datetime import datetime
 from azure.data.tables import TableClient
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ===== CONFIG =====
-STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=mlsuhu0426140346;AccountKey=rXAJv7ylfoFPmPoRDneA9ywyo6jfp7uv1BfKK5Vnr1GzzdQES6CMgiOif2eVno1fz3rmmXZgUQad+AStA76ZCA=="
-TABLE_NAME = "SensorTelemetry"
+STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING", "")
+TABLE_NAME = os.getenv("AZURE_TABLE_NAME", "SensorTelemetry")
 MODEL_DIR = "./models"
 
 # ===== STEP 1: FETCH DATA FROM AZURE =====
@@ -25,7 +29,14 @@ def fetch_data_from_azure():
     print("=" * 60)
     print("[STEP 1] FETCHING DATA FROM AZURE STORAGE")
     print("=" * 60)
-    print(f"   Storage Account: mlsuhu0426140346")
+    # Extract account name from connection string
+    account_name = "unknown"
+    if STORAGE_CONNECTION_STRING:
+        for part in STORAGE_CONNECTION_STRING.split(";"):
+            if part.startswith("AccountName="):
+                account_name = part.split("=")[1]
+                break
+    print(f"   Storage Account: {account_name}")
     print(f"   Table: {TABLE_NAME}")
     print()
     
@@ -380,7 +391,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("[COMPLETE] TRAINING COMPLETE!")
     print("=" * 60)
-    print(f"   Data source: Azure Storage (mlsuhu0426140346)")
+    print(f"   Data source: Azure Storage (stordigitaltwin2026)")
     print(f"   Records used: {len(df)}")
     print(f"   Models saved to: {os.path.abspath(MODEL_DIR)}/")
     

@@ -3,7 +3,7 @@ const { TableClient } = require("@azure/data-tables");
 // ===== AC RECOMMENDATION LOGIC =====
 // Model yang sudah di-train menggunakan Gradient Boosting dengan data REAL dari Azure Storage
 // Training Date: 10 Januari 2026
-// Dataset: 1,105 records dari Azure Storage (mlsuhu0426140346)
+// Dataset: Records dari Azure Storage (stordigitaltwin2026)
 // R2 Score: 0.96 (96% akurasi)
 // Features: suhu, kelembaban, daya, hour, month (jumlahOrang belum tersedia)
 
