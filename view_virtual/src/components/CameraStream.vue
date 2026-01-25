@@ -126,12 +126,10 @@ const updateStream = () => {
   isLoading.value = true
   isStreamActive.value = false
   
-  console.log('Starting snapshot polling from:', getBaseUrl())
+  console.log('Starting stream from:', getBaseUrl())
   
-  // Use snapshot polling instead of MJPEG (to bypass ngrok warning)
-  if (snapshotInterval) clearInterval(snapshotInterval)
-  snapshotInterval = setInterval(fetchSnapshot, 100) // ~10 FPS
-  fetchSnapshot() // Fetch immediately
+  // Use MJPEG stream directly (Cloudflare Tunnel doesn't have warning page)
+  streamUrl.value = `${getBaseUrl()}/video_feed?t=${Date.now()}`
   
   // Start polling people count
   if (peopleCountInterval) clearInterval(peopleCountInterval)
