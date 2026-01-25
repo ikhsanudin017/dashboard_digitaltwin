@@ -19,6 +19,14 @@ import hashlib
 import base64
 import urllib.parse
 
+# Production WSGI server (lebih stabil dari Flask dev server)
+try:
+    from waitress import serve
+    WAITRESS_AVAILABLE = True
+except ImportError:
+    WAITRESS_AVAILABLE = False
+    print("⚠️  Waitress not installed. Run: pip install waitress")
+
 # Azure IoT Hub SDK (optional - fallback ke MQTT jika tidak ada)
 try:
     from azure.iot.device import IoTHubDeviceClient, Message
@@ -28,11 +36,11 @@ except ImportError:
     import paho.mqtt.client as mqtt
 
 # ===== KONFIGURASI =====
-WEBCAM_PORT = 0
+WEBCAM_PORT = 0  # /dev/video0 - FHD Webcam
 STREAM_PORT = 5000
-FRAME_WIDTH = 640  # Resolusi HD
-FRAME_HEIGHT = 480
-TARGET_FPS = 30  # Target FPS tinggi untuk video smooth
+FRAME_WIDTH = 1280  # HD 720p untuk lokal
+FRAME_HEIGHT = 720
+TARGET_FPS = 60  # FPS maksimal untuk ultra smooth
 
 # ===== AZURE IoT Hub Configuration =====
 IOT_HUB_NAME = "iothub-digitaltwin-2026"
@@ -47,8 +55,8 @@ DEVICE_KEY = "1utlEsHMBvTSZNDPsAq3YO3l0NFPU9/OpXmkV9CqOhc="
 CONFIDENCE_THRESHOLD = 0.40  # 40% confidence - filter false positive
 NMS_THRESHOLD = 0.4  # Non-maximum suppression
 PUBLISH_INTERVAL = 5
-INPUT_SIZE = 320  # Balance kecepatan dan akurasi
-SKIP_FRAMES = 2  # Proses detection setiap 2 frame
+INPUT_SIZE = 416  # YOLO input size (lebih besar untuk HD)
+SKIP_FRAMES = 2  # Proses detection setiap 2 frame untuk smooth detection
 MIN_FACE_SIZE = 50  # Minimum ukuran wajah (lebih kecil)
 MIN_ASPECT_RATIO = 0.5  # Rasio minimum
 MAX_ASPECT_RATIO = 2.0  # Rasio maksimum
@@ -56,13 +64,20 @@ MIN_PERSON_HEIGHT = 100  # Minimum tinggi box untuk dianggap orang
 
 # ===== INISIALISASI =====
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": "*"}})
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": "*", "supports_credentials": True}})
 
-# Add ngrok-skip-browser-warning header to all responses
+# Cached snapshot untuk performance
+cached_snapshot = None
+cached_snapshot_time = 0
+SNAPSHOT_CACHE_MS = 100  # Cache snapshot selama 100ms
+
+# Add CORS headers to all responses
 @app.after_request
-def add_ngrok_header(response):
-    response.headers['ngrok-skip-browser-warning'] = 'true'
+def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, ngrok-skip-browser-warning'
+    response.headers['Access-Control-Max-Age'] = '3600'
     return response
 
 camera = None
@@ -264,11 +279,35 @@ def init_camera():
     global camera
     print("🎥 Initializing camera...")
     
-    camera = cv2.VideoCapture(WEBCAM_PORT, cv2.CAP_V4L2)
-    if not camera.isOpened():
-        camera = cv2.VideoCapture(WEBCAM_PORT)
+    # Coba beberapa video device
+    video_ports = [0, 1, '/dev/video0', '/dev/video1']
     
-    if not camera.isOpened():
+    for port in video_ports:
+        print(f"   Trying {port}...")
+        camera = cv2.VideoCapture(port, cv2.CAP_V4L2)
+        if camera.isOpened():
+            # Test read
+            ret, frame = camera.read()
+            if ret and frame is not None:
+                print(f"   ✓ Found camera at {port}")
+                break
+            camera.release()
+        camera = None
+    
+    if camera is None:
+        # Fallback tanpa V4L2
+        for port in [0, 1]:
+            print(f"   Trying {port} (no V4L2)...")
+            camera = cv2.VideoCapture(port)
+            if camera.isOpened():
+                ret, frame = camera.read()
+                if ret and frame is not None:
+                    print(f"   ✓ Found camera at {port}")
+                    break
+                camera.release()
+            camera = None
+    
+    if camera is None or not camera.isOpened():
         print("✗ Cannot open camera")
         return False
     
@@ -575,16 +614,16 @@ def generate_stream():
         with lock:
             if output_frame is None:
                 continue
-            # JPEG quality 80 - video lebih jernih
-            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            # JPEG quality 95 - HD crystal clear
+            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
             if not flag:
                 continue
         
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded) + b'\r\n')
         
-        # Small delay untuk streaming lebih stabil
-        time.sleep(0.03)  # ~30 FPS max
+        # Minimal delay untuk streaming ultra smooth
+        time.sleep(0.016)  # ~60 FPS max
 
 @app.route('/video_feed')
 def video_feed():
@@ -649,16 +688,30 @@ def count():
 
 @app.route('/snapshot')
 def snapshot():
-    """Return single JPEG frame - untuk bypass ngrok warning dengan fetch"""
-    global output_frame, lock
+    """Return single JPEG frame dengan caching untuk kurangi CPU load"""
+    global output_frame, lock, cached_snapshot, cached_snapshot_time
+    
+    current_time = time.time() * 1000
+    
+    # Return cached snapshot jika masih fresh
+    if cached_snapshot is not None and (current_time - cached_snapshot_time) < SNAPSHOT_CACHE_MS:
+        response = Response(cached_snapshot, mimetype='image/jpeg')
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    
     with lock:
         if output_frame is None:
             return Response(status=503)
-        flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        # JPEG quality 95% untuk HD crystal clear
+        flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
         if not flag:
             return Response(status=503)
+        cached_snapshot = bytearray(encoded)
+        cached_snapshot_time = current_time
     
-    response = Response(bytearray(encoded), mimetype='image/jpeg')
+    response = Response(cached_snapshot, mimetype='image/jpeg')
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
@@ -720,7 +773,12 @@ def main():
     print("="*60 + "\n")
     
     try:
-        app.run(host='0.0.0.0', port=STREAM_PORT, threaded=True, debug=False)
+        if WAITRESS_AVAILABLE:
+            print("🚀 Starting Waitress production server...")
+            serve(app, host='0.0.0.0', port=STREAM_PORT, threads=4)
+        else:
+            print("⚠️  Using Flask dev server (install waitress for production)")
+            app.run(host='0.0.0.0', port=STREAM_PORT, threaded=True, debug=False)
     except KeyboardInterrupt:
         print("\n⏹️  Stopping...")
     finally:

@@ -1,192 +1,112 @@
 <template>
   <div class="camera-stream">
     <div class="stream-container">
+      <!-- Loading Indicator -->
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Connecting to camera...</p>
+      </div>
+
+      <!-- Video Stream -->
       <img 
-        v-if="streamUrl && !hasError" 
+        v-show="!streamError && !isLoading"
         :src="streamUrl" 
         alt="Camera Stream"
-        @error="handleError"
-        @load="handleLoad"
         class="stream-image"
+        @load="handleLoad"
+        @error="handleError"
       />
-      
-      <!-- Raspberry Pi Offline State -->
-      <div v-if="!streamUrl || hasError" class="stream-placeholder">
+
+      <!-- Error State -->
+      <div v-if="streamError && !isLoading" class="stream-placeholder">
         <div class="placeholder-content">
           <span class="icon">📹</span>
-          <p class="main-message">{{ hasError ? 'Raspberry Pi Offline' : 'Kamera Belum Terhubung' }}</p>
-          <p class="sub-message">{{ hasError ? 'Tidak dapat terhubung ke kamera' : 'Masukkan IP Raspberry Pi untuk melihat stream' }}</p>
-          <div class="offline-info">
-            <p>Pastikan:</p>
+          <p class="main-message">Camera Stream Unavailable</p>
+          <p class="sub-message">{{ errorMessage }}</p>
+          <div class="local-access-info">
+            <p><strong>Pastikan:</strong></p>
             <ul>
-              <li>Raspberry Pi sudah menyala</li>
-              <li>Script people_counter_yolo.py sudah berjalan</li>
-              <li>Raspberry Pi dan komputer dalam jaringan yang sama</li>
+              <li>Raspberry Pi camera service berjalan</li>
+              <li>Anda terhubung ke jaringan lokal yang sama</li>
+              <li>URL camera: <code>{{ localCameraUrl }}</code></li>
             </ul>
+            <button @click="refreshStream" class="btn-refresh">
+              🔄 Refresh Stream
+            </button>
           </div>
         </div>
       </div>
-      
-      <div v-if="isStreamActive && !hasError" class="stream-overlay">
+
+      <!-- Stream Info Overlay -->
+      <div v-if="!streamError && !isLoading" class="stream-overlay">
         <div class="stream-info">
-          <span class="status-indicator active"></span>
-          <span class="status-text">LIVE</span>
+          <div class="status-indicator" :class="{ active: isStreamActive }"></div>
+          <span>LIVE</span>
         </div>
-      </div>
-      
-      <div v-if="isLoading && !hasError" class="loading-overlay">
-        <div class="spinner"></div>
-        <p>Menghubungkan ke kamera...</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, defineEmits } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 const emit = defineEmits(['peopleCountUpdate'])
 
-const raspberryPiIp = ref(import.meta.env.VITE_RASPBERRY_PI_IP || '192.168.1.8')
-const streamUrl = ref(null)
-const isLoading = ref(false)
-const isStreamActive = ref(false)
-const streamPort = ref(import.meta.env.VITE_RASPBERRY_PI_PORT || 5000)
+// State
+const localCameraUrl = ref('http://192.168.137.205:5000/video_feed')
+const streamUrl = ref('')
+const isLoading = ref(true)
+const streamError = ref(false)
 const errorMessage = ref('')
-const hasError = ref(false)
-let peopleCountInterval = null
-let snapshotInterval = null
+const isStreamActive = ref(false)
+const streamKey = ref(0)
 
-// Get base URL for API calls
-const getBaseUrl = () => {
-  const protocol = streamPort.value == 443 ? 'https' : 'http'
-  const portSuffix = streamPort.value == 443 || streamPort.value == 80 ? '' : `:${streamPort.value}`
-  return `${protocol}://${raspberryPiIp.value}${portSuffix}`
-}
-
-// Fetch people count dari Raspberry Pi setiap 2 detik
-const fetchPeopleCount = async () => {
-  if (!raspberryPiIp.value || hasError.value) return
-  
-  try {
-    const response = await fetch(`${getBaseUrl()}/count`, {
-      method: 'GET',
-      mode: 'cors',
-      headers: {
-        'ngrok-skip-browser-warning': 'true'
-      }
-    })
-    const data = await response.json()
-    console.log('👥 People count from Raspberry Pi:', data.count)
-    emit('peopleCountUpdate', data.count)
-  } catch (error) {
-    console.error('Failed to fetch people count:', error.message)
-  }
-}
-
-// Fetch snapshot dengan header ngrok-skip-browser-warning
-const fetchSnapshot = async () => {
-  if (!raspberryPiIp.value) return
-  
-  try {
-    const response = await fetch(`${getBaseUrl()}/snapshot?t=${Date.now()}`, {
-      method: 'GET',
-      mode: 'cors',
-      headers: {
-        'ngrok-skip-browser-warning': 'true'
-      }
-    })
-    
-    if (response.ok) {
-      const blob = await response.blob()
-      const imageUrl = URL.createObjectURL(blob)
-      
-      // Revoke old URL to prevent memory leak
-      if (streamUrl.value && streamUrl.value.startsWith('blob:')) {
-        URL.revokeObjectURL(streamUrl.value)
-      }
-      
-      streamUrl.value = imageUrl
-      isLoading.value = false
-      isStreamActive.value = true
-      hasError.value = false
-    } else {
-      throw new Error(`HTTP ${response.status}`)
-    }
-  } catch (error) {
-    console.error('Failed to fetch snapshot:', error.message)
-    hasError.value = true
-    isLoading.value = false
-    isStreamActive.value = false
-  }
-}
-
-const updateStream = () => {
-  hasError.value = false
-  isLoading.value = true
-  isStreamActive.value = false
-  
-  console.log('Starting snapshot polling from:', getBaseUrl())
-  
-  // Use snapshot polling (MJPEG doesn't work well with Cloudflare Tunnel)
-  if (snapshotInterval) clearInterval(snapshotInterval)
-  snapshotInterval = setInterval(fetchSnapshot, 200) // ~5 FPS
-  fetchSnapshot() // Fetch immediately
-  
-  // Start polling people count
-  if (peopleCountInterval) clearInterval(peopleCountInterval)
-  peopleCountInterval = setInterval(fetchPeopleCount, 2000)
-  fetchPeopleCount() // Fetch immediately
-}
+// Computed
+const videoFeedUrl = computed(() => {
+  // Add cache busting parameter untuk force reload
+  return `${localCameraUrl.value}?t=${streamKey.value}`
+})
 
 const refreshStream = () => {
-  if (raspberryPiIp.value) {
-    updateStream()
-  }
+  console.log('🔄 Refreshing camera stream...')
+  isLoading.value = true
+  streamError.value = false
+  errorMessage.value = ''
+  isStreamActive.value = false
+  
+  // Update stream key untuk force reload
+  streamKey.value = Date.now()
+  streamUrl.value = videoFeedUrl.value
 }
 
 const handleLoad = () => {
+  console.log('✅ Stream loaded successfully')
   isLoading.value = false
+  streamError.value = false
   isStreamActive.value = true
-  hasError.value = false
-  console.log('Stream loaded successfully')
 }
 
 const handleError = (event) => {
+  console.error('❌ Stream error:', event)
   isLoading.value = false
+  streamError.value = true
   isStreamActive.value = false
-  hasError.value = true
-  errorMessage.value = 'Cannot load stream. Check if Raspberry Pi server is running.'
-  console.error('Stream error:', event)
-  console.error('Stream URL:', streamUrl.value)
-}
-
-const openInNewTab = () => {
-  if (raspberryPiIp.value) {
-    window.open(`http://${raspberryPiIp.value}:${streamPort.value}/video_feed`, '_blank')
-  }
+  errorMessage.value = 'Tidak dapat terhubung ke kamera. Pastikan Raspberry Pi aktif dan Anda berada di jaringan lokal yang sama.'
 }
 
 onMounted(() => {
-  // Always try to start stream on mount
-  console.log('🎥 CameraStream mounted, starting stream...')
-  console.log('📍 Raspberry Pi IP:', raspberryPiIp.value)
-  updateStream()
+  console.log('🎥 CameraStream mounted')
+  console.log('📍 Camera URL:', localCameraUrl.value)
+  
+  // Initialize stream
+  setTimeout(() => {
+    refreshStream()
+  }, 500)
 })
 
 onUnmounted(() => {
-  if (peopleCountInterval) {
-    clearInterval(peopleCountInterval)
-    peopleCountInterval = null
-  }
-  if (snapshotInterval) {
-    clearInterval(snapshotInterval)
-    snapshotInterval = null
-  }
-  // Cleanup blob URL
-  if (streamUrl.value && streamUrl.value.startsWith('blob:')) {
-    URL.revokeObjectURL(streamUrl.value)
-  }
+  console.log('CameraStream unmounted')
 })
 </script>
 
@@ -429,5 +349,62 @@ onUnmounted(() => {
   background: var(--border);
   cursor: not-allowed;
   transform: none;
+}
+
+.local-access-info {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.local-access-info ul {
+  margin: 12px 0;
+  padding-left: 20px;
+  text-align: left;
+}
+
+.local-access-info li {
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.local-access-info code {
+  display: inline-block;
+  margin: 4px 0;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #4ade80;
+}
+
+.btn-open-local,
+.btn-refresh {
+  margin-top: 12px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--primary);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-open-local:hover,
+.btn-refresh:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.note {
+  margin-top: 12px;
+  font-size: 12px;
+  opacity: 0.7;
+  font-style: italic;
 }
 </style>

@@ -36,3 +36,5 @@ Thumbs.db
 view_virtual/public/models/*.blend
 view_virtual/public/models/*.glb
 ml_models/.env
+.vercel
+.env*.local
