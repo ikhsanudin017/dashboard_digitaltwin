@@ -57,6 +57,14 @@ MIN_PERSON_HEIGHT = 100  # Minimum tinggi box untuk dianggap orang
 # ===== INISIALISASI =====
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": "*"}})
+
+# Add ngrok-skip-browser-warning header to all responses
+@app.after_request
+def add_ngrok_header(response):
+    response.headers['ngrok-skip-browser-warning'] = 'true'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
 camera = None
 output_frame = None
 lock = threading.Lock()

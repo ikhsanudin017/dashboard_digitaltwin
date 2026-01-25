@@ -67,7 +67,10 @@ const fetchPeopleCount = async () => {
     
     const response = await fetch(`${protocol}://${raspberryPiIp.value}${portSuffix}/count`, {
       method: 'GET',
-      mode: 'cors'
+      mode: 'cors',
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
     })
     const data = await response.json()
     console.log('👥 People count from Raspberry Pi:', data.count)
