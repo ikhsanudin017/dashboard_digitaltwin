@@ -126,10 +126,12 @@ const updateStream = () => {
   isLoading.value = true
   isStreamActive.value = false
   
-  console.log('Starting stream from:', getBaseUrl())
+  console.log('Starting snapshot polling from:', getBaseUrl())
   
-  // Use MJPEG stream directly (Cloudflare Tunnel doesn't have warning page)
-  streamUrl.value = `${getBaseUrl()}/video_feed?t=${Date.now()}`
+  // Use snapshot polling (MJPEG doesn't work well with Cloudflare Tunnel)
+  if (snapshotInterval) clearInterval(snapshotInterval)
+  snapshotInterval = setInterval(fetchSnapshot, 200) // ~5 FPS
+  fetchSnapshot() // Fetch immediately
   
   // Start polling people count
   if (peopleCountInterval) clearInterval(peopleCountInterval)
