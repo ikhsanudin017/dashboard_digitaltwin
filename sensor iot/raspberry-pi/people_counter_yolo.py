@@ -647,10 +647,28 @@ def status():
 def count():
     return {'count': people_count, 'azure_connected': iot_connected}
 
+@app.route('/snapshot')
+def snapshot():
+    """Return single JPEG frame - untuk bypass ngrok warning dengan fetch"""
+    global output_frame, lock
+    with lock:
+        if output_frame is None:
+            return Response(status=503)
+        flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        if not flag:
+            return Response(status=503)
+    
+    response = Response(bytearray(encoded), mimetype='image/jpeg')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # Add OPTIONS handler for CORS preflight
 @app.route('/video_feed', methods=['OPTIONS'])
 @app.route('/count', methods=['OPTIONS'])
 @app.route('/status', methods=['OPTIONS'])
+@app.route('/snapshot', methods=['OPTIONS'])
 def options():
     response = app.make_default_options_response()
     response.headers['Access-Control-Allow-Origin'] = '*'

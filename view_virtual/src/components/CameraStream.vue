@@ -55,17 +55,21 @@ const streamPort = ref(import.meta.env.VITE_RASPBERRY_PI_PORT || 5000)
 const errorMessage = ref('')
 const hasError = ref(false)
 let peopleCountInterval = null
+let snapshotInterval = null
+
+// Get base URL for API calls
+const getBaseUrl = () => {
+  const protocol = streamPort.value == 443 ? 'https' : 'http'
+  const portSuffix = streamPort.value == 443 || streamPort.value == 80 ? '' : `:${streamPort.value}`
+  return `${protocol}://${raspberryPiIp.value}${portSuffix}`
+}
 
 // Fetch people count dari Raspberry Pi setiap 2 detik
 const fetchPeopleCount = async () => {
   if (!raspberryPiIp.value || hasError.value) return
   
   try {
-    // Determine protocol based on port (443 = https, otherwise http)
-    const protocol = streamPort.value == 443 ? 'https' : 'http'
-    const portSuffix = streamPort.value == 443 || streamPort.value == 80 ? '' : `:${streamPort.value}`
-    
-    const response = await fetch(`${protocol}://${raspberryPiIp.value}${portSuffix}/count`, {
+    const response = await fetch(`${getBaseUrl()}/count`, {
       method: 'GET',
       mode: 'cors',
       headers: {
@@ -80,19 +84,54 @@ const fetchPeopleCount = async () => {
   }
 }
 
+// Fetch snapshot dengan header ngrok-skip-browser-warning
+const fetchSnapshot = async () => {
+  if (!raspberryPiIp.value) return
+  
+  try {
+    const response = await fetch(`${getBaseUrl()}/snapshot?t=${Date.now()}`, {
+      method: 'GET',
+      mode: 'cors',
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    })
+    
+    if (response.ok) {
+      const blob = await response.blob()
+      const imageUrl = URL.createObjectURL(blob)
+      
+      // Revoke old URL to prevent memory leak
+      if (streamUrl.value && streamUrl.value.startsWith('blob:')) {
+        URL.revokeObjectURL(streamUrl.value)
+      }
+      
+      streamUrl.value = imageUrl
+      isLoading.value = false
+      isStreamActive.value = true
+      hasError.value = false
+    } else {
+      throw new Error(`HTTP ${response.status}`)
+    }
+  } catch (error) {
+    console.error('Failed to fetch snapshot:', error.message)
+    hasError.value = true
+    isLoading.value = false
+    isStreamActive.value = false
+  }
+}
+
 const updateStream = () => {
-  // Use MJPEG stream directly in img tag
   hasError.value = false
-  
-  // Determine protocol based on port (443 = https, otherwise http)
-  const protocol = streamPort.value == 443 ? 'https' : 'http'
-  const portSuffix = streamPort.value == 443 || streamPort.value == 80 ? '' : `:${streamPort.value}`
-  
-  streamUrl.value = `${protocol}://${raspberryPiIp.value}${portSuffix}/video_feed?t=${Date.now()}`
   isLoading.value = true
   isStreamActive.value = false
   
-  console.log('Starting MJPEG stream:', streamUrl.value)
+  console.log('Starting snapshot polling from:', getBaseUrl())
+  
+  // Use snapshot polling instead of MJPEG (to bypass ngrok warning)
+  if (snapshotInterval) clearInterval(snapshotInterval)
+  snapshotInterval = setInterval(fetchSnapshot, 100) // ~10 FPS
+  fetchSnapshot() // Fetch immediately
   
   // Start polling people count
   if (peopleCountInterval) clearInterval(peopleCountInterval)
@@ -139,6 +178,14 @@ onUnmounted(() => {
   if (peopleCountInterval) {
     clearInterval(peopleCountInterval)
     peopleCountInterval = null
+  }
+  if (snapshotInterval) {
+    clearInterval(snapshotInterval)
+    snapshotInterval = null
+  }
+  // Cleanup blob URL
+  if (streamUrl.value && streamUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(streamUrl.value)
   }
 })
 </script>
