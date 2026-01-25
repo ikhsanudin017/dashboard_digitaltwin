@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 USB Webcam dengan People Detection AKURAT
-Menggunakan YOLO v3-tiny (Ringan untuk Raspberry Pi)
+Menggunakan YOLO v3-tiny + Face Detection
+Terintegrasi dengan Azure IoT Hub
 """
 
 import cv2
@@ -10,44 +11,62 @@ from flask_cors import CORS
 import threading
 import time
 import json
-import paho.mqtt.client as mqtt
 import ssl
 from datetime import datetime
 import numpy as np
+import hmac
+import hashlib
+import base64
+import urllib.parse
+
+# Azure IoT Hub SDK (optional - fallback ke MQTT jika tidak ada)
+try:
+    from azure.iot.device import IoTHubDeviceClient, Message
+    AZURE_SDK_AVAILABLE = True
+except ImportError:
+    AZURE_SDK_AVAILABLE = False
+    import paho.mqtt.client as mqtt
 
 # ===== KONFIGURASI =====
 WEBCAM_PORT = 0
 STREAM_PORT = 5000
-FRAME_WIDTH = 320  # Resolusi kecil untuk performa tinggi
-FRAME_HEIGHT = 240
+FRAME_WIDTH = 640  # Resolusi HD
+FRAME_HEIGHT = 480
+TARGET_FPS = 30  # Target FPS tinggi untuk video smooth
 
-# ===== MQTT =====
-MQTT_BROKER = "aa736fd1494847d087ef6244a8428cf9.s1.eu.hivemq.cloud"
-MQTT_PORT = 8883
-MQTT_USERNAME = "digitaltwin"
-MQTT_PASSWORD = "Digitaltwin1"
-MQTT_TOPIC = "sensor/camera/people"
-MQTT_CLIENT_ID = "RASPBERRY_PI_CAMERA_001"
+# ===== AZURE IoT Hub Configuration =====
+IOT_HUB_NAME = "iothub-digitaltwin-2026"
+DEVICE_ID = "RASPBERRY_PI_CAMERA_001"
+# Primary Key dari Azure Portal
+DEVICE_KEY = "1utlEsHMBvTSZNDPsAq3YO3l0NFPU9/OpXmkV9CqOhc="
+
+# Connection string format (alternatif)
+# CONNECTION_STRING = "HostName=iothub-digitaltwin-2026.azure-devices.net;DeviceId=RASPBERRY_PI_CAMERA_001;SharedAccessKey=YOUR_KEY"
 
 # ===== DETECTION =====
-CONFIDENCE_THRESHOLD = 0.5  # 50% confidence minimum
+CONFIDENCE_THRESHOLD = 0.40  # 40% confidence - filter false positive
 NMS_THRESHOLD = 0.4  # Non-maximum suppression
 PUBLISH_INTERVAL = 5
-INPUT_SIZE = 160  # Input size untuk YOLO (lebih kecil = lebih cepat)
-SKIP_FRAMES = 5  # Proses YOLO setiap 5 frame untuk kurangi lag
+INPUT_SIZE = 320  # Balance kecepatan dan akurasi
+SKIP_FRAMES = 2  # Proses detection setiap 2 frame
+MIN_FACE_SIZE = 50  # Minimum ukuran wajah (lebih kecil)
+MIN_ASPECT_RATIO = 0.5  # Rasio minimum
+MAX_ASPECT_RATIO = 2.0  # Rasio maksimum
+MIN_PERSON_HEIGHT = 100  # Minimum tinggi box untuk dianggap orang
 
 # ===== INISIALISASI =====
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": "*"}})
 camera = None
 output_frame = None
 lock = threading.Lock()
 people_count = 0
-mqtt_client = None
-mqtt_connected = False
+iot_client = None
+iot_connected = False
 net = None
 output_layers = None
 classes = None
+face_cascade = None  # Haar Cascade untuk face detection
 
 def download_yolo_files():
     """Download YOLO v3-tiny files (lebih ringan untuk Raspberry Pi)"""
@@ -107,48 +126,131 @@ def init_yolo():
         print(f"✗ Error loading YOLO: {e}")
         return False
 
-def on_connect(client, userdata, flags, rc):
-    global mqtt_connected
-    mqtt_connected = (rc == 0)
-    if mqtt_connected:
-        print("✓ MQTT connected")
-
-def on_disconnect(client, userdata, rc):
-    global mqtt_connected
-    mqtt_connected = False
-
-def init_mqtt():
-    global mqtt_client
-    print("🔌 Initializing MQTT...")
-    mqtt_client = mqtt.Client(client_id=MQTT_CLIENT_ID)
-    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-    mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
-    mqtt_client.tls_insecure_set(False)
-    mqtt_client.on_connect = on_connect
-    mqtt_client.on_disconnect = on_disconnect
+def init_face_detector():
+    """Inisialisasi Haar Cascade Face Detector"""
+    global face_cascade
+    
+    print("👤 Initializing Face Detector...")
     
     try:
-        mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        mqtt_client.loop_start()
+        # Gunakan Haar Cascade bawaan OpenCV
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        
+        if face_cascade.empty():
+            print("✗ Failed to load face cascade")
+            return False
+        
+        print("✓ Face detector loaded successfully")
         return True
+        
     except Exception as e:
-        print(f"✗ MQTT error: {e}")
+        print(f"✗ Error loading face detector: {e}")
+        return False
+
+# ===== AZURE IoT Hub Functions =====
+def generate_sas_token(uri, key, expiry=3600):
+    """Generate SAS token untuk Azure IoT Hub authentication"""
+    ttl = int(time.time()) + expiry
+    sign_key = f"{uri}\n{ttl}"
+    signature = base64.b64encode(
+        hmac.new(base64.b64decode(key), sign_key.encode('utf-8'), hashlib.sha256).digest()
+    ).decode('utf-8')
+    return f"SharedAccessSignature sr={uri}&sig={urllib.parse.quote(signature, safe='')}&se={ttl}"
+
+def init_azure_iot():
+    """Inisialisasi koneksi ke Azure IoT Hub"""
+    global iot_client, iot_connected
+    
+    print("☁️  Initializing Azure IoT Hub...")
+    
+    if AZURE_SDK_AVAILABLE:
+        # Gunakan Azure IoT SDK
+        try:
+            connection_string = f"HostName={IOT_HUB_NAME}.azure-devices.net;DeviceId={DEVICE_ID};SharedAccessKey={DEVICE_KEY}"
+            iot_client = IoTHubDeviceClient.create_from_connection_string(connection_string)
+            iot_client.connect()
+            iot_connected = True
+            print("✓ Azure IoT Hub connected (SDK)")
+            return True
+        except Exception as e:
+            print(f"⚠️  Azure SDK error: {e}")
+            print("   Trying MQTT fallback...")
+    
+    # Fallback ke MQTT langsung
+    try:
+        import paho.mqtt.client as mqtt
+        
+        # Azure IoT Hub MQTT settings
+        mqtt_host = f"{IOT_HUB_NAME}.azure-devices.net"
+        mqtt_port = 8883
+        username = f"{IOT_HUB_NAME}.azure-devices.net/{DEVICE_ID}/?api-version=2021-04-12"
+        
+        # Generate SAS token
+        resource_uri = urllib.parse.quote(f"{IOT_HUB_NAME}.azure-devices.net/devices/{DEVICE_ID}", safe='')
+        sas_token = generate_sas_token(resource_uri, DEVICE_KEY)
+        
+        def on_connect(client, userdata, flags, rc):
+            global iot_connected
+            if rc == 0:
+                iot_connected = True
+                print("✓ Azure IoT Hub connected (MQTT)")
+            else:
+                print(f"✗ Connection failed with code {rc}")
+        
+        def on_disconnect(client, userdata, rc):
+            global iot_connected
+            iot_connected = False
+            print("⚠️  Azure IoT Hub disconnected")
+        
+        iot_client = mqtt.Client(client_id=DEVICE_ID, protocol=mqtt.MQTTv311)
+        iot_client.username_pw_set(username, sas_token)
+        iot_client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
+        iot_client.on_connect = on_connect
+        iot_client.on_disconnect = on_disconnect
+        
+        iot_client.connect(mqtt_host, mqtt_port, 60)
+        iot_client.loop_start()
+        
+        # Wait for connection
+        time.sleep(2)
+        return iot_connected
+        
+    except Exception as e:
+        print(f"✗ Azure IoT Hub error: {e}")
         return False
 
 def publish_people_count(count):
-    if not mqtt_connected:
+    """Kirim data people count ke Azure IoT Hub"""
+    global iot_client, iot_connected
+    
+    if not iot_connected or iot_client is None:
         return
+    
     try:
         payload = {
-            "deviceId": MQTT_CLIENT_ID,
+            "deviceId": DEVICE_ID,
             "jumlahOrang": count,
             "timestamp": datetime.now().isoformat(),
-            "location": "Ruang Server"
+            "location": "Ruang Server",
+            "sensorType": "camera_people_counter"
         }
-        mqtt_client.publish(MQTT_TOPIC, json.dumps(payload), qos=1)
-        print(f"✓ MQTT: {count} people")
+        
+        if AZURE_SDK_AVAILABLE and hasattr(iot_client, 'send_message'):
+            # Gunakan Azure SDK
+            message = Message(json.dumps(payload))
+            message.content_encoding = "utf-8"
+            message.content_type = "application/json"
+            iot_client.send_message(message)
+        else:
+            # Gunakan MQTT
+            topic = f"devices/{DEVICE_ID}/messages/events/"
+            iot_client.publish(topic, json.dumps(payload), qos=1)
+        
+        print(f"☁️  Azure IoT: {count} orang terdeteksi")
+        
     except Exception as e:
-        print(f"✗ MQTT publish error: {e}")
+        print(f"✗ Azure publish error: {e}")
 
 def init_camera():
     global camera
@@ -164,6 +266,8 @@ def init_camera():
     
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
     camera.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
+    camera.set(cv2.CAP_PROP_FPS, TARGET_FPS)  # Set FPS target
+    camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffer untuk kurangi lag
     camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
     
     # Warm-up
@@ -173,12 +277,15 @@ def init_camera():
             break
         time.sleep(0.5)
     
-    print("✓ Camera initialized")
+    print(f"✓ Camera initialized ({FRAME_WIDTH}x{FRAME_HEIGHT} @ {TARGET_FPS}fps)")
     return True
 
 def detect_people_yolo(frame):
     """Deteksi orang dengan YOLO v3-tiny"""
+    global net, output_layers, classes
+    
     if net is None:
+        print("⚠️  YOLO net is None - model tidak ter-load!")
         return 0, frame
     
     height, width = frame.shape[:2]
@@ -195,19 +302,34 @@ def detect_people_yolo(frame):
     confidences = []
     class_ids = []
     
+    # Debug: count all detections
+    total_detections = 0
+    person_detections = 0
+    
     for output in outputs:
         for detection in output:
             scores = detection[5:]
             class_id = np.argmax(scores)
             confidence = scores[class_id]
+            total_detections += 1
             
-            # Filter: only person class (class_id = 0 in COCO) and high confidence
+            # Filter: only person class (class_id = 0 in COCO) and confidence threshold
             if class_id == 0 and confidence > CONFIDENCE_THRESHOLD:
+                person_detections += 1
                 # Get bounding box
                 center_x = int(detection[0] * width)
                 center_y = int(detection[1] * height)
                 w = int(detection[2] * width)
                 h = int(detection[3] * height)
+                
+                # Filter: tinggi minimum untuk orang (bukan objek kecil)
+                if h < MIN_PERSON_HEIGHT:
+                    continue
+                
+                # Filter: aspect ratio manusia (tinggi > lebar biasanya)
+                aspect = h / w if w > 0 else 0
+                if aspect < 0.5 or aspect > 4.0:  # Orang biasanya portrait
+                    continue
                 
                 # Rectangle coordinates
                 x = int(center_x - w / 2)
@@ -216,6 +338,10 @@ def detect_people_yolo(frame):
                 boxes.append([x, y, w, h])
                 confidences.append(float(confidence))
                 class_ids.append(class_id)
+    
+    # Debug print setiap beberapa frame
+    if len(boxes) > 0:
+        print(f"🔍 Detected {len(boxes)} person(s) with confidences: {[f'{c:.2f}' for c in confidences]}")
     
     # Apply Non-Maximum Suppression
     indices = cv2.dnn.NMSBoxes(boxes, confidences, CONFIDENCE_THRESHOLD, NMS_THRESHOLD)
@@ -226,23 +352,168 @@ def detect_people_yolo(frame):
             x, y, w, h = boxes[i]
             confidence = confidences[i]
             
-            # Draw bounding box
-            color = (0, 255, 0)
-            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            # Bounding box dengan warna hijau terang dan tebal
+            color = (0, 255, 0)  # Hijau
+            thickness = 3
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, thickness)
             
-            # Draw label
-            label = f"Person {confidence:.2f}"
-            label_size, base_line = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            y_label = max(y, label_size[1])
+            # Garis sudut untuk memperjelas detection
+            corner_len = min(30, w // 4, h // 4)
+            corner_color = (0, 255, 255)  # Kuning
+            corner_thickness = 4
             
-            cv2.rectangle(frame, (x, y_label - label_size[1] - 10), 
-                         (x + label_size[0], y_label + base_line - 10), color, cv2.FILLED)
-            cv2.putText(frame, label, (x, y_label - 7), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+            # Top-left corner
+            cv2.line(frame, (x, y), (x + corner_len, y), corner_color, corner_thickness)
+            cv2.line(frame, (x, y), (x, y + corner_len), corner_color, corner_thickness)
+            # Top-right corner
+            cv2.line(frame, (x + w, y), (x + w - corner_len, y), corner_color, corner_thickness)
+            cv2.line(frame, (x + w, y), (x + w, y + corner_len), corner_color, corner_thickness)
+            # Bottom-left corner
+            cv2.line(frame, (x, y + h), (x + corner_len, y + h), corner_color, corner_thickness)
+            cv2.line(frame, (x, y + h), (x, y + h - corner_len), corner_color, corner_thickness)
+            # Bottom-right corner
+            cv2.line(frame, (x + w, y + h), (x + w - corner_len, y + h), corner_color, corner_thickness)
+            cv2.line(frame, (x + w, y + h), (x + w, y + h - corner_len), corner_color, corner_thickness)
+            
+            # Label dengan background yang jelas
+            label = f"ORANG {people_detected + 1}: {int(confidence * 100)}%"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.6
+            font_thickness = 2
+            label_size, base_line = cv2.getTextSize(label, font, font_scale, font_thickness)
+            
+            # Background label
+            label_y = max(y - 10, label_size[1] + 10)
+            cv2.rectangle(frame, (x, label_y - label_size[1] - 8), 
+                         (x + label_size[0] + 10, label_y + 4), (0, 0, 0), cv2.FILLED)
+            cv2.rectangle(frame, (x, label_y - label_size[1] - 8), 
+                         (x + label_size[0] + 10, label_y + 4), color, 2)
+            cv2.putText(frame, label, (x + 5, label_y - 4), 
+                       font, font_scale, (255, 255, 255), font_thickness)
             
             people_detected += 1
     
+    # Tidak ada text overlay besar - biarkan video bersih
+    
     return people_detected, frame
+
+# Variabel untuk tracking box stabil
+last_face_boxes = []
+last_detection_time = 0
+DETECTION_TIMEOUT = 0.5  # 500ms timeout - box lebih stabil
+
+def is_valid_face(x, y, w, h):
+    """Filter untuk memastikan deteksi adalah wajah yang valid"""
+    # Filter berdasarkan ukuran minimum
+    if w < MIN_FACE_SIZE or h < MIN_FACE_SIZE:
+        return False
+    
+    # Filter berdasarkan aspect ratio (wajah biasanya hampir kotak)
+    aspect_ratio = w / h if h > 0 else 0
+    if aspect_ratio < MIN_ASPECT_RATIO or aspect_ratio > MAX_ASPECT_RATIO:
+        return False
+    
+    return True
+
+def detect_faces(frame):
+    """Deteksi wajah dengan Haar Cascade - untuk close-up view"""
+    global face_cascade, last_face_boxes, last_detection_time
+    
+    if face_cascade is None:
+        return 0, frame
+    
+    current_time = time.time()
+    height, width = frame.shape[:2]
+    
+    # Resize untuk processing lebih cepat
+    scale = 0.5
+    small_frame = cv2.resize(frame, (int(width * scale), int(height * scale)))
+    
+    # Convert ke grayscale untuk Haar Cascade
+    gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
+    
+    # Equalize histogram untuk deteksi lebih baik di berbagai pencahayaan
+    gray = cv2.equalizeHist(gray)
+    
+    # Detect faces dengan parameter SENSITIF untuk wajah close-up
+    faces = face_cascade.detectMultiScale(
+        gray,
+        scaleFactor=1.1,   # Akurat
+        minNeighbors=3,    # Lebih sensitif!
+        minSize=(20, 20),  # Ukuran minimum kecil
+        maxSize=(300, 300) # Maksimum besar
+    )
+    
+    # Scale back ke ukuran asli (TANPA filter ketat)
+    valid_faces = []
+    for (x, y, w, h) in faces:
+        x, y, w, h = int(x/scale), int(y/scale), int(w/scale), int(h/scale)
+        # Hanya filter ukuran minimum
+        if w >= 40 and h >= 40:
+            valid_faces.append((x, y, w, h))
+    
+    # Jika ada deteksi baru, update
+    if len(valid_faces) > 0:
+        last_face_boxes = valid_faces
+        last_detection_time = current_time
+    elif current_time - last_detection_time > DETECTION_TIMEOUT:
+        # Timeout, hapus box
+        last_face_boxes = []
+    
+    # Gunakan last known boxes untuk stabilitas
+    people_detected = len(last_face_boxes)
+    
+    for i, (x, y, w, h) in enumerate(last_face_boxes):
+        # Bounding box hijau tebal
+        color = (0, 255, 0)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), color, 3)
+        
+        # Corner decorations kuning
+        corner_len = min(25, w // 4, h // 4)
+        corner_color = (0, 255, 255)
+        corner_thickness = 4
+        
+        # Top-left
+        cv2.line(frame, (x, y), (x + corner_len, y), corner_color, corner_thickness)
+        cv2.line(frame, (x, y), (x, y + corner_len), corner_color, corner_thickness)
+        # Top-right
+        cv2.line(frame, (x + w, y), (x + w - corner_len, y), corner_color, corner_thickness)
+        cv2.line(frame, (x + w, y), (x + w, y + corner_len), corner_color, corner_thickness)
+        # Bottom-left
+        cv2.line(frame, (x, y + h), (x + corner_len, y + h), corner_color, corner_thickness)
+        cv2.line(frame, (x, y + h), (x, y + h - corner_len), corner_color, corner_thickness)
+        # Bottom-right
+        cv2.line(frame, (x + w, y + h), (x + w - corner_len, y + h), corner_color, corner_thickness)
+        cv2.line(frame, (x + w, y + h), (x + w, y + h - corner_len), corner_color, corner_thickness)
+        
+        # Label
+        label = f"ORANG {i + 1}"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.7
+        font_thickness = 2
+        label_size, _ = cv2.getTextSize(label, font, font_scale, font_thickness)
+        
+        label_y = max(y - 10, label_size[1] + 10)
+        cv2.rectangle(frame, (x, label_y - label_size[1] - 8), 
+                     (x + label_size[0] + 10, label_y + 4), (0, 0, 0), cv2.FILLED)
+        cv2.rectangle(frame, (x, label_y - label_size[1] - 8), 
+                     (x + label_size[0] + 10, label_y + 4), color, 2)
+        cv2.putText(frame, label, (x + 5, label_y - 4), font, font_scale, (255, 255, 255), font_thickness)
+    
+    return people_detected, frame
+
+def detect_combined(frame):
+    """Kombinasi YOLO (body) + Haar Cascade (face) untuk deteksi optimal"""
+    # Coba YOLO dulu untuk full body
+    yolo_count, yolo_frame = detect_people_yolo(frame.copy())
+    
+    if yolo_count > 0:
+        # YOLO berhasil detect
+        return yolo_count, yolo_frame
+    else:
+        # Fallback ke face detection untuk close-up
+        face_count, face_frame = detect_faces(frame)
+        return face_count, face_frame
 
 def capture_frames():
     global camera, output_frame, lock, people_count
@@ -263,14 +534,10 @@ def capture_frames():
             frame_count += 1
             current_time = time.time()
             
-            # Perform detection setiap SKIP_FRAMES frame untuk kurangi lag
-            if frame_count % SKIP_FRAMES == 0:
-                count, detected_frame = detect_people_yolo(frame)
-                people_count = count
-                last_detected_frame = detected_frame
-            else:
-                # Gunakan frame tanpa detection untuk smooth streaming
-                last_detected_frame = frame
+            # Lakukan detection setiap frame untuk selalu menampilkan box
+            count, detected_frame = detect_combined(frame)
+            people_count = count
+            last_detected_frame = detected_frame
             
             # Calculate FPS (only for tracking, not displayed)
             elapsed = current_time - start_time
@@ -300,13 +567,16 @@ def generate_stream():
         with lock:
             if output_frame is None:
                 continue
-            # Lower JPEG quality untuk streaming lebih lancar
-            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+            # JPEG quality 80 - video lebih jernih
+            flag, encoded = cv2.imencode(".jpg", output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
             if not flag:
                 continue
         
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded) + b'\r\n')
+        
+        # Small delay untuk streaming lebih stabil
+        time.sleep(0.03)  # ~30 FPS max
 
 @app.route('/video_feed')
 def video_feed():
@@ -318,31 +588,36 @@ def index():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>YOLO People Counter</title>
+        <title>People Counter - Azure IoT</title>
         <style>
             body {{ font-family: Arial; background: #1a1a1a; color: white; text-align: center; padding: 20px; }}
             h1 {{ color: #00ff00; }}
             img {{ width: 100%; max-width: 640px; border: 3px solid #00ff00; border-radius: 8px; }}
             .info {{ background: #2a2a2a; padding: 15px; margin: 20px auto; max-width: 640px; border-radius: 8px; }}
             .status {{ color: #00ff00; font-weight: bold; font-size: 24px; }}
+            .azure {{ color: #0078d4; }}
         </style>
         <script>
             setInterval(() => {{
                 fetch('/count').then(r => r.json()).then(d => {{
                     document.getElementById('count').textContent = d.count;
+                    document.getElementById('azure').textContent = d.azure_connected ? '✓ Connected' : '✗ Disconnected';
+                    document.getElementById('azure').style.color = d.azure_connected ? '#00ff00' : '#ff4444';
                 }});
             }}, 1000);
         </script>
     </head>
     <body>
-        <h1>🎥 YOLO v3-tiny People Counter</h1>
-        <p class="status">● LIVE | People: <span id="count">0</span></p>
+        <h1>🎥 People Counter - Azure IoT Hub</h1>
+        <p class="status">● LIVE | Orang Terdeteksi: <span id="count">0</span></p>
         <img src="/video_feed">
         <div class="info">
             <h3>📌 Info</h3>
-            <p><strong>Detection:</strong> YOLO v3-tiny (Lightweight)</p>
+            <p><strong>Detection:</strong> YOLO v3-tiny + Face Detection</p>
             <p><strong>Confidence:</strong> {CONFIDENCE_THRESHOLD*100:.0f}%</p>
-            <p><strong>MQTT:</strong> {MQTT_TOPIC}</p>
+            <p><strong>☁️ Azure IoT Hub:</strong> <span class="azure">{IOT_HUB_NAME}</span></p>
+            <p><strong>📱 Device:</strong> {DEVICE_ID}</p>
+            <p><strong>Status:</strong> <span id="azure">Checking...</span></p>
         </div>
     </body>
     </html>
@@ -353,29 +628,47 @@ def status():
     return {
         'status': 'online',
         'people_count': people_count,
-        'mqtt_connected': mqtt_connected,
-        'detection': 'YOLO v3-tiny',
-        'confidence_threshold': CONFIDENCE_THRESHOLD
+        'azure_connected': iot_connected,
+        'detection': 'YOLO v3-tiny + Face Detection',
+        'confidence_threshold': CONFIDENCE_THRESHOLD,
+        'iot_hub': IOT_HUB_NAME,
+        'device_id': DEVICE_ID
     }
 
 @app.route('/count')
 def count():
-    return {'count': people_count, 'mqtt': mqtt_connected}
+    return {'count': people_count, 'azure_connected': iot_connected}
+
+# Add OPTIONS handler for CORS preflight
+@app.route('/video_feed', methods=['OPTIONS'])
+@app.route('/count', methods=['OPTIONS'])
+@app.route('/status', methods=['OPTIONS'])
+def options():
+    response = app.make_default_options_response()
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
 def main():
     print("\n" + "="*60)
-    print("YOLO v3-tiny PEOPLE COUNTER - LIGHTWEIGHT")
+    print("YOLO + FACE DETECTION PEOPLE COUNTER")
+    print("Terintegrasi Azure IoT Hub")
     print("="*60)
     
     if not init_yolo():
-        print("✗ Failed to initialize YOLO")
-        return
+        print("⚠️  YOLO tidak tersedia - menggunakan face detection saja")
+    
+    if not init_face_detector():
+        print("⚠️  Face detector tidak tersedia")
     
     if not init_camera():
         print("✗ Failed to initialize camera")
         return
     
-    init_mqtt()
+    # Initialize Azure IoT Hub
+    if not init_azure_iot():
+        print("⚠️  Azure IoT Hub tidak terhubung - data tidak akan dikirim ke cloud")
     
     capture_thread = threading.Thread(target=capture_frames, daemon=True)
     capture_thread.start()
@@ -393,10 +686,11 @@ def main():
     
     print("✓ First frame captured")
     print(f"\n🌐 Server running on port {STREAM_PORT}")
-    print(f"📡 Stream: http://192.168.1.14:{STREAM_PORT}/video_feed")
-    print(f"🏠 Home: http://192.168.1.14:{STREAM_PORT}/")
-    print(f"👥 Count API: http://192.168.1.14:{STREAM_PORT}/count")
-    print("\n💡 YOLO v3-tiny active - Lightweight people detection!")
+    print(f"📡 Stream: http://localhost:{STREAM_PORT}/video_feed")
+    print(f"🏠 Home: http://localhost:{STREAM_PORT}/")
+    print(f"👥 Count API: http://localhost:{STREAM_PORT}/count")
+    print(f"\n☁️  Azure IoT Hub: {IOT_HUB_NAME}")
+    print(f"📱 Device ID: {DEVICE_ID}")
     print("="*60 + "\n")
     
     try:
@@ -406,9 +700,12 @@ def main():
     finally:
         if camera:
             camera.release()
-        if mqtt_client:
-            mqtt_client.loop_stop()
-            mqtt_client.disconnect()
+        if iot_client:
+            if AZURE_SDK_AVAILABLE and hasattr(iot_client, 'disconnect'):
+                iot_client.disconnect()
+            elif hasattr(iot_client, 'loop_stop'):
+                iot_client.loop_stop()
+                iot_client.disconnect()
         print("✓ Done")
 
 if __name__ == '__main__':
