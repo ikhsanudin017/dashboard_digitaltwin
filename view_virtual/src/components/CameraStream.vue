@@ -47,11 +47,11 @@ import { ref, onMounted, onUnmounted, defineEmits } from 'vue'
 
 const emit = defineEmits(['peopleCountUpdate'])
 
-const raspberryPiIp = ref('192.168.1.8')
+const raspberryPiIp = ref(import.meta.env.VITE_RASPBERRY_PI_IP || '192.168.1.8')
 const streamUrl = ref(null)
 const isLoading = ref(false)
 const isStreamActive = ref(false)
-const streamPort = ref(5000)
+const streamPort = ref(import.meta.env.VITE_RASPBERRY_PI_PORT || 5000)
 const errorMessage = ref('')
 const hasError = ref(false)
 let peopleCountInterval = null
