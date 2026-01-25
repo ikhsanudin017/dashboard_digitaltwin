@@ -61,7 +61,11 @@ const fetchPeopleCount = async () => {
   if (!raspberryPiIp.value || hasError.value) return
   
   try {
-    const response = await fetch(`http://${raspberryPiIp.value}:${streamPort.value}/count`, {
+    // Determine protocol based on port (443 = https, otherwise http)
+    const protocol = streamPort.value == 443 ? 'https' : 'http'
+    const portSuffix = streamPort.value == 443 || streamPort.value == 80 ? '' : `:${streamPort.value}`
+    
+    const response = await fetch(`${protocol}://${raspberryPiIp.value}${portSuffix}/count`, {
       method: 'GET',
       mode: 'cors'
     })
@@ -76,7 +80,12 @@ const fetchPeopleCount = async () => {
 const updateStream = () => {
   // Use MJPEG stream directly in img tag
   hasError.value = false
-  streamUrl.value = `http://${raspberryPiIp.value}:${streamPort.value}/video_feed?t=${Date.now()}`
+  
+  // Determine protocol based on port (443 = https, otherwise http)
+  const protocol = streamPort.value == 443 ? 'https' : 'http'
+  const portSuffix = streamPort.value == 443 || streamPort.value == 80 ? '' : `:${streamPort.value}`
+  
+  streamUrl.value = `${protocol}://${raspberryPiIp.value}${portSuffix}/video_feed?t=${Date.now()}`
   isLoading.value = true
   isStreamActive.value = false
   
