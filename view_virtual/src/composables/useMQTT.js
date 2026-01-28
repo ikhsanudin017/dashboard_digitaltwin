@@ -2,7 +2,7 @@ import { ref, watch, onUnmounted } from 'vue'
 
 const STORAGE_KEY = 'sensor_last_data'
 
-// Azure Function Configuration (IoT Hub data via Azure Storage)
+// Azure Function Configuration - Direct Azure Storage Access
 const AZURE_FUNCTION_URL = import.meta.env.VITE_AZURE_FUNCTION_URL || 'https://func-digitaltwin-2026.azurewebsites.net/api'
 
 // Polling interval in milliseconds (5 seconds for near real-time)
@@ -31,8 +31,8 @@ const loadLastData = () => {
 }
 
 export function useMQTT() {
-  // Renamed internally but keeping export name for compatibility
-  const mqttConnected = ref(false) // Now represents "polling active"
+  // Represents "Azure connected/polling active"
+  const mqttConnected = ref(false)
   const sensorData = ref({
     temperature: 0,
     humidity: 0,
@@ -53,7 +53,7 @@ export function useMQTT() {
     saveLastData(newData)
   }, { deep: true })
 
-  // Fetch latest data from Azure Function (via IoT Hub → Storage)
+  // Fetch latest sensor data from Azure Function
   const fetchLatestData = async () => {
     try {
       const response = await fetch(`${AZURE_FUNCTION_URL}/telemetry/latest`)
@@ -98,7 +98,7 @@ export function useMQTT() {
         
         sensorData.value = nextData
         
-        console.log('🌡️ Data updated from Azure IoT Hub:', {
+        console.log('🌡️ Data updated from Azure:', {
           temperature: nextData.temperature,
           humidity: nextData.humidity,
           voltage: nextData.voltage,
@@ -117,7 +117,7 @@ export function useMQTT() {
     }
   }
 
-  // Fetch people count from Azure Function
+  // Fetch people count from Azure Function (PeopleCount table)
   const fetchPeopleCount = async () => {
     try {
       const response = await fetch(`${AZURE_FUNCTION_URL}/telemetry/people?limit=1`)
@@ -126,12 +126,27 @@ export function useMQTT() {
       
       const result = await response.json()
       
-      if (result.success && result.data && result.data.length > 0) {
-        const latestPeople = result.data[0]
-        sensorData.value.peopleCount = parseInt(latestPeople.peopleCount) || 0
-        sensorData.value.lastPeopleUpdate = latestPeople.timestamp || new Date().toLocaleTimeString()
+      // Use latest from response or data array
+      if (result.success) {
+        let count = 0
+        let timestamp = null
         
-        console.log('👥 People count updated:', sensorData.value.peopleCount)
+        // Check latest field first (new format)
+        if (result.latest && result.latest.count !== undefined) {
+          count = parseInt(result.latest.count) || 0
+          timestamp = result.latest.timestamp
+        }
+        // Fallback to data array (old format)
+        else if (result.data && result.data.length > 0) {
+          const latestPeople = result.data[0]
+          count = parseInt(latestPeople.count) || 0
+          timestamp = latestPeople.timestamp
+        }
+        
+        sensorData.value.peopleCount = count
+        sensorData.value.lastPeopleUpdate = timestamp || new Date().toLocaleTimeString()
+        
+        console.log('👥 People count updated from Azure:', count)
         return true
       }
       
@@ -142,9 +157,45 @@ export function useMQTT() {
     }
   }
 
-  // Start polling for data
+  // Save people count to Azure (called from camera detection)
+  const savePeopleCount = async (count, location = 'Ruang Utama') => {
+    try {
+      const response = await fetch(`${AZURE_FUNCTION_URL}/people/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          count: count,
+          deviceId: 'WEB_CAMERA_001',
+          location: location
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      const result = await response.json()
+      
+      if (result.success) {
+        // Update local state immediately
+        sensorData.value.peopleCount = count
+        sensorData.value.lastPeopleUpdate = new Date().toLocaleTimeString()
+        console.log('✅ People count saved to Azure:', count)
+        return true
+      }
+      
+      return false
+    } catch (error) {
+      console.error('❌ Error saving people count:', error.message)
+      return false
+    }
+  }
+
+  // Start polling for data from Azure
   const connectMQTT = () => {
-    console.log('🔌 Starting Azure IoT Hub polling...')
+    console.log('🔌 Starting Azure polling...')
     console.log('📡 Azure Function URL:', AZURE_FUNCTION_URL)
     
     // Load cached data first
@@ -158,7 +209,7 @@ export function useMQTT() {
     fetchLatestData().then(success => {
       if (success) {
         mqttConnected.value = true
-        console.log('✅ Connected to Azure IoT Hub (via polling)!')
+        console.log('✅ Connected to Azure!')
       }
     })
     
@@ -173,13 +224,11 @@ export function useMQTT() {
         const success = await fetchLatestData()
         mqttConnected.value = success
         
-        // Fetch people count less frequently (every 3rd poll = 15 seconds)
-        if (Math.random() < 0.33) {
-          await fetchPeopleCount()
-        }
+        // Fetch people count every poll (5 seconds)
+        await fetchPeopleCount()
       }, POLLING_INTERVAL)
       
-      console.log(`🔄 Polling started (every ${POLLING_INTERVAL / 1000}s)`)
+      console.log(`🔄 Azure polling started (every ${POLLING_INTERVAL / 1000}s)`)
     }
   }
 
@@ -191,7 +240,7 @@ export function useMQTT() {
       pollingTimer = null
     }
     mqttConnected.value = false
-    console.log('⚠️ Stopped Azure IoT Hub polling')
+    console.log('⚠️ Stopped Azure polling')
   }
 
   // For compatibility with existing code
@@ -209,6 +258,8 @@ export function useMQTT() {
     sensorData,
     connectMQTT,
     disconnectMQTT,
-    fetchLatestFromAzure
+    fetchLatestFromAzure,
+    savePeopleCount,
+    fetchPeopleCount
   }
 }

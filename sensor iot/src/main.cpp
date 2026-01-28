@@ -36,8 +36,8 @@ p1U=
 )EOF";
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "TOKO BERAS";
-const char* password = "sumberagung5758";
+const char* ssid = "TWIN SPACE";
+const char* password = "12345678";
 
 // ===== KONFIGURASI AZURE IoT Hub =====
 // Dapatkan nilai-nilai ini dari Azure Portal > IoT Hub > Devices

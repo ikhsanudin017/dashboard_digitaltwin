@@ -158,7 +158,8 @@ const {
   mqttConnected, 
   sensorData, 
   connectMQTT, 
-  disconnectMQTT 
+  disconnectMQTT,
+  savePeopleCount 
 } = useMQTT()
 
 // Historical Data Management
@@ -177,12 +178,15 @@ const SAVE_INTERVAL = 30000 // 30 seconds
 
 const currentTime = ref(new Date())
 
-// Handle people count update from CameraStream (Raspberry Pi)
-const handlePeopleCountUpdate = (count) => {
-  console.log('📊 People count received from Raspberry Pi:', count)
+// Handle people count update from CameraStream (Raspberry Pi or Web Camera)
+const handlePeopleCountUpdate = async (count) => {
+  console.log('📊 People count received:', count)
   peopleCount.value = count
   sensorData.value.peopleCount = count
   addChartDataPoint(peopleData, count)
+  
+  // Save to Azure Storage
+  await savePeopleCount(count, 'Ruang Utama')
 }
 
 const formattedDate = computed(() => {

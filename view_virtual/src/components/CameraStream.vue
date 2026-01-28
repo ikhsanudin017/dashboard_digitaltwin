@@ -54,19 +54,48 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 const emit = defineEmits(['peopleCountUpdate'])
 
 // State
-const localCameraUrl = ref('http://192.168.137.205:5000/video_feed')
+const localCameraUrl = ref('http://192.168.137.205:5000')
 const streamUrl = ref('')
 const isLoading = ref(true)
 const streamError = ref(false)
 const errorMessage = ref('')
 const isStreamActive = ref(false)
 const streamKey = ref(0)
+let countPollingTimer = null
 
 // Computed
 const videoFeedUrl = computed(() => {
   // Add cache busting parameter untuk force reload
-  return `${localCameraUrl.value}?t=${streamKey.value}`
+  return `${localCameraUrl.value}/video_feed?t=${streamKey.value}`
 })
+
+// Fetch people count from Raspberry Pi directly
+const fetchPeopleCountFromRaspberryPi = async () => {
+  try {
+    const response = await fetch(`${localCameraUrl.value}/count`, {
+      method: 'GET',
+      headers: {
+        'ngrok-skip-browser-warning': 'true'
+      }
+    })
+    
+    if (!response.ok) {
+      console.warn('⚠️ Cannot fetch count from Raspberry Pi')
+      return
+    }
+    
+    const data = await response.json()
+    const count = data.count || 0
+    
+    console.log('📷 People count from Raspberry Pi:', count)
+    
+    // Emit ke parent component
+    emit('peopleCountUpdate', count)
+    
+  } catch (error) {
+    console.warn('⚠️ Error fetching from Raspberry Pi:', error.message)
+  }
+}
 
 const refreshStream = () => {
   console.log('🔄 Refreshing camera stream...')
@@ -85,6 +114,9 @@ const handleLoad = () => {
   isLoading.value = false
   streamError.value = false
   isStreamActive.value = true
+  
+  // Start polling people count saat stream aktif
+  startCountPolling()
 }
 
 const handleError = (event) => {
@@ -93,6 +125,30 @@ const handleError = (event) => {
   streamError.value = true
   isStreamActive.value = false
   errorMessage.value = 'Tidak dapat terhubung ke kamera. Pastikan Raspberry Pi aktif dan Anda berada di jaringan lokal yang sama.'
+  
+  // Stop polling saat error
+  stopCountPolling()
+}
+
+const startCountPolling = () => {
+  // Fetch immediately
+  fetchPeopleCountFromRaspberryPi()
+  
+  // Then poll every 1 second untuk real-time update
+  if (!countPollingTimer) {
+    countPollingTimer = setInterval(() => {
+      fetchPeopleCountFromRaspberryPi()
+    }, 1000)
+    console.log('🔄 Started people count polling (1s)')
+  }
+}
+
+const stopCountPolling = () => {
+  if (countPollingTimer) {
+    clearInterval(countPollingTimer)
+    countPollingTimer = null
+    console.log('⏹️ Stopped people count polling')
+  }
 }
 
 onMounted(() => {
@@ -107,6 +163,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   console.log('CameraStream unmounted')
+  stopCountPolling()
 })
 </script>
 
