@@ -4,6 +4,8 @@ const { TableClient } = require("@azure/data-tables");
  * Azure Function: IoT Hub to Storage Table
  * Receives data from Azure IoT Hub (Event Hub-compatible endpoint) 
  * and stores to Azure Storage Table
+ * - Sensor data -> SensorTelemetry table
+ * - People count -> PeopleCount table (separate)
  */
 module.exports = async function (context, eventHubMessages) {
     context.log(`📥 Processing ${eventHubMessages.length} messages from IoT Hub`);
@@ -16,14 +18,16 @@ module.exports = async function (context, eventHubMessages) {
             throw new Error("STORAGE_CONNECTION_STRING not configured");
         }
 
-        const tableClient = TableClient.fromConnectionString(
-            connectionString,
-            "SensorTelemetry"
-        );
+        // Table clients untuk kedua tabel
+        const sensorTableClient = TableClient.fromConnectionString(connectionString, "SensorTelemetry");
+        const peopleTableClient = TableClient.fromConnectionString(connectionString, "PeopleCount");
 
-        // Create table jika belum ada
-        await tableClient.createTable().catch(() => {
+        // Create tables jika belum ada
+        await sensorTableClient.createTable().catch(() => {
             context.log('ℹ️  Table SensorTelemetry already exists');
+        });
+        await peopleTableClient.createTable().catch(() => {
+            context.log('ℹ️  Table PeopleCount already exists');
         });
 
         // Process setiap message
@@ -40,48 +44,56 @@ module.exports = async function (context, eventHubMessages) {
                     || "UNKNOWN_DEVICE";
                 
                 const timestamp = sensorData.timestamp || new Date().toISOString();
+                const rowKey = Date.now().toString() + Math.random().toString(36).substring(2, 7);
                 
-                // Prepare entity untuk Storage Table
-                const entity = {
-                    partitionKey: deviceId,
-                    rowKey: Date.now().toString() + Math.random().toString(36).substring(2, 7), // Unique ID
-                    timestamp: timestamp,
-                    deviceId: deviceId,
-                    receivedAt: new Date().toISOString()
-                };
+                // Cek apakah ini data people count (dari Raspberry Pi Camera)
+                if (sensorData.jumlahOrang !== undefined || sensorData.sensorType === 'camera_people_counter') {
+                    // Simpan ke tabel PeopleCount
+                    const peopleEntity = {
+                        partitionKey: deviceId,
+                        rowKey: rowKey,
+                        timestamp: timestamp,
+                        count: parseInt(sensorData.jumlahOrang ?? 0),
+                        deviceId: deviceId,
+                        location: sensorData.location || "Ruang Utama",
+                        receivedAt: new Date().toISOString()
+                    };
+                    
+                    await peopleTableClient.createEntity(peopleEntity);
+                    context.log('✅ People count saved to PeopleCount table');
+                    context.log(`   - Device: ${deviceId}`);
+                    context.log(`   - Count: ${peopleEntity.count} orang`);
+                    context.log(`   - Location: ${peopleEntity.location}`);
+                }
                 
-                // Tambahkan field sensor jika ada (support kedua format: Indonesia dan English)
+                // Cek apakah ini data sensor (dari ESP32)
                 if (sensorData.suhu !== undefined || sensorData.temperature !== undefined) {
-                    entity.suhu = parseFloat(sensorData.suhu ?? sensorData.temperature);
-                    entity.kelembaban = parseFloat(sensorData.kelembaban ?? sensorData.humidity);
-                    entity.tegangan = parseFloat(sensorData.tegangan ?? sensorData.voltage);
-                    entity.arus = parseFloat(sensorData.arus ?? sensorData.current);
-                    entity.daya = parseFloat(sensorData.daya ?? sensorData.power);
-                    entity.status_tegangan = sensorData.status_tegangan || "normal";
-                    entity.status_arus = sensorData.status_arus || "normal";
+                    // Simpan ke tabel SensorTelemetry
+                    const sensorEntity = {
+                        partitionKey: deviceId,
+                        rowKey: rowKey,
+                        timestamp: timestamp,
+                        deviceId: deviceId,
+                        receivedAt: new Date().toISOString(),
+                        suhu: parseFloat(sensorData.suhu ?? sensorData.temperature),
+                        kelembaban: parseFloat(sensorData.kelembaban ?? sensorData.humidity),
+                        tegangan: parseFloat(sensorData.tegangan ?? sensorData.voltage),
+                        arus: parseFloat(sensorData.arus ?? sensorData.current),
+                        daya: parseFloat(sensorData.daya ?? sensorData.power),
+                        status_tegangan: sensorData.status_tegangan || "normal",
+                        status_arus: sensorData.status_arus || "normal"
+                    };
                     
                     // Tambahan field jika ada
                     if (sensorData.energy !== undefined) {
-                        entity.energy = parseFloat(sensorData.energy);
+                        sensorEntity.energy = parseFloat(sensorData.energy);
                     }
-                }
-                
-                // Tambahkan field people count jika ada
-                if (sensorData.jumlahOrang !== undefined) {
-                    entity.jumlahOrang = parseInt(sensorData.jumlahOrang);
-                }
 
-                // Insert ke Storage Table
-                await tableClient.createEntity(entity);
-                
-                context.log('✅ Data saved to Storage Table');
-                context.log(`   - Device: ${deviceId}`);
-                if (sensorData.suhu !== undefined) {
-                    context.log(`   - Suhu: ${sensorData.suhu}°C`);
-                    context.log(`   - Daya: ${sensorData.daya}W`);
-                }
-                if (sensorData.jumlahOrang !== undefined) {
-                    context.log(`   - Jumlah Orang: ${sensorData.jumlahOrang}`);
+                    await sensorTableClient.createEntity(sensorEntity);
+                    context.log('✅ Sensor data saved to SensorTelemetry table');
+                    context.log(`   - Device: ${deviceId}`);
+                    context.log(`   - Suhu: ${sensorEntity.suhu}°C`);
+                    context.log(`   - Daya: ${sensorEntity.daya}W`);
                 }
 
             } catch (err) {

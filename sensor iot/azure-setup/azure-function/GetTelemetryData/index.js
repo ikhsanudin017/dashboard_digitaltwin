@@ -196,17 +196,37 @@ async function handlePeopleCount(context, connectionString, hours, limit) {
             "PeopleCount"
         );
         
+        // Coba buat tabel jika belum ada
+        try {
+            await tableClient.createTable();
+            context.log('✓ PeopleCount table created');
+        } catch (e) {
+            // Table already exists
+        }
+        
         const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
         const entities = tableClient.listEntities();
         
         const data = [];
+        let latestCount = 0;
+        let latestTimestamp = null;
+        
         for await (const entity of entities) {
-            if (new Date(entity.timestamp) >= cutoffTime) {
-                data.push({
-                    timestamp: entity.timestamp,
-                    count: entity.count || 0,
-                    location: entity.location || 'unknown'
-                });
+            const entityTime = new Date(entity.timestamp);
+            if (entityTime >= cutoffTime) {
+                const item = {
+                    timestamp: toWIB(entity.timestamp),
+                    count: entity.count || entity.jumlahOrang || 0,
+                    location: entity.location || 'Ruang Utama',
+                    deviceId: entity.deviceId || 'CAMERA_001'
+                };
+                data.push(item);
+                
+                // Track latest entry
+                if (!latestTimestamp || entityTime > latestTimestamp) {
+                    latestTimestamp = entityTime;
+                    latestCount = item.count;
+                }
             }
             if (data.length >= limit) break;
         }
@@ -217,8 +237,12 @@ async function handlePeopleCount(context, connectionString, hours, limit) {
         context.res.status = 200;
         context.res.body = {
             success: true,
-            count: data.length,
+            totalRecords: data.length,
             hours: hours,
+            latest: {
+                count: latestCount,
+                timestamp: latestTimestamp ? toWIB(latestTimestamp.toISOString()) : null
+            },
             data: data
         };
     } catch (error) {
@@ -226,9 +250,14 @@ async function handlePeopleCount(context, connectionString, hours, limit) {
         context.res.status = 200;
         context.res.body = {
             success: true,
-            count: 0,
+            totalRecords: 0,
             hours: hours,
-            data: []
+            latest: {
+                count: 0,
+                timestamp: null
+            },
+            data: [],
+            note: "PeopleCount table may be empty or not created yet"
         };
     }
 }
