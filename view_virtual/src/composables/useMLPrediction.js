@@ -79,7 +79,8 @@ export function useMLPrediction() {
     }
     
     try {
-      const response = await axios.post(`${AZURE_FUNCTION_URL}/ac-recommendation`, {
+      // Azure Function expects action segment: /ac-recommendation/{action}
+      const response = await axios.post(`${AZURE_FUNCTION_URL}/ac-recommendation/recommend`, {
         temperature: sensorData.suhu,
         humidity: sensorData.kelembaban,
         people: sensorData.jumlahOrang || 0,
@@ -206,12 +207,12 @@ export function useMLPrediction() {
     error.value = null
     
     try {
-      // Priority 1: ML API (Python Flask)
-      let result = await fetchFromMLAPI(sensorData)
+      // Priority 1: Azure Function (cloud-first)
+      let result = await fetchFromAzureFunction(sensorData)
       
-      // Priority 2: Azure Function
+      // Priority 2: ML API (local Flask)
       if (!result.success) {
-        result = await fetchFromAzureFunction(sensorData)
+        result = await fetchFromMLAPI(sensorData)
       }
       
       // Priority 3: Local calculation
