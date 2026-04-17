@@ -135,6 +135,7 @@
 <script>
 import { useAPI } from '../composables/useAPI';
 import { useMLPrediction } from '../composables/useMLPrediction';
+import { AZURE_FUNCTION_URL } from '../lib/appConfig';
 
 export default {
   name: 'ACRecommendation',
@@ -301,7 +302,7 @@ export default {
         
         // Atau fetch dari Azure Function
         const response = await fetch(
-          (import.meta.env.VITE_AZURE_FUNCTION_URL || '') + '/telemetry/latest',
+          `${AZURE_FUNCTION_URL}/telemetry/latest`,
           { timeout: 5000 }
         );
         

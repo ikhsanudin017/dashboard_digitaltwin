@@ -122,18 +122,18 @@ async function handleHistory(context, tableClient, hours, limit) {
                 daya: entity.daya
             });
         }
-        if (data.length >= limit) break;
     }
 
     // Sort by timestamp descending
     data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const limitedData = data.slice(0, limit);
 
     context.res.status = 200;
     context.res.body = {
         success: true,
-        count: data.length,
+        count: limitedData.length,
         hours: hours,
-        data: data
+        data: limitedData
     };
 }
 

@@ -1,23 +1,37 @@
 <template>
   <div class="historical-section" :class="{ 'dark': isDarkMode }">
-    <div class="section-header" @click="isExpanded = !isExpanded">
+    <div v-if="!isAdmin" class="section-header" @click="isExpanded = !isExpanded">
       <h2>📊 Historical Data & Analytics</h2>
       <button class="toggle-btn">
         {{ isExpanded ? '▼' : '▶' }}
       </button>
     </div>
     
-    <div v-if="isExpanded" class="section-content">
+    <div v-if="isExpanded || isAdmin" class="section-content">
       <!-- Date Range Picker -->
       <div class="date-range-section">
+        <div class="sync-toolbar">
+          <div class="sync-meta">
+            <span class="sync-label">Last Sync</span>
+            <strong class="sync-value">{{ lastSyncText }}</strong>
+          </div>
+          <button class="btn-refresh" :disabled="isRefreshing || isLoading" @click="refreshHistoricalData()">
+            {{ isRefreshing || isLoading ? 'Menyegarkan...' : 'Refresh Data' }}
+          </button>
+        </div>
+
         <div class="date-inputs">
           <div class="input-group">
             <label>Dari Tanggal:</label>
-            <input type="date" v-model="startDate" :max="endDate" />
+            <input type="date" v-model="tempStartDate" :max="tempEndDate" />
           </div>
           <div class="input-group">
             <label>Sampai Tanggal:</label>
-            <input type="date" v-model="endDate" :min="startDate" :max="today" />
+            <input type="date" v-model="tempEndDate" :min="tempStartDate" :max="today" />
+          </div>
+          <div class="input-group action-group">
+            <label>&nbsp;</label>
+            <button class="btn-apply" @click="applyFilter">🔍 Cari Data</button>
           </div>
         </div>
         
@@ -26,6 +40,8 @@
           <button @click="selectYesterday">Kemarin</button>
           <button @click="select7Days">7 Hari</button>
           <button @click="select30Days">30 Hari</button>
+          <button @click="select90Days">90 Hari</button>
+          <button @click="selectAllTime">All Time</button>
         </div>
       </div>
       
@@ -122,8 +138,42 @@
         <Line :data="chartData" :options="chartOptions" />
       </div>
       
-      <!-- Export Button -->
-      <div class="export-section">
+      <!-- Data Preview Table (Admin Only) -->
+      <div v-if="isAdmin" class="preview-section">
+        <h3 class="preview-title">📊 Preview Data Mentah (10 Terakhir)</h3>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Suhu (°C)</th>
+                <th>Kelembaban (%)</th>
+                <th>Tegangan (V)</th>
+                <th>Arus (A)</th>
+                <th>Daya (W)</th>
+                <th>Orang</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, i) in previewData" :key="i">
+                <td>{{ formatTimestamp(row.timestamp) }}</td>
+                <td>{{ row.temperature?.toFixed(2) || '-' }}</td>
+                <td>{{ row.humidity?.toFixed(2) || '-' }}</td>
+                <td>{{ row.voltage?.toFixed(2) || '-' }}</td>
+                <td>{{ row.current?.toFixed(2) || '-' }}</td>
+                <td>{{ row.power?.toFixed(2) || '-' }}</td>
+                <td>{{ row.peopleCount ?? '-' }}</td>
+              </tr>
+              <tr v-if="previewData.length === 0">
+                <td colspan="7" class="empty-row" style="text-align:center; padding: 20px;">Tidak ada data untuk rentang tanggal ini</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Export Button (Admin Only) -->
+      <div v-if="isAdmin" class="export-section">
         <button @click="handleExport" class="export-btn">
           📥 Export to CSV
         </button>
@@ -133,7 +183,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Line } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js'
 import { useHistoricalData } from '../composables/useHistoricalData'
@@ -145,66 +195,157 @@ const props = defineProps({
   currentPeopleCount: {
     type: Number,
     default: 0
+  },
+  isAdmin: {
+    type: Boolean,
+    default: true
   }
 })
 
-const { historicalData, isLoading, loadHistoricalData, getDataByDateRange, getAggregatedData, exportToCSV, getStatistics } = useHistoricalData()
+const { historicalData, isLoading, loadHistoricalData, getDataByDateRange, getAggregatedData, getAvailableDateRange, exportToCSV, getStatistics } = useHistoricalData()
 
 const isExpanded = ref(false)
+const AUTO_REFRESH_INTERVAL = 30000
+let refreshTimer = null
+const lastSyncAt = ref(null)
+const isRefreshing = ref(false)
+
+function formatDateInput(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function parseDateInput(value, endOfDay = false) {
+  const [year, month, day] = String(value).split('-').map(Number)
+  if (!year || !month || !day) return new Date()
+
+  return endOfDay
+    ? new Date(year, month - 1, day, 23, 59, 59, 999)
+    : new Date(year, month - 1, day, 0, 0, 0, 0)
+}
 
 // Load data from Azure Storage when component mounts
 onMounted(async () => {
   console.log('🔄 HistoricalAnalytics: Loading data from Azure Storage...')
-  await loadHistoricalData()
+  await refreshHistoricalData()
+  refreshTimer = setInterval(() => {
+    refreshHistoricalData(true)
+  }, AUTO_REFRESH_INTERVAL)
   console.log('📊 HistoricalAnalytics: Data loaded, total records:', historicalData.value.length)
 })
-const today = new Date().toISOString().split('T')[0]
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+})
+
+const today = formatDateInput(new Date())
 const endDate = ref(today)
 const startDate = ref(getDateDaysAgo(7))
+
+const tempStartDate = ref(startDate.value)
+const tempEndDate = ref(endDate.value)
 
 const chartInterval = ref('daily')
 const selectedMetric = ref('temperature')
 const comparisonMode = ref(false)
+const availableDateRange = computed(() => getAvailableDateRange())
+const lastSyncText = computed(() => {
+  if (!lastSyncAt.value) return 'Belum sinkron'
+
+  return lastSyncAt.value.toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+})
 
 function getDateDaysAgo(days) {
   const date = new Date()
   date.setDate(date.getDate() - days)
-  return date.toISOString().split('T')[0]
+  return formatDateInput(date)
+}
+
+function applyFilter() {
+  startDate.value = tempStartDate.value
+  endDate.value = tempEndDate.value
 }
 
 function selectToday() {
-  startDate.value = today
-  endDate.value = today
+  tempStartDate.value = today
+  tempEndDate.value = today
+  applyFilter()
 }
 
 function selectYesterday() {
   const yesterday = getDateDaysAgo(1)
-  startDate.value = yesterday
-  endDate.value = yesterday
+  tempStartDate.value = yesterday
+  tempEndDate.value = yesterday
+  applyFilter()
 }
 
 function select7Days() {
-  startDate.value = getDateDaysAgo(7)
-  endDate.value = today
+  tempStartDate.value = getDateDaysAgo(7)
+  tempEndDate.value = today
+  applyFilter()
 }
 
 function select30Days() {
-  startDate.value = getDateDaysAgo(30)
-  endDate.value = today
+  tempStartDate.value = getDateDaysAgo(30)
+  tempEndDate.value = today
+  applyFilter()
+}
+
+function select90Days() {
+  tempStartDate.value = getDateDaysAgo(90)
+  tempEndDate.value = today
+  applyFilter()
+}
+
+async function selectAllTime() {
+  if (!availableDateRange.value) {
+    await refreshHistoricalData(true)
+  }
+
+  const range = getAvailableDateRange()
+  if (!range) return
+
+  tempStartDate.value = range.startDate
+  tempEndDate.value = range.endDate
+  applyFilter()
+}
+
+async function refreshHistoricalData(background = false) {
+  if (!background) {
+    isRefreshing.value = true
+  }
+
+  try {
+    await loadHistoricalData({ background })
+    lastSyncAt.value = new Date()
+  } finally {
+    if (!background) {
+      isRefreshing.value = false
+    }
+  }
 }
 
 const statistics = computed(() => {
-  const start = new Date(startDate.value)
-  const end = new Date(endDate.value)
-  end.setHours(23, 59, 59, 999)
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
   
   return getStatistics(start, end)
 })
 
 const chartData = computed(() => {
-  const start = new Date(startDate.value)
-  const end = new Date(endDate.value)
-  end.setHours(23, 59, 59, 999)
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
   
   const aggregated = getAggregatedData(start, end, chartInterval.value)
   
@@ -294,11 +435,25 @@ function formatEnergy(wh) {
 }
 
 function handleExport() {
-  const start = new Date(startDate.value)
-  const end = new Date(endDate.value)
-  end.setHours(23, 59, 59, 999)
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
   
   exportToCSV(start, end)
+}
+
+const previewData = computed(() => {
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
+  
+  const rangeData = getDataByDateRange(start, end)
+  if (!rangeData || rangeData.length === 0) return []
+  return [...rangeData].reverse().slice(0, 10)
+})
+
+const formatTimestamp = (ts) => {
+  if (!ts) return '-'
+  const d = new Date(ts)
+  return `${d.toLocaleDateString('id-ID')} ${d.toLocaleTimeString('id-ID')}`
 }
 </script>
 
@@ -311,6 +466,57 @@ function handleExport() {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
 }
+
+.preview-section {
+  margin-top: 30px;
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding-top: 20px;
+}
+
+.dark .preview-section {
+  border-top-color: rgba(255,255,255,0.1);
+}
+
+.preview-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #1f2937;
+}
+
+.dark .preview-title {
+  color: #e5e7eb;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.05);
+  margin-bottom: 20px;
+}
+
+.dark .table-wrap {
+  border-color: rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.2);
+}
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; white-space: nowrap; }
+.data-table th {
+  background: rgba(243,244,246,1);
+  color: #374151;
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: left;
+}
+.dark .data-table th { background: rgba(255,255,255,0.05); color: #e5e7eb; }
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  color: #4b5563;
+}
+.dark .data-table td { border-bottom-color: rgba(255,255,255,0.05); color: #d1d5db; }
+.data-table tbody tr:hover { background: rgba(6,182,212,0.04); }
 
 .historical-section.dark {
   background: #1e293b;
@@ -372,6 +578,64 @@ function handleExport() {
 
 .dark .date-range-section {
   background: #0f172a;
+}
+
+.sync-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.sync-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dark .sync-label {
+  color: #94a3b8;
+}
+
+.sync-value {
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.dark .sync-value {
+  color: #e2e8f0;
+}
+
+.btn-refresh {
+  border: none;
+  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 6px 14px rgba(14, 165, 233, 0.2);
+}
+
+.btn-refresh:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(14, 165, 233, 0.25);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .date-inputs {
@@ -621,5 +885,28 @@ function handleExport() {
   .chart-container {
     height: 300px;
   }
+}
+.btn-apply {
+  background: var(--primary, #06b6d4);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  height: 42px; /* Matches input height roughly */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-apply:hover {
+  background: var(--primary-dark, #0891b2);
+  transform: translateY(-1px);
+}
+.action-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 </style>

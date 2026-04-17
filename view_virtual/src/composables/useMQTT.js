@@ -1,9 +1,7 @@
 import { ref, watch, onUnmounted } from 'vue'
+import { AZURE_FUNCTION_URL } from '../lib/appConfig'
 
 const STORAGE_KEY = 'sensor_last_data'
-
-// Azure Function Configuration - Direct Azure Storage Access
-const AZURE_FUNCTION_URL = import.meta.env.VITE_AZURE_FUNCTION_URL || 'https://func-digitaltwin-2026.azurewebsites.net/api'
 
 // Polling interval in milliseconds (5 seconds for near real-time)
 const POLLING_INTERVAL = 5000

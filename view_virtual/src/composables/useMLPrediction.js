@@ -1,9 +1,6 @@
 import { ref, computed } from 'vue'
 import axios from 'axios'
-
-// ML Prediction API URLs
-const ML_API_URL = import.meta.env.VITE_ML_API_URL || 'http://localhost:5000/api'
-const AZURE_FUNCTION_URL = import.meta.env.VITE_AZURE_FUNCTION_URL || ''
+import { AZURE_FUNCTION_URL, ML_API_URL } from '../lib/appConfig'
 
 export function useMLPrediction() {
   const isLoading = ref(false)

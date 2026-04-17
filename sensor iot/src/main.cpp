@@ -89,10 +89,35 @@ unsigned long sasTokenExpiry = 0;
 // Variabel untuk timing
 unsigned long lastMsg = 0;
 const long interval = 5000; // Kirim data setiap 5 detik
+const unsigned long SAS_TOKEN_REFRESH_WINDOW = 120; // Refresh 2 menit sebelum expiry
 
 // Counter untuk statistik
 unsigned long successCount = 0;
 unsigned long failCount = 0;
+
+String getIsoTimestampUTC() {
+  time_t now = time(nullptr);
+  struct tm timeInfo;
+
+  if (!gmtime_r(&now, &timeInfo)) {
+    return "";
+  }
+
+  char buffer[32];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &timeInfo);
+  return String(buffer);
+}
+
+void ensureWiFiConnected() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  Serial.println("\n⚠️ WiFi terputus, mencoba konek ulang...");
+  WiFi.disconnect(true, true);
+  delay(250);
+  setupWiFi();
+}
 
 // Struktur untuk hasil pembacaan tegangan
 struct VoltageReading {
@@ -297,6 +322,8 @@ String generateSasToken(const char* key, String url, long expiry) {
 
 // Fungsi untuk koneksi ulang ke Azure IoT Hub
 void reconnectMQTT() {
+  ensureWiFiConnected();
+
   while (!client.connected()) {
     Serial.println("\nMenghubungkan ke Azure IoT Hub...");
     Serial.print("Hub: ");
@@ -333,7 +360,7 @@ void reconnectMQTT() {
     
     // Generate SAS Token jika expired atau belum ada
     unsigned long currentTime = time(nullptr);
-    if (sasToken == "" || currentTime >= sasTokenExpiry) {
+    if (sasToken == "" || currentTime >= (sasTokenExpiry - SAS_TOKEN_REFRESH_WINDOW)) {
       Serial.println("Generating new SAS Token...");
       sasTokenExpiry = currentTime + 3600; // Token valid untuk 1 jam
       String resourceUri = mqtt_server + "/devices/" + String(deviceId);
@@ -451,6 +478,15 @@ void setup() {
 }
 
 void loop() {
+  ensureWiFiConnected();
+
+  unsigned long currentEpoch = time(nullptr);
+  if (sasToken != "" && currentEpoch > 0 && currentEpoch >= (sasTokenExpiry - SAS_TOKEN_REFRESH_WINDOW)) {
+    Serial.println("\n⏳ SAS Token hampir expired, refresh koneksi MQTT...");
+    client.disconnect();
+    sasToken = "";
+  }
+
   // Maintain koneksi MQTT - panggil loop() sesering mungkin
   client.loop();
   
@@ -563,14 +599,16 @@ void loop() {
     Serial.println(" W");
     
     // Buat JSON document
-    JsonDocument doc;
-    doc["suhu"] = round(suhuCelsius * 10) / 10.0;  // 1 desimal
-    doc["kelembaban"] = round(kelembaban * 10) / 10.0;  // 1 desimal
-    doc["tegangan"] = round(voltageData.voltage * 10) / 10.0;  // 1 desimal
-    doc["arus"] = round(currentData.current * 100) / 100.0;  // 2 desimal
-    doc["daya"] = round(power * 10) / 10.0;  // 1 desimal
-    doc["status_tegangan"] = voltageData.isConnected ? "terhubung" : "tidak_terhubung";
-    doc["status_arus"] = currentData.isConnected ? "terhubung" : "tidak_terhubung";
+     JsonDocument doc;
+     doc["suhu"] = round(suhuCelsius * 10) / 10.0;  // 1 desimal
+     doc["kelembaban"] = round(kelembaban * 10) / 10.0;  // 1 desimal
+     doc["tegangan"] = round(voltageData.voltage * 10) / 10.0;  // 1 desimal
+     doc["arus"] = round(currentData.current * 100) / 100.0;  // 2 desimal
+     doc["daya"] = round(power * 10) / 10.0;  // 1 desimal
+     doc["status_tegangan"] = voltageData.isConnected ? "terhubung" : "tidak_terhubung";
+     doc["status_arus"] = currentData.isConnected ? "terhubung" : "tidak_terhubung";
+     doc["deviceId"] = deviceId;
+     doc["timestamp"] = getIsoTimestampUTC();
     
     // Serialize JSON ke string
     char jsonBuffer[256];
@@ -600,12 +638,15 @@ void loop() {
         client.loop();
         delay(50);
       }
-    } else {
-      failCount++;
-      Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
-      Serial.print("   MQTT State: ");
-      Serial.println(client.state());
-    }
+     } else {
+       failCount++;
+       Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
+       Serial.print("   MQTT State: ");
+       Serial.println(client.state());
+       Serial.println("   Memaksa reconnect untuk percobaan berikutnya...");
+       client.disconnect();
+       sasToken = "";
+     }
     
     Serial.println("=================================");
   }

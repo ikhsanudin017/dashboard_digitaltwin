@@ -1,9 +1,6 @@
 import { ref } from 'vue'
 import axios from 'axios'
-
-// Azure Function URL - ganti dengan URL Azure Function Anda setelah deploy
-const AZURE_FUNCTION_URL = import.meta.env.VITE_AZURE_FUNCTION_URL || ''
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+import { API_BASE_URL, AZURE_FUNCTION_URL } from '../lib/appConfig'
 
 export function useAPI() {
   const temperatureData = ref({

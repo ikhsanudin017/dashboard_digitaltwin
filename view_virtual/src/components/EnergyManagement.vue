@@ -1,15 +1,15 @@
 <template>
   <div class="energy-management" :class="{ 'dark': isDarkMode }">
-    <div class="section-header" @click="isExpanded = !isExpanded">
+    <div v-if="!isAdmin" class="section-header" @click="isExpanded = !isExpanded">
       <h2>💰 Energy Management & AI Recommendations</h2>
       <button class="toggle-btn">
         {{ isExpanded ? '▼' : '▶' }}
       </button>
     </div>
     
-    <div v-if="isExpanded" class="section-content">
-      <!-- Settings Section -->
-      <div class="settings-section">
+    <div v-if="isExpanded || isAdmin" class="section-content">
+      <!-- Settings Section (Admin Only) -->
+      <div v-if="isAdmin" class="settings-section">
         <h3>⚙️ Pengaturan</h3>
         <div class="settings-grid">
           <div class="setting-item">
@@ -43,7 +43,7 @@
             <span class="card-title">Hari Ini</span>
           </div>
           <div class="card-value">{{ todayConsumption.toFixed(2) }} kWh</div>
-          <div class="card-cost">Rp {{ todayCost.toLocaleString('id-ID') }}</div>
+          <div class="card-cost">Rp {{ formatCurrency(todayCost) }}</div>
           <div class="card-progress">
             <div class="progress-bar">
               <div 
@@ -63,7 +63,7 @@
             <span class="card-title">Bulan Ini</span>
           </div>
           <div class="card-value">{{ monthlyConsumption.toFixed(2) }} kWh</div>
-          <div class="card-cost">Rp {{ monthlyCost.toLocaleString('id-ID') }}</div>
+          <div class="card-cost">Rp {{ formatCurrency(monthlyCost) }}</div>
           <div class="card-progress">
             <div class="progress-bar">
               <div 
@@ -83,7 +83,7 @@
             <span class="card-title">Proyeksi Bulan Ini</span>
           </div>
           <div class="card-value">{{ projectedMonthly.toFixed(2) }} kWh</div>
-          <div class="card-cost">Rp {{ projectedCost.toLocaleString('id-ID') }}</div>
+          <div class="card-cost">Rp {{ formatCurrency(projectedCost) }}</div>
           <div class="card-status" :class="projectionStatus.class">
             {{ projectionStatus.text }}
           </div>
@@ -150,7 +150,7 @@
             </div>
             <p class="rec-description">{{ rec.description }}</p>
             <div v-if="rec.potentialSaving > 0" class="rec-saving">
-              💵 Potensi penghematan: <strong>Rp {{ parseFloat(rec.potentialSaving).toLocaleString('id-ID') }}</strong>
+              💵 Potensi penghematan: <strong>Rp {{ formatCurrency(rec.potentialSaving) }}</strong>
             </div>
           </div>
         </div>
@@ -173,7 +173,11 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 const props = defineProps({
   isDarkMode: Boolean,
-  currentPower: Number
+  currentPower: Number,
+  isAdmin: {
+    type: Boolean,
+    default: true
+  }
 })
 
 const {
@@ -217,6 +221,15 @@ const projectedMonthly = computed(() => {
 })
 
 const projectedCost = computed(() => calculateCost(projectedMonthly.value))
+
+// Format currency to exactly 2 decimals (e.g., Rp 10.714,29)
+const formatCurrency = (value) => {
+  const num = Number(value || 0)
+  return num.toLocaleString('id-ID', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
 
 const projectionStatus = computed(() => {
   const ratio = projectedMonthly.value / settings.value.monthlyTarget

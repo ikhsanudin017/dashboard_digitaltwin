@@ -8,9 +8,7 @@
       title="Menunggu Data People Counter"
       description="Sistem menunggu data dari kamera penghitung orang"
       :actions="[
-        { icon: '📹', text: 'Pastikan kamera Raspberry Pi aktif' },
-        { icon: '🤖', text: 'Model YOLO memproses video' },
-        { icon: '📡', text: 'Data dikirim melalui MQTT' }
+        { icon: '⏳', text: 'Menunggu koneksi ke data sensor' }
       ]"
       :show-status="true"
       status-text="Menunggu deteksi kamera..."
@@ -85,17 +83,13 @@ const chartData = computed(() => ({
       backgroundColor: 'rgba(6, 182, 212, 0.15)',
       borderWidth: 3,
       fill: true,
-      tension: 0.5,
-      pointRadius: 5,
-      pointHoverRadius: 8,
+      tension: 0.4,
+      pointRadius: 3,
+      pointHoverRadius: 6,
       pointBackgroundColor: '#06b6d4',
       pointBorderColor: '#fff',
-      pointBorderWidth: 3,
-      stepped: false,
-      shadowOffsetX: 0,
-      shadowOffsetY: 4,
-      shadowBlur: 10,
-      shadowColor: 'rgba(6, 182, 212, 0.3)'
+      pointBorderWidth: 2,
+      stepped: false
     }
   ]
 }))
@@ -107,17 +101,7 @@ const chartOptions = computed(() => {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        display: true,
-        position: 'top',
-        labels: {
-          usePointStyle: true,
-          padding: 15,
-          font: {
-            size: 12,
-            weight: '600'
-          },
-          color: isDark ? '#b8b8c8' : '#7f8c8d'
-        }
+        display: false
       },
       tooltip: {
         mode: 'index',
@@ -141,23 +125,18 @@ const chartOptions = computed(() => {
     },
     scales: {
       y: {
-        beginAtZero: true,
-        max: 25,
+        min: 0,
+        max: 5,
         ticks: {
-          stepSize: 5,
+          stepSize: 1,
+          precision: 0,
           font: {
             size: 11
           },
           color: isDark ? '#b8b8c8' : '#95a5a6'
         },
         title: {
-          display: true,
-          text: 'Jumlah Orang',
-          font: {
-            size: 12,
-            weight: '600'
-          },
-          color: isDark ? '#b8b8c8' : '#7f8c8d'
+          display: false
         },
         grid: {
           color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)',
@@ -170,9 +149,12 @@ const chartOptions = computed(() => {
         },
         ticks: {
           font: {
-            size: 11
+            size: 10
           },
-          color: isDark ? '#b8b8c8' : '#95a5a6'
+          color: isDark ? '#b8b8c8' : '#95a5a6',
+          maxRotation: 45,
+          autoSkip: true,
+          maxTicksLimit: 10
         }
       }
     },
@@ -191,7 +173,7 @@ const chartOptions = computed(() => {
 
 <style scoped>
 .chart-container {
-  height: 300px;
+  height: 180px;
   position: relative;
 }
 

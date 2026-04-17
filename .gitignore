@@ -27,6 +27,7 @@ sensor iot/bridge/query-latest.js
 # Environment files
 .env
 .env.local
+client_secret_*.json
 
 # OS
 .DS_Store

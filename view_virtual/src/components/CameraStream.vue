@@ -23,17 +23,10 @@
           <span class="icon">📹</span>
           <p class="main-message">Camera Stream Unavailable</p>
           <p class="sub-message">{{ errorMessage }}</p>
-          <div class="local-access-info">
-            <p><strong>Pastikan:</strong></p>
-            <ul>
-              <li>Raspberry Pi camera service berjalan</li>
-              <li>Anda terhubung ke jaringan lokal yang sama</li>
-              <li>URL camera: <code>{{ localCameraUrl }}</code></li>
-            </ul>
-            <button @click="refreshStream" class="btn-refresh">
-              🔄 Refresh Stream
-            </button>
-          </div>
+          <button @click="refreshStream" class="camera-refresh-trigger">
+            <span class="btn-icon">🔄</span>
+            <span class="btn-text">Muat Ulang Kamera</span>
+          </button>
         </div>
       </div>
 
@@ -124,7 +117,7 @@ const handleError = (event) => {
   isLoading.value = false
   streamError.value = true
   isStreamActive.value = false
-  errorMessage.value = 'Tidak dapat terhubung ke kamera. Pastikan Raspberry Pi aktif dan Anda berada di jaringan lokal yang sama.'
+  errorMessage.value = 'Kamera sedang tidak dapat diakses saat ini. Silakan coba muat ulang.'
   
   // Stop polling saat error
   stopCountPolling()
@@ -408,34 +401,42 @@ onUnmounted(() => {
   transform: none;
 }
 
-.local-access-info {
+.camera-refresh-trigger {
   margin-top: 20px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 12px 24px;
+  background: var(--primary, #0284c7);
+  color: #ffffff;
+  border: none;
   border-radius: 8px;
-  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  justify-content: center !important;
+  width: auto !important;
+  height: auto !important;
+  white-space: nowrap !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-.local-access-info ul {
-  margin: 12px 0;
-  padding-left: 20px;
-  text-align: left;
+.camera-refresh-trigger:hover {
+  background: var(--primary-dark, #0369a1);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
-.local-access-info li {
-  margin: 8px 0;
-  font-size: 13px;
+.camera-refresh-trigger .btn-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 
-.local-access-info code {
-  display: inline-block;
-  margin: 4px 0;
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
-  color: #4ade80;
+.camera-refresh-trigger .btn-text {
+  font-size: 14px;
+  line-height: 1;
+  color: #ffffff;
 }
 
 .btn-open-local,
