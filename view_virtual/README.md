@@ -102,6 +102,8 @@ view_virtual/
 ├── postcss.config.js           # PostCSS configuration
 ├── index.html                  # Entry HTML
 ├── env.example.txt             # Environment variables template
+├── 📁 config/
+│   └── vercel.vite.json        # Referensi alternatif config Vercel untuk Vite
 │
 ├── 📁 src/
 │   ├── App.vue                 # Root component

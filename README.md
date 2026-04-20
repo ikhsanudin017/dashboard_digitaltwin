@@ -102,6 +102,23 @@ dashboard_digitaltwin/
 ├── 📁 .github/                  # GitHub configurations
 │   └── README.md                # CI/CD documentation
 │
+├── 📁 docs/                     # 📚 Dokumentasi planning, report, referensi
+│   ├── README.md                # Indeks dokumentasi
+│   ├── planning/
+│   │   ├── TRELLO_IMPORT_90_HARI.csv
+│   │   └── TRELLO_IMPORT_README.md
+│   ├── reports/
+│   │   └── REPORT_PENGEMBANGAN_CODE_HEALTH_SECURITY.md
+│   └── reference/
+│       └── Proposal Ignition 2025.docx.pdf
+│
+├── 📁 local_data/               # 🧪 Data runtime lokal (tidak untuk production)
+│   └── azurite/
+│       ├── .gitkeep
+│       ├── __azurite_db_queue__.json
+│       ├── __azurite_db_queue_extent__.json
+│       └── __queuestorage__/
+│
 ├── 📁 ml_models/                # 🤖 Machine Learning Models
 │   ├── README.md                # ML documentation
 │   ├── train_model.py           # Energy forecast training
@@ -135,6 +152,8 @@ dashboard_digitaltwin/
 └── 📁 view_virtual/             # 🖥️ Vue.js Dashboard
     ├── README.md                # Frontend documentation
     ├── package.json
+   ├── config/
+   │   └── vercel.vite.json     # Referensi config Vercel untuk Vite
     ├── src/
     │   ├── App.vue
     │   ├── components/          # Vue components
@@ -203,6 +222,9 @@ func start  # Local testing
 | `/scripts` | Utility scripts untuk data management | [README](scripts/README.md) |
 | `/sensor iot` | ESP32 firmware & Raspberry Pi | [README](sensor%20iot/README.md) |
 | `/view_virtual` | Vue.js Dashboard frontend | [README](view_virtual/README.md) |
+| `/local_data` | Data runtime lokal (Azurite, cache, output sementara) | [README](local_data/README.md) |
+| `/docs/planning` | Roadmap dan Trello import file | [README](docs/planning/TRELLO_IMPORT_README.md) |
+| `/docs/reports` | Laporan audit pengembangan | [Report](docs/reports/REPORT_PENGEMBANGAN_CODE_HEALTH_SECURITY.md) |
 | `/.github` | CI/CD Pipeline configuration | [README](.github/README.md) |
 
 ## ⚙️ Konfigurasi

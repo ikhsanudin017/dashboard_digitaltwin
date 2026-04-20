@@ -13,6 +13,12 @@ package-lock.json
 # Azure Functions local storage
 __blobstorage__/
 __queuestorage__/
+__azurite_db_queue__.json
+__azurite_db_queue_extent__.json
+
+# Local runtime artifacts
+local_data/azurite/*
+!local_data/azurite/.gitkeep
 
 # Utility scripts & data exports
 scripts/
