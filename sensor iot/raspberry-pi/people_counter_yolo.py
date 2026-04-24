@@ -11,6 +11,7 @@ from flask_cors import CORS
 import threading
 import time
 import json
+import os
 import ssl
 from datetime import datetime
 import numpy as np
@@ -43,10 +44,9 @@ FRAME_HEIGHT = 720
 TARGET_FPS = 60  # FPS maksimal untuk ultra smooth
 
 # ===== AZURE IoT Hub Configuration =====
-IOT_HUB_NAME = "iothub-digitaltwin-2026"
-DEVICE_ID = "RASPBERRY_PI_CAMERA_001"
-# Primary Key dari Azure Portal
-DEVICE_KEY = "1utlEsHMBvTSZNDPsAq3YO3l0NFPU9/OpXmkV9CqOhc="
+IOT_HUB_NAME = os.getenv("IOT_HUB_NAME", "")
+DEVICE_ID = os.getenv("IOT_DEVICE_ID", "RASPBERRY_PI_CAMERA_001")
+DEVICE_KEY = os.getenv("IOT_DEVICE_KEY", "")
 
 # Connection string format (alternatif)
 # CONNECTION_STRING = "HostName=iothub-digitaltwin-2026.azure-devices.net;DeviceId=RASPBERRY_PI_CAMERA_001;SharedAccessKey=YOUR_KEY"
@@ -184,6 +184,11 @@ def generate_sas_token(uri, key, expiry=3600):
 def init_azure_iot():
     """Inisialisasi koneksi ke Azure IoT Hub"""
     global iot_client, iot_connected
+
+    if not IOT_HUB_NAME or not DEVICE_KEY:
+        print("✗ Azure IoT credentials belum dikonfigurasi.")
+        print("  Set environment variables: IOT_HUB_NAME, IOT_DEVICE_ID, IOT_DEVICE_KEY")
+        return False
     
     print("☁️  Initializing Azure IoT Hub...")
     

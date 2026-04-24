@@ -2,11 +2,111 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 import { AZURE_FUNCTION_URL, ML_API_URL } from '../lib/appConfig'
 
+const PREDICTION_SCHEMA_VERSION = '1.0.0'
+
+const FALLBACK_LEVEL_BY_SOURCE = Object.freeze({
+  azure_function: 0,
+  ml_api: 1,
+  local_calculation: 2
+})
+
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const round = (value, digits = 2) => {
+  const factor = 10 ** digits
+  return Math.round(toNumber(value, 0) * factor) / factor
+}
+
+const normalizeConfidencePercent = (value, fallback = 0) => {
+  const numeric = toNumber(value, fallback)
+  if (numeric <= 1) {
+    return round(numeric * 100, 1)
+  }
+  return round(numeric, 1)
+}
+
+const createTraceId = () => `pred_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+const normalizeSensorInput = (sensorData = {}) => {
+  const now = new Date()
+
+  return {
+    suhu: toNumber(sensorData.suhu ?? sensorData.temperature, 25),
+    kelembaban: toNumber(sensorData.kelembaban ?? sensorData.humidity, 60),
+    tegangan: toNumber(sensorData.tegangan ?? sensorData.voltage, 220),
+    arus: toNumber(sensorData.arus ?? sensorData.current, 0.5),
+    daya: toNumber(sensorData.daya ?? sensorData.power, 100),
+    jumlahOrang: Math.max(0, Math.trunc(toNumber(sensorData.jumlahOrang ?? sensorData.people ?? sensorData.peopleCount, 0))),
+    hour: Math.trunc(toNumber(sensorData.hour, now.getHours())),
+    month: Math.trunc(toNumber(sensorData.month, now.getMonth() + 1)),
+    timestamp_utc: sensorData.timestamp_utc || sensorData.timestamp || now.toISOString()
+  }
+}
+
+const inferMode = (recommendedTemp, ambientTemp) => {
+  if (recommendedTemp < ambientTemp - 1) return 'cooling'
+  if (recommendedTemp > ambientTemp + 1) return 'eco'
+  return 'maintain'
+}
+
+const inferAction = (mode) => {
+  if (mode === 'cooling') return 'Turunkan suhu AC'
+  if (mode === 'eco') return 'Naikkan suhu AC untuk hemat energi'
+  return 'Pertahankan suhu AC'
+}
+
+const createUnifiedPrediction = ({
+  source,
+  traceId,
+  sensorData,
+  energy = {},
+  ac = {},
+  modelVersion = 'unknown',
+  timestampUtc
+}) => {
+  const predictedWatt = toNumber(energy.predicted_watt ?? energy.predictedWatt, sensorData.daya)
+  const dailyKwh = toNumber(energy.daily_kwh ?? energy.dailyKwh, (predictedWatt * 24) / 1000)
+  const monthlyKwh = toNumber(energy.monthly_kwh ?? energy.monthlyKwh, dailyKwh * 30)
+  const monthlyCostIDR = toNumber(
+    energy.monthly_cost_idr ?? energy.monthlyCostIDR,
+    monthlyKwh * 1444.70
+  )
+
+  const recommendedTemp = toNumber(ac.recommended_temp ?? ac.recommendedTemp, 24)
+  const mode = ac.mode || inferMode(recommendedTemp, sensorData.suhu)
+
+  return {
+    schema_version: PREDICTION_SCHEMA_VERSION,
+    timestamp_utc: timestampUtc || sensorData.timestamp_utc || new Date().toISOString(),
+    trace_id: traceId,
+    source,
+    source_tag: `${source}:prediction`,
+    model_version: modelVersion,
+    energy: {
+      predicted_watt: round(predictedWatt, 2),
+      daily_kwh: round(dailyKwh, 2),
+      monthly_kwh: round(monthlyKwh, 2),
+      monthly_cost_idr: round(monthlyCostIDR, 0),
+      confidence_percent: normalizeConfidencePercent(energy.confidence_percent ?? energy.confidence, 0)
+    },
+    ac: {
+      recommended_temp: round(recommendedTemp, 1),
+      action: ac.action || ac.reason || inferAction(mode),
+      mode,
+      confidence_percent: normalizeConfidencePercent(ac.confidence_percent ?? ac.confidence, 0)
+    }
+  }
+}
+
 export function useMLPrediction() {
   const isLoading = ref(false)
   const error = ref(null)
   const lastPrediction = ref(null)
   const modelInfo = ref(null)
+  const predictionMeta = ref(null)
   
   // Prediction results
   const energyPrediction = ref({
@@ -48,19 +148,34 @@ export function useMLPrediction() {
    * Fetch prediction dari ML API lokal (Python Flask)
    */
   const fetchFromMLAPI = async (sensorData) => {
+    if (!ML_API_URL) {
+      return { success: false, error: 'ML API URL not configured' }
+    }
+
     try {
       const response = await axios.post(`${ML_API_URL}/predict/all`, sensorData, {
         timeout: 5000
       })
-      
-      if (response.data) {
+
+      if (response.data?.ac && response.data?.energy) {
+        const unified = createUnifiedPrediction({
+          source: 'ml_api',
+          traceId: sensorData.trace_id,
+          sensorData,
+          energy: response.data.energy,
+          ac: response.data.ac,
+          modelVersion: response.data.model_version ?? 'ml_api',
+          timestampUtc: response.data.timestamp
+        })
+
         return {
           success: true,
-          data: response.data,
+          data: unified,
           source: 'ml_api'
         }
       }
-      return { success: false }
+
+      return { success: false, error: 'Invalid ML API response contract' }
     } catch (err) {
       console.warn('[ML API] Not available:', err.message)
       return { success: false, error: err.message }
@@ -76,39 +191,55 @@ export function useMLPrediction() {
     }
     
     try {
-      // Azure Function expects action segment: /ac-recommendation/{action}
+      // Azure Function expects canonical payload: suhu, kelembaban, jumlahOrang, daya, timestamp
       const response = await axios.post(`${AZURE_FUNCTION_URL}/ac-recommendation/recommend`, {
-        temperature: sensorData.suhu,
-        humidity: sensorData.kelembaban,
-        people: sensorData.jumlahOrang || 0,
-        timeOfDay: sensorData.hour || new Date().getHours(),
-        power: sensorData.daya
+        suhu: sensorData.suhu,
+        kelembaban: sensorData.kelembaban,
+        jumlahOrang: sensorData.jumlahOrang || 0,
+        daya: sensorData.daya,
+        timestamp: sensorData.timestamp_utc,
+        trace_id: sensorData.trace_id
       }, {
         timeout: 5000
       })
-      
-      if (response.data) {
+
+      const payload = response.data || {}
+      const recommendation = payload.data || payload.recommendation || payload
+
+      if (payload.success === false || !recommendation) {
+        return { success: false, error: payload.error || 'Invalid Azure Function response contract' }
+      }
+
+      const unified = createUnifiedPrediction({
+        source: 'azure_function',
+        traceId: sensorData.trace_id,
+        sensorData,
+        energy: {
+          predicted_watt: sensorData.daya,
+          daily_kwh: (sensorData.daya * 24) / 1000,
+          monthly_kwh: ((sensorData.daya * 24) / 1000) * 30,
+          monthly_cost_idr: (((sensorData.daya * 24) / 1000) * 30) * 1444.70,
+          confidence: recommendation.confidence
+        },
+        ac: {
+          recommended_temp: recommendation.recommendedTemp ?? recommendation.recommended_temp,
+          action: recommendation.reason ?? recommendation.action,
+          mode: recommendation.mode,
+          confidence: recommendation.confidence
+        },
+        modelVersion: recommendation.model_info?.training_date || 'azure_function',
+        timestampUtc: recommendation.timestamp
+      })
+
+      if (unified.ac.recommended_temp) {
         return {
           success: true,
-          data: {
-            energy: {
-              predicted_watt: sensorData.daya || 100,
-              daily_kwh: ((sensorData.daya || 100) * 24) / 1000,
-              monthly_kwh: ((sensorData.daya || 100) * 24 * 30) / 1000,
-              monthly_cost_idr: ((sensorData.daya || 100) * 24 * 30 / 1000) * 1444.70,
-              confidence: 80
-            },
-            ac: {
-              recommended_temp: response.data.recommendedTemperature || response.data.recommended_temp,
-              action: response.data.reason || response.data.action,
-              mode: response.data.mode || 'maintain',
-              confidence: response.data.confidence || 85
-            }
-          },
+          data: unified,
           source: 'azure_function'
         }
       }
-      return { success: false }
+
+      return { success: false, error: 'Missing recommended temperature from Azure Function' }
     } catch (err) {
       console.warn('[Azure Function] Not available:', err.message)
       return { success: false, error: err.message }
@@ -177,21 +308,25 @@ export function useMLPrediction() {
     
     return {
       success: true,
-      data: {
+      data: createUnifiedPrediction({
+        source: 'local_calculation',
+        traceId: sensorData.trace_id,
+        sensorData,
         energy: {
           predicted_watt: predictedWatt,
           daily_kwh: dailyKwh,
           monthly_kwh: monthlyKwh,
           monthly_cost_idr: monthlyCostIDR,
-          confidence: 60 // Lower confidence for local calculation
+          confidence: 60
         },
         ac: {
           recommended_temp: recommendedTemp,
-          action: action,
-          mode: mode,
+          action,
+          mode,
           confidence: 60
-        }
-      },
+        },
+        modelVersion: 'local_rule_v1'
+      }),
       source: 'local_calculation'
     }
   }
@@ -204,50 +339,72 @@ export function useMLPrediction() {
     error.value = null
     
     try {
+      const normalizedInput = normalizeSensorInput(sensorData)
+      const traceId = sensorData?.trace_id || createTraceId()
+      normalizedInput.trace_id = traceId
+
+      const fallbackChain = []
+
       // Priority 1: Azure Function (cloud-first)
-      let result = await fetchFromAzureFunction(sensorData)
+      let result = await fetchFromAzureFunction(normalizedInput)
+      fallbackChain.push('azure_function')
       
       // Priority 2: ML API (local Flask)
       if (!result.success) {
-        result = await fetchFromMLAPI(sensorData)
+        result = await fetchFromMLAPI(normalizedInput)
+        fallbackChain.push('ml_api')
       }
       
       // Priority 3: Local calculation
       if (!result.success) {
-        result = calculateLocalPrediction(sensorData)
+        result = calculateLocalPrediction(normalizedInput)
+        fallbackChain.push('local_calculation')
       }
       
       // Update state
       if (result.success) {
         const data = result.data
+        const fallbackLevel = FALLBACK_LEVEL_BY_SOURCE[result.source] ?? 2
+
+        predictionMeta.value = {
+          schema_version: data.schema_version,
+          timestamp_utc: data.timestamp_utc,
+          trace_id: data.trace_id,
+          source: data.source,
+          source_tag: data.source_tag,
+          model_version: data.model_version,
+          fallback_level: fallbackLevel,
+          fallback_chain: fallbackChain,
+          input: normalizedInput
+        }
         
         energyPrediction.value = {
           predictedWatt: data.energy.predicted_watt || 0,
           dailyKwh: data.energy.daily_kwh || 0,
           monthlyKwh: data.energy.monthly_kwh || 0,
           monthlyCostIDR: data.energy.monthly_cost_idr || 0,
-          confidence: data.energy.confidence || 0
+          confidence: data.energy.confidence_percent || 0
         }
         
         acRecommendation.value = {
           recommendedTemp: data.ac.recommended_temp || 24,
           action: data.ac.action || 'Pertahankan suhu',
           mode: data.ac.mode || 'maintain',
-          confidence: data.ac.confidence || 0
+          confidence: data.ac.confidence_percent || 0,
+          sourceTag: data.source_tag,
+          fallbackLevel,
+          traceId: data.trace_id
         }
         
-        lastPrediction.value = {
-          timestamp: new Date().toISOString(),
-          source: result.source,
-          input: sensorData
-        }
+        lastPrediction.value = predictionMeta.value
         
         console.log(`[ML] Prediction from ${result.source}:`, {
+          meta: predictionMeta.value,
           energy: energyPrediction.value,
           ac: acRecommendation.value
         })
         
-        return { success: true, source: result.source }
+        return { success: true, source: result.source, meta: predictionMeta.value }
       }
       
       throw new Error('All prediction methods failed')
@@ -309,6 +466,7 @@ export function useMLPrediction() {
     error,
     lastPrediction,
     modelInfo,
+    predictionMeta,
     energyPrediction,
     acRecommendation,
     

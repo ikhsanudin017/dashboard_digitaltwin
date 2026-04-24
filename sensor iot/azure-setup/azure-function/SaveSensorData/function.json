@@ -4,8 +4,8 @@
       "type": "httpTrigger",
       "direction": "in",
       "name": "req",
-      "methods": ["post"],
-      "authLevel": "anonymous",
+      "methods": ["post", "options"],
+      "authLevel": "function",
       "route": "sensor/save"
     },
     {

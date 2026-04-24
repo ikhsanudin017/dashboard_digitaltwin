@@ -8,6 +8,32 @@
 #include <mbedtls/base64.h>
 #include <time.h>
 
+#ifdef __has_include
+#if __has_include("secrets.h")
+#include "secrets.h"
+#endif
+#endif
+
+#ifndef WIFI_SSID
+#define WIFI_SSID "CHANGE_ME_WIFI_SSID"
+#endif
+
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD "CHANGE_ME_WIFI_PASSWORD"
+#endif
+
+#ifndef IOT_HUB_NAME
+#define IOT_HUB_NAME "CHANGE_ME_IOT_HUB_NAME"
+#endif
+
+#ifndef IOT_DEVICE_ID
+#define IOT_DEVICE_ID "CHANGE_ME_DEVICE_ID"
+#endif
+
+#ifndef IOT_DEVICE_KEY
+#define IOT_DEVICE_KEY "CHANGE_ME_DEVICE_KEY"
+#endif
+
 // ===== AZURE IoT Hub ROOT CERTIFICATE =====
 // DigiCert Global Root G2 - Required for Azure IoT Hub TLS
 const char* azure_root_ca = R"EOF(
@@ -36,14 +62,14 @@ p1U=
 )EOF";
 
 // ===== KONFIGURASI WiFi =====
-const char* ssid = "TWIN SPACE";
-const char* password = "12345678";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 // ===== KONFIGURASI AZURE IoT Hub =====
 // Dapatkan nilai-nilai ini dari Azure Portal > IoT Hub > Devices
-const char* iotHubName = "iothub-digitaltwin-2026";        // Nama IoT Hub (tanpa .azure-devices.net)
-const char* deviceId = "ESP32_ENERGY_MONITOR_001";         // Device ID yang terdaftar di IoT Hub
-const char* deviceKey = "PgTM+KsKJtOWWNruP44afGCZbvQg/u5VxL1+L4zJXSg=";  // Primary Key device
+const char* iotHubName = IOT_HUB_NAME;        // Nama IoT Hub (tanpa .azure-devices.net)
+const char* deviceId = IOT_DEVICE_ID;         // Device ID yang terdaftar di IoT Hub
+const char* deviceKey = IOT_DEVICE_KEY;       // Primary Key device
 
 // MQTT Configuration untuk Azure IoT Hub
 String mqtt_server = String(iotHubName) + ".azure-devices.net";

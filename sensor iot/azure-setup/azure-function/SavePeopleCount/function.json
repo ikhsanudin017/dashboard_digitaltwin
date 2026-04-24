@@ -5,7 +5,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["post", "options"],
-      "authLevel": "anonymous",
+      "authLevel": "function",
       "route": "people/save"
     },
     {

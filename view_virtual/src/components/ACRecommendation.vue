@@ -133,7 +133,6 @@
 </template>
 
 <script>
-import { useAPI } from '../composables/useAPI';
 import { useMLPrediction } from '../composables/useMLPrediction';
 import { AZURE_FUNCTION_URL } from '../lib/appConfig';
 
@@ -160,11 +159,9 @@ export default {
     }
   },
   setup() {
-    const { fetchData } = useAPI();
     const mlPrediction = useMLPrediction();
 
     return {
-      fetchData,
       mlPrediction
     };
   },
@@ -256,6 +253,7 @@ export default {
           // Format recommendation dari ML prediction
           const ac = this.mlPrediction.acRecommendation.value;
           const energy = this.mlPrediction.energyPrediction.value;
+          const meta = this.mlPrediction.predictionMeta.value || {};
           
           this.recommendation = {
             recommendedTemp: ac.recommendedTemp,
@@ -263,7 +261,7 @@ export default {
             comfortLevel: this.getComfortLevel(ac.mode),
             reason: ac.action,
             energySavingPercent: this.calculateSaving(ac.recommendedTemp),
-            confidence: ac.confidence / 100,
+            confidence: this.normalizeConfidenceScore(ac.confidence),
             factors: {
               ambient_temp: this.localSensorData.suhu,
               humidity: this.localSensorData.kelembaban,
@@ -272,6 +270,9 @@ export default {
               current_hour: new Date().getHours()
             },
             mlSource: mlResult.source,
+            sourceTag: meta.source_tag || `${mlResult.source}:prediction`,
+            fallbackLevel: meta.fallback_level,
+            traceId: meta.trace_id,
             energyPrediction: {
               watt: energy.predictedWatt,
               dailyKwh: energy.dailyKwh,
@@ -326,23 +327,56 @@ export default {
     
     async fetchFromAzureFunction() {
       try {
-        const response = await this.fetchData(
-          '/api/ac-recommendation/latest-with-recommendation',
-          {
-            method: 'POST',
-            body: JSON.stringify({})
-          }
-        );
+        const response = await fetch(`${AZURE_FUNCTION_URL}/ac-recommendation/latest-with-recommendation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({})
+        });
 
-        if (response.success) {
-          this.recommendation = response.data.recommendation;
+        const payload = await response.json();
+
+        if (response.ok && payload.success && payload.data?.recommendation) {
+          const recommendation = payload.data.recommendation;
+          this.recommendation = {
+            recommendedTemp: recommendation.recommendedTemp || recommendation.recommended_temp || 24,
+            emoji: recommendation.emoji || this.getEmoji(recommendation.mode),
+            comfortLevel: recommendation.comfortLevel || this.getComfortLevel(recommendation.mode),
+            reason: recommendation.reason || recommendation.action || 'Pertahankan suhu AC',
+            energySavingPercent: recommendation.energySavingPercent || this.calculateSaving(recommendation.recommendedTemp || 24),
+            confidence: this.normalizeConfidenceScore(recommendation.confidence),
+            factors: recommendation.factors || {
+              ambient_temp: this.localSensorData.suhu,
+              humidity: this.localSensorData.kelembaban,
+              people_count: this.localSensorData.jumlahOrang || 0,
+              power_consumption: (this.localSensorData.daya / 1000).toFixed(2),
+              current_hour: new Date().getHours()
+            },
+            mlSource: 'azure_function',
+            sourceTag: 'azure_function:prediction',
+            fallbackLevel: 0,
+            traceId: payload.trace_id || null,
+            energyPrediction: {
+              watt: this.localSensorData.daya,
+              dailyKwh: (this.localSensorData.daya * 24) / 1000,
+              monthlyCost: ((this.localSensorData.daya * 24 * 30) / 1000) * 1444.70
+            }
+          };
+
           this.updateLastUpdateTime();
         } else {
-          this.error = response.error || 'Failed to fetch recommendation';
+          this.error = payload.error || 'Failed to fetch recommendation';
         }
       } catch (err) {
         throw err;
       }
+    },
+
+    normalizeConfidenceScore(value) {
+      const numeric = Number(value) || 0;
+      const percent = numeric <= 1 ? numeric * 100 : numeric;
+      return Math.max(0, Math.min(1, percent / 100));
     },
     
     getEmoji(mode) {

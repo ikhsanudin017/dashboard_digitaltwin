@@ -1,9 +1,9 @@
 const { TableClient } = require("@azure/data-tables");
 
 /**
- * Azure Function: Save Sensor Data (Anonymous)
+ * Azure Function: Save Sensor Data (Protected)
  * Receives sensor data via HTTP POST and stores to Azure Storage Table
- * This endpoint doesn't require authentication - for ESP32 direct posting
+ * This endpoint requires Function Key authentication
  */
 module.exports = async function (context, req) {
     // Enable CORS
@@ -11,7 +11,7 @@ module.exports = async function (context, req) {
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, x-functions-key, Authorization',
             'Content-Type': 'application/json'
         }
     };

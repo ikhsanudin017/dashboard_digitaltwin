@@ -34,6 +34,9 @@ sensor iot/bridge/query-latest.js
 .env
 .env.local
 client_secret_*.json
+sensor iot/azure-setup/azure-function/local.settings.json
+sensor iot/include/secrets.h
+sensor iot/raspberry-pi/.env
 
 # OS
 .DS_Store

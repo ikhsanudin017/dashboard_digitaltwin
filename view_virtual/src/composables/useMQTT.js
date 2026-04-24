@@ -1,5 +1,5 @@
 import { ref, watch, onUnmounted } from 'vue'
-import { AZURE_FUNCTION_URL } from '../lib/appConfig'
+import { AZURE_FUNCTION_URL, AZURE_FUNCTION_WRITE_KEY } from '../lib/appConfig'
 
 const STORAGE_KEY = 'sensor_last_data'
 
@@ -158,10 +158,16 @@ export function useMQTT() {
   // Save people count to Azure (called from camera detection)
   const savePeopleCount = async (count, location = 'Ruang Utama') => {
     try {
+      if (!AZURE_FUNCTION_WRITE_KEY) {
+        console.warn('⚠️ VITE_AZURE_FUNCTION_WRITE_KEY belum diisi. Endpoint write Azure Function tidak bisa dipanggil.')
+        return false
+      }
+
       const response = await fetch(`${AZURE_FUNCTION_URL}/people/save`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-functions-key': AZURE_FUNCTION_WRITE_KEY
         },
         body: JSON.stringify({
           count: count,

@@ -11,7 +11,7 @@ module.exports = async function (context, req) {
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, x-functions-key, Authorization',
             'Content-Type': 'application/json'
         }
     };
