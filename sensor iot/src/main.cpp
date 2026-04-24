@@ -122,7 +122,10 @@ DHT dht(DHTPIN, DHTTYPE);
 IRsend irsend(IR_TX_PIN);
 IRrecv irrecv(IR_RX_PIN, IR_CAPTURE_BUFFER_SIZE, IR_CAPTURE_TIMEOUT_MS, true);
 decode_results irResults;
-IRGreeAC greeAc(IR_TX_PIN);
+// Model eksplisit: coba YAW1F dulu. Jika AC tidak respon, ganti ke YBOFB atau YX1FSF.
+// Parameter ketiga (true) = aktifkan inversi sinyal (beberapa unit Gree butuh ini).
+// Bisa juga diganti runtime via serial: ac-model ybofb
+IRGreeAC greeAc(IR_TX_PIN, gree_ac_remote_model_t::YAW1F, true);
 WiFiClientSecure espClient;  // Gunakan WiFiClientSecure untuk TLS
 PubSubClient client(espClient);
 Preferences rawIrPrefs;
@@ -597,10 +600,18 @@ bool sendRawIrFrame(uint16_t* frame, uint16_t frameLen, uint8_t repeatCount, con
     repeatCount = 1;
   }
 
+  // Matikan receiver sementara untuk menghindari self-capture dan timer conflict
+  irrecv.disableIRIn();
+  delay(5);
+
   for (uint8_t i = 0; i < repeatCount; i++) {
     irsend.sendRaw(frame, frameLen, IR_SEND_FREQUENCY_KHZ);
     delay(80);
   }
+
+  // Nyalakan kembali receiver setelah selesai kirim
+  delay(20);
+  irrecv.enableIRIn();
 
   lastIrSendAt = millis();
   Serial.print("✅ IR terkirim (");
@@ -1026,12 +1037,21 @@ bool sendAcCommandNow(bool powerOn, uint8_t mode, uint8_t fan, uint8_t setpoint,
   bool sent = trySendRawAcState(powerOn, mode, fan, setpoint, bypassCooldown, &appliedMode, &appliedSetpoint);
 
   if (!sent) {
+    // Matikan receiver sementara untuk menghindari self-capture dan timer conflict
+    irrecv.disableIRIn();
+    delay(5);
+
     greeAc.setPower(powerOn);
     greeAc.setMode(mode);
     greeAc.setFan(fan);
     greeAc.setTemp(setpoint);
     greeAc.setSwingVertical(true, kGreeSwingAuto);
-    greeAc.send();
+    greeAc.send(kGreeDefaultRepeat + 1);
+
+    // Nyalakan kembali receiver setelah selesai kirim
+    delay(20);
+    irrecv.enableIRIn();
+
     lastIrSendAt = millis();
     appliedMode = mode;
     appliedSetpoint = setpoint;
