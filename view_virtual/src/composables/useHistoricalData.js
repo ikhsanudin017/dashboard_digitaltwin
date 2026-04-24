@@ -4,6 +4,10 @@ import { AZURE_FUNCTION_URL } from '../lib/appConfig'
 
 const STORAGE_KEY = 'digitaltwin_historical_data'
 const MAX_DATA_POINTS = 10000
+const DEFAULT_HISTORY_HOURS = 720
+const DEFAULT_HISTORY_LIMIT = 5000
+const RECENT_HISTORY_HOURS = 48
+const RECENT_HISTORY_LIMIT = 1000
 
 // Shared store so DashboardHome and HistoricalAnalytics see the same history.
 const historicalData = ref([])
@@ -47,7 +51,7 @@ const sortByTimestampAsc = data => {
 }
 
 const normalizeDataPoint = sensorData => ({
-  timestamp: sensorData.timestamp || new Date().toISOString(),
+  timestamp: sensorData.timestamp || sensorData.receivedAt || new Date().toISOString(),
   temperature: sensorData.temperature ?? sensorData.suhu ?? null,
   humidity: sensorData.humidity ?? sensorData.kelembaban ?? null,
   voltage: sensorData.voltage ?? sensorData.tegangan ?? null,
@@ -56,13 +60,40 @@ const normalizeDataPoint = sensorData => ({
   peopleCount: sensorData.peopleCount ?? sensorData.jumlahOrang ?? 0
 })
 
+const buildDataPointKey = (item) => {
+  return [
+    item.timestamp,
+    item.temperature ?? '',
+    item.humidity ?? '',
+    item.voltage ?? '',
+    item.current ?? '',
+    item.power ?? '',
+    item.peopleCount ?? ''
+  ].join('|')
+}
+
+const mergeUniqueDataPoints = (...collections) => {
+  const merged = new Map()
+
+  collections
+    .flat()
+    .filter(Boolean)
+    .forEach(item => {
+      const normalized = normalizeDataPoint(item)
+      merged.set(buildDataPointKey(normalized), normalized)
+    })
+
+  return sortByTimestampAsc([...merged.values()])
+}
+
 const saveHistoricalData = () => {
   try {
+    historicalData.value = mergeUniqueDataPoints(historicalData.value)
+
     if (historicalData.value.length > MAX_DATA_POINTS) {
       historicalData.value = historicalData.value.slice(-MAX_DATA_POINTS)
     }
 
-    historicalData.value = sortByTimestampAsc(historicalData.value)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(historicalData.value))
   } catch (error) {
     console.error('Error saving historical data:', error)
@@ -72,80 +103,148 @@ const saveHistoricalData = () => {
 const loadCachedHistoricalData = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
-    return stored ? JSON.parse(stored) : []
+    return stored ? mergeUniqueDataPoints(JSON.parse(stored)) : []
   } catch (error) {
     console.error('Error loading cached historical data:', error)
     return []
   }
 }
 
-const mergeAzureWithPendingLocal = (azureData, cachedData) => {
-  if (!azureData.length) return sortByTimestampAsc(cachedData)
+const fetchAzureHistoryWindow = async ({ hours = DEFAULT_HISTORY_HOURS, limit = DEFAULT_HISTORY_LIMIT } = {}) => {
+  if (!AZURE_FUNCTION_URL) return []
 
-  const latestAzureTimestamp = Math.max(...azureData.map(item => toTimestamp(item.timestamp)))
-  const pendingLocalData = cachedData.filter(item => toTimestamp(item.timestamp) > latestAzureTimestamp)
+  const response = await axios.get(`${AZURE_FUNCTION_URL}/telemetry/history?hours=${hours}&limit=${limit}`, {
+    timeout: 15000
+  })
 
-  return sortByTimestampAsc([...azureData, ...pendingLocalData])
+  if (!response.data.success || !Array.isArray(response.data.data)) {
+    return []
+  }
+
+  return response.data.data.map(item => normalizeDataPoint({
+    timestamp: item.timestamp || item.receivedAt,
+    receivedAt: item.receivedAt,
+    suhu: item.suhu,
+    kelembaban: item.kelembaban,
+    tegangan: item.tegangan,
+    arus: item.arus,
+    daya: item.daya,
+    jumlahOrang: item.jumlahOrang
+  }))
+}
+
+const fetchAzureLatestPoint = async () => {
+  if (!AZURE_FUNCTION_URL) return null
+
+  const response = await axios.get(`${AZURE_FUNCTION_URL}/telemetry/latest`, {
+    timeout: 10000
+  })
+
+  if (!response.data.success || !response.data.data) {
+    return null
+  }
+
+  return normalizeDataPoint({
+    timestamp: response.data.data.timestamp,
+    suhu: response.data.data.suhu,
+    kelembaban: response.data.data.kelembaban,
+    tegangan: response.data.data.tegangan,
+    arus: response.data.data.arus,
+    daya: response.data.data.daya,
+    jumlahOrang: response.data.data.jumlahOrang
+  })
+}
+
+const mergeAzureWithPendingLocal = (azureData, cachedData, existingData) => {
+  return mergeUniqueDataPoints(cachedData, existingData, azureData)
 }
 
 export function useHistoricalData() {
-  const loadHistoricalData = async ({ background = false } = {}) => {
+  const loadHistoricalData = async ({
+    background = false,
+    hours = DEFAULT_HISTORY_HOURS,
+    limit = DEFAULT_HISTORY_LIMIT
+  } = {}) => {
     if (!background) {
       isLoading.value = true
     }
 
     const cachedData = loadCachedHistoricalData()
 
-    if (AZURE_FUNCTION_URL) {
-      try {
-        console.log('🔵 Loading data from Azure Storage...')
-        const response = await axios.get(`${AZURE_FUNCTION_URL}/telemetry/history?hours=720&limit=5000`, {
-          timeout: 15000
-        })
+    try {
+      if (AZURE_FUNCTION_URL) {
+        console.log('Loading historical data from Azure...', { hours, limit })
 
-        if (response.data.success && response.data.data?.length > 0) {
-          const azureData = response.data.data.map(item => normalizeDataPoint({
-            timestamp: item.timestamp,
-            suhu: item.suhu,
-            kelembaban: item.kelembaban,
-            tegangan: item.tegangan,
-            arus: item.arus,
-            daya: item.daya,
-            jumlahOrang: item.jumlahOrang
+        const requests = [fetchAzureHistoryWindow({ hours, limit })]
+
+        if (hours > RECENT_HISTORY_HOURS) {
+          requests.push(fetchAzureHistoryWindow({
+            hours: RECENT_HISTORY_HOURS,
+            limit: Math.min(limit, RECENT_HISTORY_LIMIT)
           }))
+        }
 
-          historicalData.value = mergeAzureWithPendingLocal(azureData, cachedData)
+        requests.push(fetchAzureLatestPoint())
+
+        const results = await Promise.all(requests)
+        const latestPoint = results.pop()
+        const recentData = hours > RECENT_HISTORY_HOURS ? results.pop() : []
+        const requestedWindow = results[0] || []
+        const azureData = mergeUniqueDataPoints(
+          requestedWindow,
+          recentData || [],
+          latestPoint ? [latestPoint] : []
+        )
+
+        if (azureData.length > 0) {
+          historicalData.value = mergeAzureWithPendingLocal(azureData, cachedData, historicalData.value)
           saveHistoricalData()
 
-          console.log('✅ Azure Storage data loaded:', historicalData.value.length, 'records')
-
-          if (!background) {
-            isLoading.value = false
-          }
-
-          return
+          console.log('Azure Storage data loaded:', historicalData.value.length, 'records')
+          return historicalData.value
         }
-      } catch (azureError) {
-        console.warn('⚠️ Azure Storage error:', azureError.message)
+      }
+
+      historicalData.value = mergeUniqueDataPoints(cachedData, historicalData.value)
+
+      if (historicalData.value.length > 0) {
+        console.log('Historical data loaded from cache:', historicalData.value.length, 'records')
+      } else {
+        console.log('No historical data available')
+      }
+
+      return historicalData.value
+    } catch (error) {
+      console.warn('Azure historical data error:', error.message)
+      historicalData.value = mergeUniqueDataPoints(cachedData, historicalData.value)
+      return historicalData.value
+    } finally {
+      if (!background) {
+        isLoading.value = false
       }
     }
+  }
 
-    historicalData.value = sortByTimestampAsc(cachedData)
+  const loadHistoricalDataForRange = async (startDate, endDate, options = {}) => {
+    const start = toTimestamp(startDate)
+    const end = toTimestamp(endDate)
 
-    if (historicalData.value.length > 0) {
-      console.log('📂 Historical data loaded from cache:', historicalData.value.length, 'records')
-    } else {
-      console.log('ℹ️ No historical data available')
+    if (!start || !end || end < start) {
+      return loadHistoricalData(options)
     }
 
-    if (!background) {
-      isLoading.value = false
-    }
+    const requestedHours = Math.max(24, Math.ceil((end - start) / 3600000) + 6)
+
+    return loadHistoricalData({
+      ...options,
+      hours: requestedHours,
+      limit: DEFAULT_HISTORY_LIMIT
+    })
   }
 
   const addDataPoint = (sensorData) => {
     const dataPoint = normalizeDataPoint(sensorData)
-    historicalData.value = sortByTimestampAsc([...historicalData.value, dataPoint])
+    historicalData.value = mergeUniqueDataPoints(historicalData.value, [dataPoint])
     saveHistoricalData()
   }
 
@@ -263,7 +362,7 @@ export function useHistoricalData() {
     link.click()
     document.body.removeChild(link)
 
-    console.log('✅ Data exported:', sortedData.length, 'records (newest first)')
+    console.log('Data exported:', sortedData.length, 'records (newest first)')
   }
 
   const calculateStats = (values) => {
@@ -319,6 +418,7 @@ export function useHistoricalData() {
     historicalData,
     isLoading,
     loadHistoricalData,
+    loadHistoricalDataForRange,
     addDataPoint,
     getDataByDateRange,
     getAggregatedData,

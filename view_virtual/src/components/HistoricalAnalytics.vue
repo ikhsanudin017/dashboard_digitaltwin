@@ -46,6 +46,14 @@
       </div>
       
       <!-- Statistics Cards -->
+      <div v-if="statistics" class="stats-summary-bar">
+        <div class="stats-summary-chip">
+          <span class="stats-summary-label">Jumlah Data</span>
+          <strong class="stats-summary-value">{{ statistics.totalRecords }}</strong>
+          <span class="stats-summary-label">data points</span>
+        </div>
+      </div>
+
       <div v-if="statistics" class="stats-grid">
         <div class="stat-card">
           <div class="stat-icon">🌡️</div>
@@ -202,7 +210,17 @@ const props = defineProps({
   }
 })
 
-const { historicalData, isLoading, loadHistoricalData, getDataByDateRange, getAggregatedData, getAvailableDateRange, exportToCSV, getStatistics } = useHistoricalData()
+const {
+  historicalData,
+  isLoading,
+  loadHistoricalData,
+  loadHistoricalDataForRange,
+  getDataByDateRange,
+  getAggregatedData,
+  getAvailableDateRange,
+  exportToCSV,
+  getStatistics
+} = useHistoricalData()
 
 const isExpanded = ref(false)
 const AUTO_REFRESH_INTERVAL = 30000
@@ -272,53 +290,52 @@ function getDateDaysAgo(days) {
   return formatDateInput(date)
 }
 
-function applyFilter() {
+async function applyFilter() {
   startDate.value = tempStartDate.value
   endDate.value = tempEndDate.value
+  await refreshHistoricalData()
 }
 
-function selectToday() {
+async function selectToday() {
   tempStartDate.value = today
   tempEndDate.value = today
-  applyFilter()
+  await applyFilter()
 }
 
-function selectYesterday() {
+async function selectYesterday() {
   const yesterday = getDateDaysAgo(1)
   tempStartDate.value = yesterday
   tempEndDate.value = yesterday
-  applyFilter()
+  await applyFilter()
 }
 
-function select7Days() {
+async function select7Days() {
   tempStartDate.value = getDateDaysAgo(7)
   tempEndDate.value = today
-  applyFilter()
+  await applyFilter()
 }
 
-function select30Days() {
+async function select30Days() {
   tempStartDate.value = getDateDaysAgo(30)
   tempEndDate.value = today
-  applyFilter()
+  await applyFilter()
 }
 
-function select90Days() {
+async function select90Days() {
   tempStartDate.value = getDateDaysAgo(90)
   tempEndDate.value = today
-  applyFilter()
+  await applyFilter()
 }
 
 async function selectAllTime() {
-  if (!availableDateRange.value) {
-    await refreshHistoricalData(true)
-  }
+  await loadHistoricalData({ background: true })
 
   const range = getAvailableDateRange()
   if (!range) return
 
   tempStartDate.value = range.startDate
   tempEndDate.value = range.endDate
-  applyFilter()
+  await applyFilter()
 }
 
 async function refreshHistoricalData(background = false) {
@@ -327,7 +344,10 @@ async function refreshHistoricalData(background = false) {
   }
 
   try {
-    await loadHistoricalData({ background })
+    const start = parseDateInput(startDate.value)
+    const end = parseDateInput(endDate.value, true)
+
+    await loadHistoricalDataForRange(start, end, { background })
     lastSyncAt.value = new Date()
   } finally {
     if (!background) {
@@ -707,11 +727,58 @@ const formatTimestamp = (ts) => {
   color: white;
 }
 
+.stats-summary-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.stats-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  color: #0f172a;
+}
+
+.dark .stats-summary-chip {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.24);
+  color: #e2e8f0;
+}
+
+.stats-summary-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.dark .stats-summary-label {
+  color: #cbd5e1;
+}
+
+.stats-summary-value {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0891b2;
+}
+
+.dark .stats-summary-value {
+  color: #67e8f9;
+}
+
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 15px;
   margin-bottom: 20px;
+}
+
+.stats-grid .stat-card:last-child {
+  display: none;
 }
 
 .stat-card {
@@ -864,6 +931,18 @@ const formatTimestamp = (ts) => {
   box-shadow: 0 8px 12px rgba(16, 185, 129, 0.4);
 }
 
+@media (max-width: 1280px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
   .historical-section {
     padding: 15px;
@@ -871,6 +950,10 @@ const formatTimestamp = (ts) => {
   
   .section-header h2 {
     font-size: 1.2rem;
+  }
+
+  .stats-summary-bar {
+    justify-content: flex-start;
   }
   
   .stats-grid {

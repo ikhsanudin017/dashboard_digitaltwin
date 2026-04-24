@@ -112,9 +112,10 @@ async function handleHistory(context, tableClient, hours, limit) {
 
     const data = [];
     for await (const entity of entities) {
-        if (new Date(entity.timestamp) >= cutoffTime) {
+        const entityTimestamp = entity.timestamp || entity.receivedAt;
+        if (entityTimestamp && new Date(entityTimestamp) >= cutoffTime) {
             data.push({
-                timestamp: entity.timestamp,
+                timestamp: entityTimestamp,
                 suhu: entity.suhu,
                 kelembaban: entity.kelembaban,
                 tegangan: entity.tegangan,
@@ -150,7 +151,8 @@ async function handleStats(context, tableClient, hours) {
     let maxDaya = -Infinity, minDaya = Infinity;
 
     for await (const entity of entities) {
-        if (new Date(entity.timestamp) >= cutoffTime) {
+        const entityTimestamp = entity.timestamp || entity.receivedAt;
+        if (entityTimestamp && new Date(entityTimestamp) >= cutoffTime) {
             count++;
             totalSuhu += entity.suhu || 0;
             totalKelembaban += entity.kelembaban || 0;

@@ -14,6 +14,8 @@ import {
 } from 'firebase/auth'
 import { auth, googleProvider, isFirebaseConfigured } from '../lib/firebase'
 
+const LOCAL_ADMIN_PROFILE_STORAGE_KEY = 'twinspace_local_admin_profile'
+
 const user = ref(null)
 const isAuthReady = ref(false)
 const isSigningIn = ref(false)
@@ -21,12 +23,60 @@ const authError = ref('')
 
 let authObserverInitialized = false
 const credentialDomain = String(import.meta.env.VITE_AUTH_DEFAULT_DOMAIN || '').trim().toLowerCase()
+const localAdminEmail = String(import.meta.env.VITE_LOCAL_ADMIN_EMAIL || '').trim().toLowerCase()
+const localAdminPassword = String(import.meta.env.VITE_LOCAL_ADMIN_PASSWORD || '').trim()
+const localAdminName = String(import.meta.env.VITE_LOCAL_ADMIN_NAME || 'TwinSpace Admin').trim() || 'TwinSpace Admin'
 const adminEmailAllowlist = new Set(
   String(import.meta.env.VITE_ADMIN_EMAILS || '')
     .split(',')
     .map(email => email.trim().toLowerCase())
     .filter(Boolean)
 )
+
+const readStoredLocalAdminProfile = () => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const raw = window.sessionStorage.getItem(LOCAL_ADMIN_PROFILE_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw)
+    const email = String(parsed?.email || '').trim().toLowerCase()
+    if (!email) return null
+
+    return {
+      uid: String(parsed?.uid || 'local-admin'),
+      email,
+      displayName: String(parsed?.displayName || localAdminName).trim() || localAdminName,
+      isLocalAdmin: true
+    }
+  } catch {
+    return null
+  }
+}
+
+const persistLocalAdminProfile = profile => {
+  if (typeof window === 'undefined') return
+
+  window.sessionStorage.setItem(
+    LOCAL_ADMIN_PROFILE_STORAGE_KEY,
+    JSON.stringify({
+      uid: profile.uid,
+      email: profile.email,
+      displayName: profile.displayName
+    })
+  )
+}
+
+const clearStoredLocalAdminProfile = () => {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.removeItem(LOCAL_ADMIN_PROFILE_STORAGE_KEY)
+}
+
+const localAdminProfile = ref(readStoredLocalAdminProfile())
+if (localAdminProfile.value) {
+  user.value = localAdminProfile.value
+}
 
 const resolveCredentialEmail = identifier => {
   const normalizedIdentifier = String(identifier || '').trim().toLowerCase()
@@ -89,6 +139,7 @@ const initializeAuthObserver = () => {
   if (authObserverInitialized) return
 
   if (!isFirebaseConfigured || !auth) {
+    user.value = localAdminProfile.value
     isAuthReady.value = true
     authObserverInitialized = true
     return
@@ -101,11 +152,12 @@ const initializeAuthObserver = () => {
   onAuthStateChanged(
     auth,
     currentUser => {
-      user.value = currentUser
+      user.value = currentUser || localAdminProfile.value
       isAuthReady.value = true
     },
     error => {
       authError.value = mapAuthError(error)
+      user.value = localAdminProfile.value
       isAuthReady.value = true
     }
   )
@@ -221,6 +273,17 @@ export function useFirebaseAuth() {
   }
 
   const getAdminRoleStatus = async ({ forceRefresh = false } = {}) => {
+    if (localAdminProfile.value) {
+      return {
+        success: true,
+        authorized: true,
+        email: localAdminProfile.value.email,
+        claims: { admin: true, role: 'admin', local: true },
+        source: 'local-env',
+        error: ''
+      }
+    }
+
     if (!isFirebaseConfigured || !auth || !auth.currentUser) {
       return { success: false, error: 'Sesi login tidak ditemukan.' }
     }
@@ -248,6 +311,41 @@ export function useFirebaseAuth() {
   }
 
   const signInAsAdmin = async ({ identifier, password }) => {
+    const resolvedEmail = resolveCredentialEmail(identifier) || String(identifier || '').trim().toLowerCase()
+    const normalizedPassword = String(password || '')
+
+    if (localAdminEmail && localAdminPassword && resolvedEmail === localAdminEmail) {
+      if (normalizedPassword !== localAdminPassword) {
+        authError.value = 'Password admin tidak valid.'
+        return { success: false, error: authError.value }
+      }
+
+      isSigningIn.value = true
+      authError.value = ''
+
+      try {
+        const profile = {
+          uid: 'local-admin',
+          email: localAdminEmail,
+          displayName: localAdminName,
+          isLocalAdmin: true
+        }
+
+        localAdminProfile.value = profile
+        persistLocalAdminProfile(profile)
+        user.value = profile
+
+        return {
+          success: true,
+          claims: { admin: true, role: 'admin', local: true },
+          roleSource: 'local-env',
+          email: localAdminEmail
+        }
+      } finally {
+        isSigningIn.value = false
+      }
+    }
+
     const signInResult = await signInWithEmailPassword({
       identifier,
       password,
@@ -275,10 +373,20 @@ export function useFirebaseAuth() {
   }
 
   const signOutUser = async () => {
-    if (!auth) return { success: true }
+    localAdminProfile.value = null
+    clearStoredLocalAdminProfile()
+
+    if (!auth) {
+      user.value = null
+      return { success: true }
+    }
 
     try {
-      await signOut(auth)
+      if (auth.currentUser) {
+        await signOut(auth)
+      } else {
+        user.value = null
+      }
       return { success: true }
     } catch (error) {
       authError.value = 'Gagal keluar dari sesi login.'

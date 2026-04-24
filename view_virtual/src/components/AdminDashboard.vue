@@ -1,6 +1,5 @@
 <template>
   <div class="admin" :class="{ dark: isDarkMode }">
-    <!-- Sidebar (Drawer on mobile) -->
     <aside class="sidebar" :class="{ 'mobile-open': isMobileMenuOpen }">
       <div class="sidebar-brand">
         <div class="brand-logo-wrap">
@@ -8,9 +7,8 @@
         </div>
         <div class="brand-text">
           <span class="brand-title">TwinSpace</span>
-          <span class="brand-role">Admin Panel</span>
+          <span class="brand-role">ADMIN PANEL</span>
         </div>
-        <!-- Close button on mobile -->
         <button class="menu-close-btn" @click="isMobileMenuOpen = false">✕</button>
       </div>
 
@@ -44,15 +42,11 @@
       </div>
     </aside>
 
-    <!-- Overlay backrop for mobile menu -->
     <div v-if="isMobileMenuOpen" class="mobile-overlay" @click="isMobileMenuOpen = false"></div>
 
-    <!-- Main Content -->
     <main class="main-content">
-      <!-- Top Bar -->
       <header class="topbar">
         <div class="topbar-left">
-          <!-- Burger toggle for mobile -->
           <button class="burger-btn" @click="isMobileMenuOpen = true">
             <span></span><span></span><span></span>
           </button>
@@ -72,7 +66,6 @@
         </div>
       </header>
 
-      <!-- Section: Overview -->
       <section v-if="activeSection === 'overview'" class="section">
         <div class="overview-head">
           <div class="overview-copy">
@@ -129,20 +122,11 @@
               <span class="stat-value">{{ sensorData.voltage.toFixed(1) }}V</span>
             </div>
           </div>
-          <div class="stat-card pink">
-            <div class="stat-icon-bg">✅</div>
-            <div class="stat-body">
-              <span class="stat-label">Perangkat Aktif</span>
-              <span class="stat-value">{{ devices.filter(d => d.statusClass === 'online').length }} / {{ devices.length }}</span>
-            </div>
-          </div>
         </div>
 
-        <!-- Quick Actions -->
         <div class="panel">
           <h2 class="panel-title">⚡ Quick Actions</h2>
           <div class="action-grid">
-
             <button class="quick-action" @click="activeSection = 'energy'">
               <span>💰</span> Energy Management
             </button>
@@ -155,7 +139,6 @@
           </div>
         </div>
 
-        <!-- Recent Activity Log -->
         <div class="panel">
           <h2 class="panel-title">🕐 Activity Log</h2>
           <div class="log-list">
@@ -170,50 +153,67 @@
         </div>
       </section>
 
-      <!-- Section: Data Export -->
-
-
-      <!-- Section: Energy Management -->
       <section v-if="activeSection === 'energy'" class="section">
         <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" />
       </section>
 
-      <!-- Section: Historical Analytics -->
       <section v-if="activeSection === 'analytics'" class="section">
         <HistoricalAnalytics :is-dark-mode="isDarkMode" :current-people-count="sensorData.peopleCount || 0" />
       </section>
 
-      <!-- Section: Device Management -->
       <section v-if="activeSection === 'devices'" class="section">
         <div class="panel">
           <h2 class="panel-title">🔧 Manajemen Perangkat IoT</h2>
           <div class="device-grid">
             <div v-for="device in devices" :key="device.id" class="device-card" :class="device.statusClass">
-              <div class="device-icon">{{ device.icon }}</div>
+              <div class="device-card-head">
+                <div class="device-icon">{{ device.icon }}</div>
+                <div class="device-status-wrap" :class="device.statusClass">
+                  <span class="device-status-dot" :class="device.statusClass"></span>
+                  <span class="device-status-text">{{ device.status }}</span>
+                </div>
+              </div>
               <div class="device-info">
                 <strong>{{ device.name }}</strong>
                 <span class="device-id">{{ device.id }}</span>
-                <span class="device-type">{{ device.type }}</span>
               </div>
-              <div class="device-status-wrap">
-                <span class="device-status-dot" :class="device.statusClass"></span>
-                <span class="device-status-text">{{ device.status }}</span>
+              <span class="device-type">{{ device.type }}</span>
+              <div class="device-meta">
+                <span class="device-last-label">Update terakhir</span>
+                <span class="device-last">{{ device.lastSeen }}</span>
               </div>
-              <span class="device-last">{{ device.lastSeen }}</span>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Section: Alert Settings -->
       <section v-if="activeSection === 'alerts'" class="section">
-        <div class="panel">
-          <h2 class="panel-title">🔔 Pengaturan Alert & Threshold</h2>
+        <div class="panel alert-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">🔔 Pengaturan Alert & Threshold</h2>
+              <p class="panel-desc">Atur batas aman setiap parameter dan pantau status sensor secara langsung.</p>
+            </div>
+            <div class="alert-summary" :class="activeAlertCount > 0 ? 'danger' : 'ok'">
+              <span class="alert-summary-dot"></span>
+              <span>{{ activeAlertCount > 0 ? `${activeAlertCount} alert aktif` : 'Semua parameter normal' }}</span>
+            </div>
+          </div>
           <div class="alert-grid">
-            <div v-for="alert in alertSettings" :key="alert.key" class="alert-card">
-              <div class="alert-header">
-                <span class="alert-icon">{{ alert.icon }}</span>
-                <strong>{{ alert.label }}</strong>
+            <div v-for="alert in alertSettings" :key="alert.key" class="alert-card" :class="getAlertStatus(alert)">
+              <div class="alert-card-top">
+                <div class="alert-header">
+                  <span class="alert-icon-wrap">
+                    <span class="alert-icon">{{ alert.icon }}</span>
+                  </span>
+                  <div class="alert-header-copy">
+                    <strong>{{ alert.label }}</strong>
+                    <span class="alert-current">Saat ini {{ formatAlertValue(alert) }}</span>
+                  </div>
+                </div>
+                <div class="alert-badge" :class="getAlertStatus(alert)">
+                  {{ getAlertBadgeText(alert) }}
+                </div>
               </div>
               <div class="alert-inputs">
                 <div class="input-group">
@@ -230,13 +230,13 @@
               </div>
             </div>
           </div>
-          <div class="panel-actions">
+          <div class="panel-actions alert-actions">
+            <span class="panel-note">Threshold ini dipakai sebagai batas visual monitoring di dashboard admin.</span>
             <button class="btn-primary" @click="saveAlertSettings">💾 Simpan Pengaturan</button>
           </div>
         </div>
       </section>
 
-      <!-- Section: System Settings -->
       <section v-if="activeSection === 'settings'" class="section">
         <div class="panel">
           <h2 class="panel-title">⚙️ Pengaturan Sistem</h2>
@@ -293,18 +293,26 @@
           </div>
         </div>
 
-        <!-- System Info -->
-        <div class="panel">
-          <h2 class="panel-title">ℹ️ Informasi Sistem</h2>
+        <div class="panel system-info-panel">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">ℹ️ Informasi Sistem</h2>
+              <p class="panel-desc">Ringkasan stack teknologi yang menopang dashboard, data pipeline, dan perangkat IoT.</p>
+            </div>
+            <div class="system-stack-pill">
+              <span class="system-stack-dot"></span>
+              <span>{{ systemInfoItems.length }} komponen inti</span>
+            </div>
+          </div>
           <div class="info-grid">
-            <div class="info-item"><span>Frontend</span><strong>Vue 3 + Vite</strong></div>
-            <div class="info-item"><span>3D Engine</span><strong>Babylon.js</strong></div>
-            <div class="info-item"><span>Chart</span><strong>Chart.js + vue-chartjs</strong></div>
-            <div class="info-item"><span>Auth</span><strong>Firebase Google</strong></div>
-            <div class="info-item"><span>Backend</span><strong>Azure Functions</strong></div>
-            <div class="info-item"><span>Storage</span><strong>Azure Table Storage</strong></div>
-            <div class="info-item"><span>ML</span><strong>Python Flask API</strong></div>
-            <div class="info-item"><span>IoT</span><strong>ESP32 + RPi</strong></div>
+            <div v-for="item in systemInfoItems" :key="item.label" class="info-item" :class="item.tone">
+              <div class="info-item-head">
+                <span class="info-icon">{{ item.icon }}</span>
+                <span class="info-label">{{ item.label }}</span>
+              </div>
+              <strong>{{ item.value }}</strong>
+              <span class="info-note">{{ item.note }}</span>
+            </div>
           </div>
         </div>
       </section>
@@ -378,8 +386,6 @@ const userInitials = computed(() => {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 })
 
-
-
 // Devices (Reactive to MQTT connection)
 const devices = computed(() => [
   { id: 'ESP32-001', name: 'ESP32 Sensor Node', type: 'Suhu, Kelembaban, Listrik', icon: '🌡️', status: mqttConnected.value ? 'Online' : 'Offline', statusClass: mqttConnected.value ? 'online' : 'offline', lastSeen: mqttConnected.value ? 'Baru saja' : 'N/A' },
@@ -392,6 +398,17 @@ const onlineDeviceCount = computed(() => (
   devices.value.filter(device => device.statusClass === 'online').length
 ))
 
+const systemInfoItems = [
+  { label: 'Frontend', value: 'Vue 3 + Vite', note: 'UI utama dan bundler aplikasi', icon: '🧩', tone: 'cyan' },
+  { label: '3D Engine', value: 'Babylon.js', note: 'Render digital twin interaktif', icon: '🧊', tone: 'blue' },
+  { label: 'Chart', value: 'Chart.js + vue-chartjs', note: 'Visualisasi histori dan tren', icon: '📈', tone: 'violet' },
+  { label: 'Auth', value: 'Firebase Google', note: 'Autentikasi akun operator dan admin', icon: '🔐', tone: 'amber' },
+  { label: 'Backend', value: 'Azure Functions', note: 'API telemetry dan pengolahan data', icon: '☁️', tone: 'cyan' },
+  { label: 'Storage', value: 'Azure Table Storage', note: 'Penyimpanan histori sensor', icon: '🗄️', tone: 'slate' },
+  { label: 'ML', value: 'Python Flask API', note: 'Serving model dan prediksi energi', icon: '🧠', tone: 'rose' },
+  { label: 'IoT', value: 'ESP32 + RPi', note: 'Perangkat edge dan kamera lapangan', icon: '📡', tone: 'emerald' }
+]
+
 // Alert settings
 const alertSettings = ref([
   { key: 'temperature', icon: '🌡️', label: 'Suhu (°C)', min: 15, max: 30, step: 0.5, currentValue: () => sensorData.value.temperature },
@@ -401,14 +418,32 @@ const alertSettings = ref([
   { key: 'people', icon: '👥', label: 'Jumlah Orang', min: 0, max: 20, step: 1, currentValue: () => sensorData.value.peopleCount || 0 }
 ])
 
+const activeAlertCount = computed(() => (
+  alertSettings.value.filter(alert => getAlertStatus(alert) === 'alert-danger').length
+))
+
+const getAlertCurrentValue = (alert) => {
+  const value = typeof alert.currentValue === 'function' ? alert.currentValue() : 0
+  return typeof value === 'number' && !Number.isNaN(value) ? value : 0
+}
+
+const formatAlertValue = (alert) => {
+  const value = getAlertCurrentValue(alert)
+  return alert.step < 1 ? value.toFixed(1) : value.toFixed(0)
+}
+
 const getAlertStatus = (alert) => {
-  const val = typeof alert.currentValue === 'function' ? alert.currentValue() : 0
+  const val = getAlertCurrentValue(alert)
   if (val < alert.min || val > alert.max) return 'alert-danger'
   return 'alert-ok'
 }
 
+const getAlertBadgeText = (alert) => {
+  return getAlertStatus(alert) === 'alert-danger' ? 'Perlu perhatian' : 'Stabil'
+}
+
 const getAlertStatusText = (alert) => {
-  const val = typeof alert.currentValue === 'function' ? alert.currentValue() : 0
+  const val = getAlertCurrentValue(alert)
   if (val < alert.min) return `⚠️ Di bawah minimum (${val})`
   if (val > alert.max) return `⚠️ Di atas maximum (${val})`
   return `✅ Normal (${typeof val === 'number' ? val.toFixed(1) : val})`
@@ -510,86 +545,96 @@ onUnmounted(() => {
   border-right-color: rgba(255,255,255,0.06);
 }
 
+/* ===== Sidebar Brand Custom (Mirip Screenshot) ===== */
 .sidebar-brand {
   position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
   margin: 16px 14px 10px;
-  padding: 16px 16px 14px;
-  border-radius: 20px;
-  background:
-    linear-gradient(145deg, rgba(6,182,212,0.12), rgba(255,255,255,0.96)),
-    linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,250,252,0.95));
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-  border: 1px solid rgba(6,182,212,0.12);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  padding: 16px 18px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #f4faff, #e6f4fe);
+  border: 1px solid rgba(186, 230, 253, 0.4);
+  box-shadow: 0 4px 15px rgba(14, 116, 144, 0.03);
 }
 .dark .sidebar-brand {
-  border-bottom-color: rgba(255,255,255,0.06);
-  border-color: rgba(34,211,238,0.14);
-  background:
-    linear-gradient(145deg, rgba(34,211,238,0.1), rgba(17,24,39,0.96)),
-    linear-gradient(180deg, rgba(17,24,39,0.96), rgba(15,23,42,0.96));
-  box-shadow: 0 14px 30px rgba(0,0,0,0.28);
+  background: linear-gradient(145deg, rgba(8,47,73,0.38), rgba(15,23,42,0.96));
+  border-color: rgba(34,211,238,0.16);
+  box-shadow: 0 16px 30px rgba(0,0,0,0.28);
 }
+
 .brand-logo-wrap {
-  width: 48px;
-  height: 48px;
+  position: relative;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 16px;
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(6,182,212,0.16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 18px rgba(6,182,212,0.12);
+  background: #ffffff;
+  border: 2px solid #eef7ff;
+  box-shadow: 0 0 0 2px #e0f2fe, 0 4px 12px rgba(186, 230, 253, 0.4);
   flex-shrink: 0;
 }
 .dark .brand-logo-wrap {
-  background: rgba(15,23,42,0.94);
-  border-color: rgba(34,211,238,0.16);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 22px rgba(0,0,0,0.26);
+  background: #0f172a;
+  border-color: #1e293b;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
-.brand-logo { width: 30px; height: 30px; object-fit: contain; }
+
+.brand-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
 .brand-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
+
 .brand-title {
   font-weight: 900;
-  font-size: 1.28rem;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  color: #0f172a;
-  display: block;
+  font-size: 1.45rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #0f172a; /* Warna teks biru super gelap (slate) */
+  /* Shadow disesuaikan dengan warna aksen cyan tema Anda */
+  text-shadow: 1.5px 1.5px 0px rgba(6, 182, 212, 0.3); 
 }
+
 .dark .brand-title {
   color: #f8fafc;
+  /* Shadow cyan yang lebih terang untuk dark mode */
+  text-shadow: 1.5px 1.5px 0px rgba(34, 211, 238, 0.4);
 }
+
 .brand-role {
   display: inline-flex;
-  width: fit-content;
   align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 5px 10px;
+  justify-content: center;
+  padding: 6px 14px;
   border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.65rem;
+  font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: #06b6d4;
-  background: rgba(6,182,212,0.1);
-  border: 1px solid rgba(6,182,212,0.14);
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  color: #0091a1;
+  background: #daf1fd;
+  border: 1px solid #bce6fd;
 }
 .dark .brand-role {
   color: #67e8f9;
-  background: rgba(34,211,238,0.12);
-  border-color: rgba(34,211,238,0.16);
+  background: rgba(8,47,73,0.76);
+  border-color: rgba(34,211,238,0.22);
 }
+
 .menu-close-btn {
   display: none;
   align-items: center;
@@ -1151,6 +1196,14 @@ onUnmounted(() => {
   margin-top: 20px;
   flex-wrap: wrap;
 }
+.panel-note {
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+.dark .panel-note {
+  color: #94a3b8;
+}
 
 /* ===== Buttons ===== */
 .btn-primary {
@@ -1334,54 +1387,460 @@ onUnmounted(() => {
 .empty-row { text-align: center; color: #94a3b8; padding: 24px !important; }
 
 /* ===== Devices ===== */
-.device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.device-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.06);
-  background: rgba(0,0,0,0.01);
-  transition: all 0.25s;
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(280px, 1fr));
+  gap: 18px;
+  align-items: stretch;
 }
-.dark .device-card { border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
-.device-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
-.device-icon { font-size: 1.6rem; }
-.device-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.device-info strong { font-size: 0.92rem; }
-.device-id { font-size: 0.75rem; color: #64748b; font-family: monospace; }
-.device-type { font-size: 0.78rem; color: #94a3b8; }
-.device-status-wrap { display: flex; align-items: center; gap: 6px; }
+.device-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  padding: 20px;
+  min-height: 228px;
+  border-radius: 18px;
+  border: 1px solid rgba(15,23,42,0.06);
+  background: linear-gradient(160deg, rgba(255,255,255,0.98), rgba(248,250,252,0.92));
+  box-shadow: 0 14px 30px rgba(15,23,42,0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.device-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  border-radius: 18px 18px 0 0;
+  background: linear-gradient(90deg, rgba(6,182,212,0.82), rgba(99,102,241,0.78));
+}
+.device-card.online::before {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+.device-card.warning::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+.device-card.offline::before {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+.dark .device-card {
+  border-color: rgba(255,255,255,0.06);
+  background: linear-gradient(160deg, rgba(15,23,42,0.96), rgba(30,41,59,0.9));
+  box-shadow: 0 18px 38px rgba(2,6,23,0.28);
+}
+.device-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 34px rgba(15,23,42,0.1);
+  border-color: rgba(6,182,212,0.2);
+}
+.device-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.device-icon {
+  width: 58px;
+  height: 58px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(6,182,212,0.16), rgba(224,242,254,0.95));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+}
+.dark .device-icon {
+  background: linear-gradient(145deg, rgba(34,211,238,0.14), rgba(8,47,73,0.92));
+}
+.device-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 72px;
+}
+.device-info strong {
+  display: block;
+  width: 100%;
+  font-size: 1rem;
+  line-height: 1.22;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.device-id {
+  display: block;
+  width: 100%;
+  font-size: 0.76rem;
+  color: #64748b;
+  font-family: monospace;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.device-type {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: 0.88rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  min-height: calc(1.5em * 2);
+}
+.device-status-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1px solid rgba(15,23,42,0.06);
+  background: rgba(248,250,252,0.86);
+  flex-shrink: 0;
+}
+.dark .device-status-wrap {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(15,23,42,0.68);
+}
+.device-status-wrap.online {
+  color: #047857;
+  background: rgba(16,185,129,0.1);
+}
+.device-status-wrap.warning {
+  color: #b45309;
+  background: rgba(245,158,11,0.12);
+}
+.device-status-wrap.offline {
+  color: #b91c1c;
+  background: rgba(239,68,68,0.1);
+}
+.dark .device-status-wrap.online {
+  color: #6ee7b7;
+}
+.dark .device-status-wrap.warning {
+  color: #fcd34d;
+}
+.dark .device-status-wrap.offline {
+  color: #fca5a5;
+}
 .device-status-dot { width: 8px; height: 8px; border-radius: 50%; }
 .device-status-dot.online { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.4); }
 .device-status-dot.warning { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.4); }
 .device-status-dot.offline { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.4); }
-.device-status-text { font-size: 0.82rem; font-weight: 600; }
-.device-last { font-size: 0.72rem; color: #94a3b8; white-space: nowrap; }
+.device-status-text { font-size: 0.82rem; font-weight: 700; }
+.device-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15,23,42,0.06);
+  margin-top: auto;
+}
+.dark .device-meta {
+  border-top-color: rgba(255,255,255,0.06);
+}
+.device-last-label {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+}
+.device-last {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.dark .device-last {
+  color: #cbd5e1;
+}
 
 /* ===== Alerts ===== */
-.alert-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.alert-card {
-  padding: 20px;
-  border-radius: 14px;
-  border: 1px solid rgba(0,0,0,0.06);
-  transition: all 0.25s;
+.alert-panel {
+  overflow: hidden;
 }
-.dark .alert-card { border-color: rgba(255,255,255,0.06); }
-.alert-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.alert-icon { font-size: 1.4rem; }
-.alert-inputs { display: flex; gap: 12px; margin-bottom: 12px; }
+.alert-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,0.08);
+  background: rgba(248,250,252,0.86);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.alert-summary.ok {
+  color: #0f766e;
+  background: linear-gradient(135deg, rgba(209,250,229,0.92), rgba(204,251,241,0.92));
+  border-color: rgba(45,212,191,0.24);
+  box-shadow: 0 10px 20px rgba(20,184,166,0.1);
+}
+.alert-summary.danger {
+  color: #be123c;
+  background: linear-gradient(135deg, rgba(255,228,230,0.94), rgba(255,241,242,0.92));
+  border-color: rgba(251,113,133,0.22);
+  box-shadow: 0 10px 20px rgba(244,63,94,0.08);
+}
+.dark .alert-summary {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(15,23,42,0.72);
+  color: #e2e8f0;
+}
+.dark .alert-summary.ok {
+  color: #5eead4;
+}
+.dark .alert-summary.danger {
+  color: #fda4af;
+}
+.alert-summary-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 5px rgba(255,255,255,0.24);
+}
+.dark .alert-summary-dot {
+  box-shadow: 0 0 0 5px rgba(15,23,42,0.45);
+}
+.alert-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+.alert-card {
+  position: relative;
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  min-height: 236px;
+  border-radius: 20px;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: linear-gradient(160deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94));
+  box-shadow: 0 14px 28px rgba(15,23,42,0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.alert-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, rgba(6,182,212,0.8), rgba(99,102,241,0.72));
+}
+.alert-card.alert-danger::before {
+  background: linear-gradient(90deg, #f43f5e, #fb7185);
+}
+.alert-card.alert-ok::before {
+  background: linear-gradient(90deg, #14b8a6, #2dd4bf);
+}
+.alert-card.alert-ok {
+  border-color: rgba(45,212,191,0.22);
+  background:
+    radial-gradient(circle at top right, rgba(153,246,228,0.32), transparent 42%),
+    linear-gradient(160deg, rgba(245,255,252,0.98), rgba(236,253,245,0.92));
+  box-shadow: 0 16px 32px rgba(20,184,166,0.09);
+}
+.alert-card.alert-danger {
+  border-color: rgba(251,113,133,0.2);
+  background:
+    radial-gradient(circle at top right, rgba(254,205,211,0.34), transparent 42%),
+    linear-gradient(160deg, rgba(255,251,252,0.98), rgba(255,241,242,0.92));
+  box-shadow: 0 16px 32px rgba(244,63,94,0.08);
+}
+.alert-card:nth-last-child(2),
+.alert-card:last-child {
+  grid-column: span 6;
+}
+.dark .alert-card {
+  border-color: rgba(255,255,255,0.06);
+  background: linear-gradient(160deg, rgba(15,23,42,0.96), rgba(30,41,59,0.9));
+  box-shadow: 0 18px 34px rgba(2,6,23,0.28);
+}
+.dark .alert-card.alert-ok {
+  border-color: rgba(45,212,191,0.18);
+  background:
+    radial-gradient(circle at top right, rgba(20,184,166,0.18), transparent 42%),
+    linear-gradient(160deg, rgba(15,23,42,0.96), rgba(12,74,64,0.62));
+}
+.dark .alert-card.alert-danger {
+  border-color: rgba(251,113,133,0.16);
+  background:
+    radial-gradient(circle at top right, rgba(244,63,94,0.16), transparent 42%),
+    linear-gradient(160deg, rgba(15,23,42,0.96), rgba(76,5,25,0.5));
+}
+.alert-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 34px rgba(15,23,42,0.1);
+  border-color: rgba(6,182,212,0.2);
+}
+.alert-card.alert-ok:hover {
+  box-shadow: 0 20px 38px rgba(20,184,166,0.16);
+  border-color: rgba(45,212,191,0.32);
+}
+.alert-card.alert-danger:hover {
+  box-shadow: 0 20px 38px rgba(244,63,94,0.14);
+  border-color: rgba(251,113,133,0.28);
+}
+.alert-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.alert-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 0;
+  min-width: 0;
+  flex: 1;
+}
+.alert-icon-wrap {
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(6,182,212,0.16), rgba(224,242,254,0.95));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+}
+.dark .alert-icon-wrap {
+  background: linear-gradient(145deg, rgba(34,211,238,0.14), rgba(8,47,73,0.92));
+}
+.alert-card.alert-ok .alert-icon-wrap {
+  background: linear-gradient(145deg, rgba(153,246,228,0.62), rgba(236,253,245,0.98));
+}
+.alert-card.alert-danger .alert-icon-wrap {
+  background: linear-gradient(145deg, rgba(255,228,230,0.96), rgba(255,241,242,0.98));
+}
+.dark .alert-card.alert-ok .alert-icon-wrap {
+  background: linear-gradient(145deg, rgba(45,212,191,0.18), rgba(15,118,110,0.42));
+}
+.dark .alert-card.alert-danger .alert-icon-wrap {
+  background: linear-gradient(145deg, rgba(251,113,133,0.18), rgba(136,19,55,0.38));
+}
+.alert-icon {
+  font-size: 1.6rem;
+}
+.alert-header-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.alert-header-copy strong {
+  font-size: 1rem;
+  line-height: 1.28;
+}
+.alert-card.alert-ok .alert-header-copy strong {
+  color: #0f766e;
+}
+.alert-card.alert-danger .alert-header-copy strong {
+  color: #e11d48;
+}
+.dark .alert-card.alert-ok .alert-header-copy strong {
+  color: #5eead4;
+}
+.dark .alert-card.alert-danger .alert-header-copy strong {
+  color: #fda4af;
+}
+.alert-current {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+.dark .alert-current {
+  color: #94a3b8;
+}
+.alert-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid rgba(15,23,42,0.06);
+  background: rgba(248,250,252,0.86);
+}
+.dark .alert-badge {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(15,23,42,0.68);
+}
+.alert-badge.alert-ok {
+  color: #0f766e;
+  background: linear-gradient(135deg, rgba(209,250,229,0.92), rgba(204,251,241,0.92));
+  border-color: rgba(45,212,191,0.2);
+}
+.alert-badge.alert-danger {
+  color: #be123c;
+  background: linear-gradient(135deg, rgba(255,228,230,0.94), rgba(255,241,242,0.92));
+  border-color: rgba(251,113,133,0.2);
+}
+.dark .alert-badge.alert-ok {
+  color: #5eead4;
+}
+.dark .alert-badge.alert-danger {
+  color: #fda4af;
+}
+.alert-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
 .alert-inputs .input-group { flex: 1; }
 .alert-status {
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 0.82rem;
-  font-weight: 600;
+  margin-top: auto;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.84rem;
+  font-weight: 700;
   text-align: center;
+  border: 1px solid transparent;
 }
-.alert-ok { background: rgba(16,185,129,0.1); color: #059669; }
-.dark .alert-ok { color: #34d399; }
-.alert-danger { background: rgba(239,68,68,0.1); color: #ef4444; }
-.dark .alert-danger { color: #fca5a5; }
+.alert-ok {
+  background: linear-gradient(135deg, rgba(209,250,229,0.92), rgba(204,251,241,0.92));
+  color: #0f766e;
+  border-color: rgba(45,212,191,0.18);
+}
+.dark .alert-ok {
+  color: #5eead4;
+  background: linear-gradient(135deg, rgba(20,83,45,0.32), rgba(17,94,89,0.3));
+  border-color: rgba(45,212,191,0.14);
+}
+.alert-danger {
+  background: linear-gradient(135deg, rgba(255,228,230,0.96), rgba(255,241,242,0.94));
+  color: #e11d48;
+  border-color: rgba(251,113,133,0.16);
+}
+.dark .alert-danger {
+  color: #fda4af;
+  background: linear-gradient(135deg, rgba(127,29,29,0.3), rgba(136,19,55,0.28));
+  border-color: rgba(251,113,133,0.14);
+}
+.alert-actions {
+  align-items: center;
+  justify-content: space-between;
+}
 
 /* ===== Settings ===== */
 .settings-list { display: flex; flex-direction: column; gap: 4px; }
@@ -1424,23 +1883,207 @@ onUnmounted(() => {
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(22px); }
 
 /* ===== Info Grid ===== */
+.system-info-panel {
+  overflow: hidden;
+}
+.system-stack-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(6,182,212,0.16);
+  background: linear-gradient(135deg, rgba(236,254,255,0.96), rgba(224,242,254,0.92));
+  color: #0f766e;
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: 0 10px 20px rgba(14,165,233,0.08);
+}
+.dark .system-stack-pill {
+  border-color: rgba(34,211,238,0.14);
+  background: linear-gradient(135deg, rgba(8,47,73,0.64), rgba(15,23,42,0.82));
+  color: #67e8f9;
+}
+.system-stack-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 5px rgba(255,255,255,0.24);
+}
+.dark .system-stack-dot {
+  box-shadow: 0 0 0 5px rgba(15,23,42,0.45);
+}
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 .info-item {
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(0,0,0,0.06);
-  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  min-height: 160px;
+  border-radius: 20px;
+  border: 1px solid rgba(15,23,42,0.06);
+  background: linear-gradient(160deg, rgba(255,255,255,0.98), rgba(248,250,252,0.92));
+  box-shadow: 0 14px 28px rgba(15,23,42,0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
-.dark .info-item { border-color: rgba(255,255,255,0.06); }
-.info-item span { font-size: 0.78rem; color: #94a3b8; }
-.info-item strong { font-size: 0.92rem; }
+.info-item::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, rgba(6,182,212,0.8), rgba(99,102,241,0.72));
+}
+.info-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 34px rgba(15,23,42,0.09);
+}
+.dark .info-item {
+  border-color: rgba(255,255,255,0.06);
+  background: linear-gradient(160deg, rgba(15,23,42,0.96), rgba(30,41,59,0.9));
+  box-shadow: 0 18px 34px rgba(2,6,23,0.28);
+}
+.info-item-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.info-icon {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(6,182,212,0.16), rgba(224,242,254,0.95));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+}
+.dark .info-icon {
+  background: linear-gradient(145deg, rgba(34,211,238,0.14), rgba(8,47,73,0.92));
+}
+.info-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.dark .info-label {
+  color: #94a3b8;
+}
+.info-item strong {
+  font-size: 1.06rem;
+  line-height: 1.35;
+  font-weight: 800;
+  color: #1e293b;
+}
+.dark .info-item strong {
+  color: #f8fafc;
+}
+.info-note {
+  margin-top: auto;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: #64748b;
+}
+.dark .info-note {
+  color: #94a3b8;
+}
+.info-item.cyan::before { background: linear-gradient(90deg, #06b6d4, #38bdf8); }
+.info-item.blue::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.info-item.violet::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+.info-item.amber::before { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.info-item.slate::before { background: linear-gradient(90deg, #64748b, #94a3b8); }
+.info-item.rose::before { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.info-item.emerald::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.info-item.cyan .info-icon {
+  background: linear-gradient(145deg, rgba(207,250,254,0.92), rgba(224,242,254,0.98));
+}
+.info-item.blue .info-icon {
+  background: linear-gradient(145deg, rgba(219,234,254,0.94), rgba(239,246,255,0.98));
+}
+.info-item.violet .info-icon {
+  background: linear-gradient(145deg, rgba(237,233,254,0.94), rgba(245,243,255,0.98));
+}
+.info-item.amber .info-icon {
+  background: linear-gradient(145deg, rgba(254,243,199,0.94), rgba(255,251,235,0.98));
+}
+.info-item.slate .info-icon {
+  background: linear-gradient(145deg, rgba(226,232,240,0.94), rgba(248,250,252,0.98));
+}
+.info-item.rose .info-icon {
+  background: linear-gradient(145deg, rgba(255,228,230,0.94), rgba(255,241,242,0.98));
+}
+.info-item.emerald .info-icon {
+  background: linear-gradient(145deg, rgba(209,250,229,0.94), rgba(236,253,245,0.98));
+}
+.dark .info-item.cyan .info-icon {
+  background: linear-gradient(145deg, rgba(8,145,178,0.22), rgba(12,74,110,0.42));
+}
+.dark .info-item.blue .info-icon {
+  background: linear-gradient(145deg, rgba(59,130,246,0.2), rgba(30,64,175,0.38));
+}
+.dark .info-item.violet .info-icon {
+  background: linear-gradient(145deg, rgba(139,92,246,0.2), rgba(91,33,182,0.38));
+}
+.dark .info-item.amber .info-icon {
+  background: linear-gradient(145deg, rgba(245,158,11,0.2), rgba(146,64,14,0.38));
+}
+.dark .info-item.slate .info-icon {
+  background: linear-gradient(145deg, rgba(100,116,139,0.22), rgba(51,65,85,0.44));
+}
+.dark .info-item.rose .info-icon {
+  background: linear-gradient(145deg, rgba(244,63,94,0.2), rgba(136,19,55,0.38));
+}
+.dark .info-item.emerald .info-icon {
+  background: linear-gradient(145deg, rgba(16,185,129,0.2), rgba(6,95,70,0.38));
+}
 
 /* ===== Responsive ===== */
-/* ===== Responsive ===== */
+@media (max-width: 1440px) {
+  .device-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .info-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .alert-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .alert-card,
+  .alert-card:nth-last-child(2),
+  .alert-card:last-child {
+    grid-column: span 1;
+  }
+  .device-card {
+    min-height: 0;
+  }
+  .device-card-head {
+    align-items: flex-start;
+  }
+  .device-status-wrap {
+    align-self: flex-start;
+  }
+  .device-type {
+    min-height: 0;
+  }
+  .device-meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 @media (max-width: 900px) {
   .admin { flex-direction: column; }
   
@@ -1448,7 +2091,7 @@ onUnmounted(() => {
   .sidebar {
     position: fixed;
     top: 0;
-    left: -280px; /* Hidden by default */
+    left: -280px;
     width: 280px;
     height: 100vh;
     z-index: 200;
@@ -1466,10 +2109,10 @@ onUnmounted(() => {
     padding: 16px;
     justify-content: space-between;
   }
-  .brand-logo-wrap { width: 46px; height: 46px; }
+  .brand-logo-wrap { width: 48px; height: 48px; border-radius: 16px; }
   .brand-logo { width: 28px; height: 28px; }
-  .brand-title { font-size: 1.1rem; }
-  .brand-role { font-size: 0.7rem; }
+  .brand-title { font-size: 1.14rem; }
+  .brand-role { width: 146px; font-size: 0.64rem; letter-spacing: 0.14em; padding: 7px 10px; }
   
   .menu-close-btn {
     display: flex;
@@ -1545,6 +2188,9 @@ onUnmounted(() => {
   }
 
   .section { padding: 20px 16px 40px; }
+  .device-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 600px) {
@@ -1568,6 +2214,31 @@ onUnmounted(() => {
     align-items: flex-start;
   }
   .input-row { flex-direction: column; }
+  .system-stack-pill {
+    width: 100%;
+    justify-content: center;
+  }
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  .info-item {
+    min-height: 0;
+  }
+  .alert-grid {
+    grid-template-columns: 1fr;
+  }
+  .alert-card {
+    min-height: 0;
+  }
+  .alert-card-top {
+    flex-direction: column;
+  }
+  .alert-badge {
+    align-self: flex-start;
+  }
+  .alert-inputs {
+    grid-template-columns: 1fr;
+  }
   .setting-row { flex-direction: column; align-items: flex-start; gap: 8px; }
   .setting-input { width: 100% !important; text-align: left; }
   .panel-actions { flex-direction: column; }
