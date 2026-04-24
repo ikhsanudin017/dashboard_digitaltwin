@@ -122,10 +122,11 @@ DHT dht(DHTPIN, DHTTYPE);
 IRsend irsend(IR_TX_PIN);
 IRrecv irrecv(IR_RX_PIN, IR_CAPTURE_BUFFER_SIZE, IR_CAPTURE_TIMEOUT_MS, true);
 decode_results irResults;
-// Model eksplisit: coba YAW1F dulu. Jika AC tidak respon, ganti ke YBOFB atau YX1FSF.
-// Parameter ketiga (true) = aktifkan inversi sinyal (beberapa unit Gree butuh ini).
-// Bisa juga diganti runtime via serial: ac-model ybofb
-IRGreeAC greeAc(IR_TX_PIN, gree_ac_remote_model_t::YAW1F, true);
+// Model Gree untuk GWC-09F5S: coba YBOFB dulu, lalu YAW1F, lalu YX1FSF.
+// Parameter 3 (inverted): false = direct GPIO → LED (tanpa transistor)
+//                          true  = jika pakai transistor NPN (sinyal terbalik)
+// Ganti runtime via serial: ac-model yaw1f / ac-model ybofb / ac-model yx1fsf
+IRGreeAC greeAc(IR_TX_PIN, gree_ac_remote_model_t::YBOFB, false);
 WiFiClientSecure espClient;  // Gunakan WiFiClientSecure untuk TLS
 PubSubClient client(espClient);
 Preferences rawIrPrefs;
