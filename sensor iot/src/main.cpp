@@ -4,9 +4,15 @@
 #include <PubSubClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 #include <mbedtls/md.h>
 #include <mbedtls/base64.h>
 #include <time.h>
+#include <IRremoteESP8266.h>
+#include <IRrecv.h>
+#include <IRsend.h>
+#include <IRutils.h>
+#include <ir_Gree.h>
 
 #ifdef __has_include
 #if __has_include("secrets.h")
@@ -77,10 +83,17 @@ const int mqtt_port = 8883;  // Port MQTT over TLS (wajib untuk Azure)
 String mqtt_username = mqtt_server + "/" + String(deviceId) + "/?api-version=2021-04-12";
 // Topic dengan properties: content-type = application/json
 String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/$.ct=application%2Fjson&$.ce=utf-8";
+String mqtt_c2d_topic = "devices/" + String(deviceId) + "/messages/devicebound/#";
 
 // ===== KONFIGURASI DHT11 =====
-#define DHTPIN 4     // Pin data DHT11 terhubung ke GPIO 4
+#define DHTPIN 14    // Pin data DHT11 terhubung ke GPIO 14
 #define DHTTYPE DHT11     // Tipe sensor DHT11
+
+// ===== KONFIGURASI IR CLOSED-LOOP AC =====
+#define IR_TX_PIN 4
+#define IR_RX_PIN 27
+#define IR_CAPTURE_BUFFER_SIZE 1024
+#define IR_CAPTURE_TIMEOUT_MS 50
 
 // ===== SENSOR TEGANGAN ZMPT101B =====
 // Pin: GPIO 35 (ADC1_CH7) - Kompatibel dengan WiFi
@@ -89,9 +102,10 @@ String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/$.ct=appli
 #define ADC_BITS 12
 #define ADC_COUNTS 4096       // 2^12 = 4096
 #define VREF 3.3              // Tegangan referensi ESP32
-#define VOLTAGE_CALIBRATION 579.0  // Faktor kalibrasi (220V / 0.38V RMS)
+#define VOLTAGE_CALIBRATION 153.0  // Faktor awal hasil kalibrasi lapangan (target PLN 220V)
 #define RMS_THRESHOLD 0.25    // Threshold minimum RMS (filter noise)
 #define VOLTAGE_THRESHOLD 150.0  // Minimum tegangan valid
+#define VOLTAGE_MAX_VALID 300.0  // Maksimum tegangan valid (filter salah baca)
 
 // ===== SENSOR ARUS SCT013-000 (100A/50mA) =====
 // Pin: GPIO 32 (ADC1_CH4) - Kompatibel dengan WiFi
@@ -105,8 +119,14 @@ String mqtt_topic = "devices/" + String(deviceId) + "/messages/events/$.ct=appli
 
 // Inisialisasi objek
 DHT dht(DHTPIN, DHTTYPE);
+IRsend irsend(IR_TX_PIN);
+IRrecv irrecv(IR_RX_PIN, IR_CAPTURE_BUFFER_SIZE, IR_CAPTURE_TIMEOUT_MS, true);
+decode_results irResults;
+IRGreeAC greeAc(IR_TX_PIN);
 WiFiClientSecure espClient;  // Gunakan WiFiClientSecure untuk TLS
 PubSubClient client(espClient);
+Preferences rawIrPrefs;
+bool rawIrStorageReady = false;
 
 // Variabel untuk SAS Token
 String sasToken = "";
@@ -121,6 +141,101 @@ const unsigned long SAS_TOKEN_REFRESH_WINDOW = 120; // Refresh 2 menit sebelum e
 unsigned long successCount = 0;
 unsigned long failCount = 0;
 
+const uint16_t IR_SEND_FREQUENCY_KHZ = 38;
+const uint16_t IR_MAX_RAW_LENGTH = 600;
+const unsigned long IR_SEND_COOLDOWN_MS = 1500;
+
+const float DEFAULT_TARGET_TEMP_C = 24.0;
+const float TEMP_HYSTERESIS_UP_C = 0.7;
+const float TEMP_HYSTERESIS_DOWN_C = 0.4;
+const unsigned long AC_COMMAND_COOLDOWN_MS = 90000;
+const float HOT_START_THRESHOLD_C = 28.0;
+const float FAN_MODE_MAX_HUMIDITY_PERCENT = 70.0;
+const float FAN_MODE_MAX_FEELS_LIKE_MARGIN_C = 0.2;
+const uint8_t RAW_COOL_PROFILE_MIN_C = kGreeMinTempC;
+const uint8_t RAW_COOL_PROFILE_MAX_C = kGreeMaxTempC;
+
+uint16_t lastIrRaw[IR_MAX_RAW_LENGTH];
+uint16_t powerIrRaw[IR_MAX_RAW_LENGTH];
+uint16_t offIrRaw[IR_MAX_RAW_LENGTH];
+uint16_t fanIrRaw[IR_MAX_RAW_LENGTH];
+uint16_t coolIrRaw[kGreeMaxTempC + 1][IR_MAX_RAW_LENGTH];
+uint16_t lastIrRawLen = 0;
+uint16_t powerIrRawLen = 0;
+uint16_t offIrRawLen = 0;
+uint16_t fanIrRawLen = 0;
+uint16_t coolIrRawLen[kGreeMaxTempC + 1];
+bool hasLastIrRaw = false;
+bool hasPowerIrRaw = false;
+bool hasOffIrRaw = false;
+bool hasFanIrRaw = false;
+bool hasCoolIrRaw[kGreeMaxTempC + 1];
+unsigned long lastIrSendAt = 0;
+String serialInputBuffer = "";
+bool irCaptureEnabled = false;
+
+bool closedLoopEnabled = true;
+bool hasMlTargetTemp = false;
+float mlTargetTempC = DEFAULT_TARGET_TEMP_C;
+float effectiveTargetTempC = DEFAULT_TARGET_TEMP_C;
+String targetSource = "default";
+
+bool acPowerState = false;
+uint8_t acModeState = kGreeCool;
+uint8_t acFanState = kGreeFanAuto;
+uint8_t acSetpointState = 24;
+
+bool acDesiredPowerState = false;
+uint8_t acDesiredModeState = kGreeCool;
+uint8_t acDesiredFanState = kGreeFanAuto;
+uint8_t acDesiredSetpointState = 24;
+
+unsigned long lastAcCommandAt = 0;
+String acLastReason = "startup";
+float lastMeasuredTempC = NAN;
+float lastMeasuredHumidityPercent = NAN;
+float lastMeasuredHeatIndexC = NAN;
+float lastControlTempC = NAN;
+bool hasSensorSnapshot = false;
+String closedLoopBand = "startup";
+
+void setupWiFi();
+void handleIrCapture();
+void handleSerialInput();
+void processSerialCommand(const String& rawCommand);
+bool sendRawIrFrame(uint16_t* frame, uint16_t frameLen, uint8_t repeatCount, const char* label,
+                    bool bypassCooldown = false);
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void handleCloudControlMessage(const char* topic, const byte* payload, unsigned int length);
+void printClosedLoopStatus();
+uint8_t clampAcSetpoint(float tempC);
+const char* acModeToLabel(uint8_t mode);
+const char* acFanToLabel(uint8_t fan);
+const char* acModelToLabel(gree_ac_remote_model_t model);
+uint8_t modeFromString(const String& mode);
+uint8_t fanFromString(const String& fan);
+bool setAcModelFromString(const String& modelName);
+bool hasPendingAcCommand();
+void setDesiredAcState(bool powerOn, uint8_t mode, uint8_t fan, uint8_t setpoint, const char* reason);
+bool sendAcCommandNow(bool powerOn, uint8_t mode, uint8_t fan, uint8_t setpoint, const char* reason, bool bypassCooldown);
+bool flushPendingAcCommand();
+bool persistRawProfile(const char* storageKey, const uint16_t* frame, uint16_t frameLen, bool available);
+bool loadRawProfile(const char* storageKey, uint16_t* frame, uint16_t* frameLen, bool* availableFlag);
+void loadStoredRawProfiles();
+bool saveLastIrCapture(uint16_t* frame, uint16_t* frameLen, bool* availableFlag, const char* label,
+                       const char* storageKey = nullptr);
+uint8_t countCoolRawProfiles();
+void printRawProfileSummary();
+bool findBestCoolRawProfile(uint8_t requestedSetpoint, uint8_t* resolvedSetpoint);
+bool trySendRawAcState(bool powerOn, uint8_t mode, uint8_t fan, uint8_t requestedSetpoint,
+                       bool bypassCooldown, uint8_t* appliedMode, uint8_t* appliedSetpoint);
+void setMlTargetTemp(float targetC, const char* source);
+void clearMlTargetTemp();
+float calculateControlTemperature(float suhuCelsius, float kelembaban, float* heatIndexC);
+bool extractTargetTempFromPayload(const JsonDocument& doc, float* targetTempC);
+void triggerClosedLoopRecheck(const char* source);
+void applyClosedLoopControl(float suhuCelsius, float kelembaban);
+
 String getIsoTimestampUTC() {
   time_t now = time(nullptr);
   struct tm timeInfo;
@@ -134,6 +249,323 @@ String getIsoTimestampUTC() {
   return String(buffer);
 }
 
+void setMlTargetTemp(float targetC, const char* source) {
+  mlTargetTempC = constrain(targetC, static_cast<float>(kGreeMinTempC), static_cast<float>(kGreeMaxTempC));
+  hasMlTargetTemp = true;
+  effectiveTargetTempC = mlTargetTempC;
+  targetSource = source;
+}
+
+void clearMlTargetTemp() {
+  hasMlTargetTemp = false;
+  effectiveTargetTempC = DEFAULT_TARGET_TEMP_C;
+  targetSource = "default";
+}
+
+float calculateControlTemperature(float suhuCelsius, float kelembaban, float* heatIndexC) {
+  float heatIndex = NAN;
+
+  if (!isnan(suhuCelsius) && !isnan(kelembaban)) {
+    heatIndex = dht.computeHeatIndex(suhuCelsius, kelembaban, false);
+  }
+
+  if (heatIndexC != nullptr) {
+    *heatIndexC = heatIndex;
+  }
+
+  if (isnan(suhuCelsius)) {
+    return NAN;
+  }
+
+  if (isnan(heatIndex)) {
+    return suhuCelsius;
+  }
+
+  return heatIndex > suhuCelsius ? heatIndex : suhuCelsius;
+}
+
+bool extractTargetTempFromPayload(const JsonDocument& doc, float* targetTempC) {
+  if (targetTempC == nullptr) {
+    return false;
+  }
+
+  auto readTarget = [&](JsonVariantConst value) -> bool {
+    if (value.is<float>() || value.is<double>() || value.is<int>() || value.is<long>() ||
+        value.is<unsigned int>() || value.is<unsigned long>()) {
+      *targetTempC = value.as<float>();
+      return true;
+    }
+    if (value.is<const char*>()) {
+      String text = value.as<String>();
+      text.trim();
+      if (text.length() == 0) {
+        return false;
+      }
+      char firstChar = text.charAt(0);
+      if (!(isDigit(firstChar) || firstChar == '-' || firstChar == '+')) {
+        return false;
+      }
+      *targetTempC = text.toFloat();
+      return true;
+    }
+    return false;
+  };
+
+  if (readTarget(doc["target_temp"]) ||
+      readTarget(doc["recommended_temp"]) ||
+      readTarget(doc["predicted_temp"]) ||
+      readTarget(doc["recommendedTemp"])) {
+    return true;
+  }
+
+  JsonVariantConst dataNode = doc["data"];
+  if (dataNode.isNull()) {
+    return false;
+  }
+
+  if (readTarget(dataNode["target_temp"]) ||
+      readTarget(dataNode["recommended_temp"]) ||
+      readTarget(dataNode["predicted_temp"]) ||
+      readTarget(dataNode["recommendedTemp"])) {
+    return true;
+  }
+
+  JsonVariantConst recommendationNode = dataNode["recommendation"];
+  if (recommendationNode.isNull()) {
+    return false;
+  }
+
+  return readTarget(recommendationNode["target_temp"]) ||
+         readTarget(recommendationNode["recommended_temp"]) ||
+         readTarget(recommendationNode["predicted_temp"]) ||
+         readTarget(recommendationNode["recommendedTemp"]);
+}
+
+void triggerClosedLoopRecheck(const char* source) {
+  if (!closedLoopEnabled || !hasSensorSnapshot || isnan(lastMeasuredTempC)) {
+    return;
+  }
+
+  Serial.print("🔁 Re-evaluasi closed-loop dari snapshot sensor | source=");
+  Serial.println(source);
+  applyClosedLoopControl(lastMeasuredTempC, lastMeasuredHumidityPercent);
+}
+
+bool persistRawProfile(const char* storageKey, const uint16_t* frame, uint16_t frameLen, bool available) {
+  if (!rawIrStorageReady || storageKey == nullptr || storageKey[0] == '\0') {
+    return false;
+  }
+
+  char lenKey[16];
+  char dataKey[16];
+  snprintf(lenKey, sizeof(lenKey), "%s_l", storageKey);
+  snprintf(dataKey, sizeof(dataKey), "%s_d", storageKey);
+
+  if (!available || frame == nullptr || frameLen == 0) {
+    rawIrPrefs.remove(lenKey);
+    rawIrPrefs.remove(dataKey);
+    return true;
+  }
+
+  rawIrPrefs.putUShort(lenKey, frameLen);
+  size_t written = rawIrPrefs.putBytes(dataKey, frame, frameLen * sizeof(uint16_t));
+  return written == (frameLen * sizeof(uint16_t));
+}
+
+bool loadRawProfile(const char* storageKey, uint16_t* frame, uint16_t* frameLen, bool* availableFlag) {
+  if (!rawIrStorageReady || storageKey == nullptr || storageKey[0] == '\0' || frame == nullptr ||
+      frameLen == nullptr || availableFlag == nullptr) {
+    return false;
+  }
+
+  char lenKey[16];
+  char dataKey[16];
+  snprintf(lenKey, sizeof(lenKey), "%s_l", storageKey);
+  snprintf(dataKey, sizeof(dataKey), "%s_d", storageKey);
+
+  uint16_t storedLen = rawIrPrefs.getUShort(lenKey, 0);
+  size_t storedBytes = rawIrPrefs.getBytesLength(dataKey);
+  if (storedLen == 0 || storedBytes != storedLen * sizeof(uint16_t) || storedLen > IR_MAX_RAW_LENGTH) {
+    *frameLen = 0;
+    *availableFlag = false;
+    return false;
+  }
+
+  size_t readBytes = rawIrPrefs.getBytes(dataKey, frame, storedLen * sizeof(uint16_t));
+  if (readBytes != storedLen * sizeof(uint16_t)) {
+    *frameLen = 0;
+    *availableFlag = false;
+    return false;
+  }
+
+  *frameLen = storedLen;
+  *availableFlag = true;
+  return true;
+}
+
+void loadStoredRawProfiles() {
+  if (!rawIrStorageReady) {
+    return;
+  }
+
+  loadRawProfile("power", powerIrRaw, &powerIrRawLen, &hasPowerIrRaw);
+  loadRawProfile("off", offIrRaw, &offIrRawLen, &hasOffIrRaw);
+  loadRawProfile("fan", fanIrRaw, &fanIrRawLen, &hasFanIrRaw);
+
+  for (uint8_t setpoint = RAW_COOL_PROFILE_MIN_C; setpoint <= RAW_COOL_PROFILE_MAX_C; setpoint++) {
+    char key[16];
+    snprintf(key, sizeof(key), "cool_%u", setpoint);
+    loadRawProfile(key, coolIrRaw[setpoint], &coolIrRawLen[setpoint], &hasCoolIrRaw[setpoint]);
+  }
+}
+
+bool saveLastIrCapture(uint16_t* frame, uint16_t* frameLen, bool* availableFlag, const char* label,
+                       const char* storageKey) {
+  if (!hasLastIrRaw || lastIrRawLen == 0) {
+    Serial.println("⚠️ Belum ada capture IR. Tekan tombol remote dulu.");
+    return false;
+  }
+
+  if (frame == nullptr || frameLen == nullptr || availableFlag == nullptr) {
+    Serial.println("⚠️ Profil IR tidak valid.");
+    return false;
+  }
+
+  for (uint16_t i = 0; i < lastIrRawLen; i++) {
+    frame[i] = lastIrRaw[i];
+  }
+  *frameLen = lastIrRawLen;
+  *availableFlag = true;
+
+  Serial.print("💾 Profil IR tersimpan: ");
+  Serial.print(label);
+  Serial.print(" | raw length=");
+  Serial.println(*frameLen);
+
+  if (storageKey != nullptr) {
+    bool persisted = persistRawProfile(storageKey, frame, *frameLen, *availableFlag);
+    Serial.print("   Flash save: ");
+    Serial.println(persisted ? "ok" : "gagal");
+  }
+  return true;
+}
+
+uint8_t countCoolRawProfiles() {
+  uint8_t count = 0;
+  for (uint8_t setpoint = RAW_COOL_PROFILE_MIN_C; setpoint <= RAW_COOL_PROFILE_MAX_C; setpoint++) {
+    if (hasCoolIrRaw[setpoint] && coolIrRawLen[setpoint] > 0) {
+      count++;
+    }
+  }
+  return count;
+}
+
+void printRawProfileSummary() {
+  Serial.println("Raw IR profiles:");
+  Serial.print("  off: ");
+  Serial.println(hasOffIrRaw ? "ready" : "empty");
+  Serial.print("  fan: ");
+  Serial.println(hasFanIrRaw ? "ready" : "empty");
+  Serial.print("  cool count: ");
+  Serial.println(countCoolRawProfiles());
+  Serial.print("  cool setpoints: ");
+
+  bool first = true;
+  for (uint8_t setpoint = RAW_COOL_PROFILE_MIN_C; setpoint <= RAW_COOL_PROFILE_MAX_C; setpoint++) {
+    if (!hasCoolIrRaw[setpoint] || coolIrRawLen[setpoint] == 0) {
+      continue;
+    }
+
+    if (!first) {
+      Serial.print(", ");
+    }
+    Serial.print(setpoint);
+    first = false;
+  }
+
+  if (first) {
+    Serial.print("-");
+  }
+  Serial.println();
+}
+
+bool findBestCoolRawProfile(uint8_t requestedSetpoint, uint8_t* resolvedSetpoint) {
+  if (resolvedSetpoint == nullptr) {
+    return false;
+  }
+
+  requestedSetpoint = clampAcSetpoint(requestedSetpoint);
+  int bestDiff = 100;
+  bool found = false;
+
+  for (uint8_t setpoint = RAW_COOL_PROFILE_MIN_C; setpoint <= RAW_COOL_PROFILE_MAX_C; setpoint++) {
+    if (!hasCoolIrRaw[setpoint] || coolIrRawLen[setpoint] == 0) {
+      continue;
+    }
+
+    int diff = abs(static_cast<int>(setpoint) - static_cast<int>(requestedSetpoint));
+    if (!found || diff < bestDiff) {
+      *resolvedSetpoint = setpoint;
+      bestDiff = diff;
+      found = true;
+    }
+  }
+
+  return found;
+}
+
+bool trySendRawAcState(bool powerOn, uint8_t mode, uint8_t fan, uint8_t requestedSetpoint,
+                       bool bypassCooldown, uint8_t* appliedMode, uint8_t* appliedSetpoint) {
+  (void)fan;
+
+  if (appliedMode != nullptr) {
+    *appliedMode = mode;
+  }
+  if (appliedSetpoint != nullptr) {
+    *appliedSetpoint = requestedSetpoint;
+  }
+
+  if (!powerOn) {
+    if (!hasOffIrRaw || offIrRawLen == 0) {
+      return false;
+    }
+    return sendRawIrFrame(offIrRaw, offIrRawLen, 1, "off", bypassCooldown);
+  }
+
+  if (mode == kGreeFan) {
+    if (!hasFanIrRaw || fanIrRawLen == 0) {
+      return false;
+    }
+    return sendRawIrFrame(fanIrRaw, fanIrRawLen, 1, "fan", bypassCooldown);
+  }
+
+  if (mode != kGreeCool) {
+    return false;
+  }
+
+  uint8_t resolvedSetpoint = requestedSetpoint;
+  if (!findBestCoolRawProfile(requestedSetpoint, &resolvedSetpoint)) {
+    return false;
+  }
+
+  char label[16];
+  snprintf(label, sizeof(label), "cool-%u", resolvedSetpoint);
+  bool sent = sendRawIrFrame(coolIrRaw[resolvedSetpoint], coolIrRawLen[resolvedSetpoint], 1,
+                             label, bypassCooldown);
+
+  if (!sent) {
+    return false;
+  }
+
+  if (appliedMode != nullptr) {
+    *appliedMode = kGreeCool;
+  }
+  if (appliedSetpoint != nullptr) {
+    *appliedSetpoint = resolvedSetpoint;
+  }
+  return true;
+}
+
 void ensureWiFiConnected() {
   if (WiFi.status() == WL_CONNECTED) {
     return;
@@ -143,6 +575,712 @@ void ensureWiFiConnected() {
   WiFi.disconnect(true, true);
   delay(250);
   setupWiFi();
+}
+
+bool sendRawIrFrame(uint16_t* frame, uint16_t frameLen, uint8_t repeatCount, const char* label,
+                    bool bypassCooldown) {
+  if (frame == nullptr || frameLen == 0) {
+    Serial.println("⚠️ Frame IR kosong, tidak ada data untuk dikirim.");
+    return false;
+  }
+
+  unsigned long now = millis();
+  if (!bypassCooldown && now - lastIrSendAt < IR_SEND_COOLDOWN_MS) {
+    unsigned long waitMs = IR_SEND_COOLDOWN_MS - (now - lastIrSendAt);
+    Serial.print("⏳ Tunggu ");
+    Serial.print(waitMs);
+    Serial.println(" ms sebelum kirim IR berikutnya.");
+    return false;
+  }
+
+  if (repeatCount == 0) {
+    repeatCount = 1;
+  }
+
+  for (uint8_t i = 0; i < repeatCount; i++) {
+    irsend.sendRaw(frame, frameLen, IR_SEND_FREQUENCY_KHZ);
+    delay(80);
+  }
+
+  lastIrSendAt = millis();
+  Serial.print("✅ IR terkirim (");
+  Serial.print(label);
+  Serial.print(") | raw length=");
+  Serial.print(frameLen);
+  Serial.print(" | repeat=");
+  Serial.println(repeatCount);
+  return true;
+}
+
+void processSerialCommand(const String& rawCommand) {
+  String command = rawCommand;
+  command.trim();
+  command.toLowerCase();
+
+  if (command.length() == 0) {
+    return;
+  }
+
+  if (command == "ir-help") {
+    Serial.println("Perintah IR & Closed-loop:");
+    Serial.println("  ir-help         -> tampilkan daftar perintah");
+    Serial.println("  ir-save-power   -> simpan capture terakhir jadi tombol POWER");
+    Serial.println("  ir-save-off     -> simpan capture OFF asli dari remote");
+    Serial.println("  ir-save-fan     -> simpan capture ON + FAN asli dari remote");
+    Serial.println("  ir-save-cool 24 -> simpan capture ON + COOL setpoint tertentu");
+    Serial.println("  ir-send-last    -> kirim ulang capture terakhir");
+    Serial.println("  ir-send-power   -> kirim ulang frame POWER yang tersimpan");
+    Serial.println("  ir-send-off     -> kirim profil OFF raw");
+    Serial.println("  ir-send-fan     -> kirim profil FAN raw");
+    Serial.println("  ir-send-cool 24 -> kirim profil COOL raw");
+    Serial.println("  ir-list         -> tampilkan daftar profil raw tersimpan");
+    Serial.println("  ir-capture-on   -> aktifkan mode capture KY-022");
+    Serial.println("  ir-capture-off  -> nonaktifkan mode capture KY-022");
+    Serial.println("  cl-enable       -> aktifkan closed-loop otomatis");
+    Serial.println("  cl-disable      -> nonaktifkan closed-loop otomatis");
+    Serial.println("  cl-status       -> tampilkan status closed-loop");
+    Serial.println("  cl-target 24.0  -> set target suhu dari simulasi ML");
+    Serial.println("  cl-clear-target -> hapus target ML, pakai default");
+    Serial.println("  ac-resend       -> kirim ulang state AC sekarang (bypass cooldown)");
+    Serial.println("  ac-test-cool 24 -> paksa kirim COOL 24C sekarang");
+    Serial.println("  ac-model yaw1f  -> ganti model Gree (yaw1f/ybofb/yx1fsf)");
+    Serial.println("  ac-off          -> paksa kirim command AC OFF");
+    return;
+  }
+
+  if (command == "cl-enable") {
+    closedLoopEnabled = true;
+    Serial.println("✅ Closed-loop diaktifkan.");
+    triggerClosedLoopRecheck("serial_cl_enable");
+    return;
+  }
+
+  if (command == "cl-disable") {
+    closedLoopEnabled = false;
+    Serial.println("⏸️ Closed-loop dinonaktifkan.");
+    return;
+  }
+
+  if (command == "cl-status") {
+    printClosedLoopStatus();
+    return;
+  }
+
+  if (command.startsWith("cl-target ")) {
+    String value = command.substring(String("cl-target ").length());
+    float target = value.toFloat();
+    if (target < kGreeMinTempC || target > kGreeMaxTempC) {
+      Serial.print("⚠️ Target harus di rentang ");
+      Serial.print(kGreeMinTempC);
+      Serial.print("-");
+      Serial.print(kGreeMaxTempC);
+      Serial.println(" C");
+      return;
+    }
+
+    setMlTargetTemp(target, "ml");
+    Serial.print("🎯 Target ML diset ke ");
+    Serial.print(mlTargetTempC, 1);
+    Serial.println(" C");
+    triggerClosedLoopRecheck("serial_cl_target");
+    return;
+  }
+
+  if (command == "cl-clear-target") {
+    clearMlTargetTemp();
+    Serial.println("♻️ Target ML dihapus, kembali ke target default.");
+    triggerClosedLoopRecheck("serial_cl_clear_target");
+    return;
+  }
+
+  if (command == "ac-off") {
+    setDesiredAcState(false, acDesiredModeState, acDesiredFanState, acDesiredSetpointState, "manual_ac_off");
+    flushPendingAcCommand();
+    return;
+  }
+
+  if (command == "ac-resend") {
+    setDesiredAcState(acDesiredPowerState, acDesiredModeState, acDesiredFanState, acDesiredSetpointState, "manual_resend");
+    sendAcCommandNow(acDesiredPowerState, acDesiredModeState, acDesiredFanState, acDesiredSetpointState, acLastReason.c_str(), true);
+    return;
+  }
+
+  if (command.startsWith("ac-test-cool")) {
+    String value = command.substring(String("ac-test-cool").length());
+    value.trim();
+    uint8_t setpoint = acDesiredSetpointState;
+    if (value.length() > 0) {
+      setpoint = clampAcSetpoint(value.toFloat());
+    }
+    setDesiredAcState(true, kGreeCool, kGreeFanAuto, setpoint, "manual_test_cool");
+    sendAcCommandNow(acDesiredPowerState, acDesiredModeState, acDesiredFanState, acDesiredSetpointState, acLastReason.c_str(), true);
+    return;
+  }
+
+  if (command.startsWith("ac-model ")) {
+    String value = command.substring(String("ac-model ").length());
+    value.trim();
+    value.toLowerCase();
+    if (!setAcModelFromString(value)) {
+      Serial.println("⚠️ Model tidak dikenali. Pilih: yaw1f | ybofb | yx1fsf");
+      return;
+    }
+
+    Serial.print("✅ Model remote Gree diset ke ");
+    Serial.println(acModelToLabel(greeAc.getModel()));
+    return;
+  }
+
+  if (command == "ir-capture-on") {
+    irCaptureEnabled = true;
+    Serial.println("✅ IR capture aktif.");
+    return;
+  }
+
+  if (command == "ir-capture-off") {
+    irCaptureEnabled = false;
+    Serial.println("⏸️ IR capture nonaktif.");
+    return;
+  }
+
+  if (command == "ir-save-power") {
+    saveLastIrCapture(powerIrRaw, &powerIrRawLen, &hasPowerIrRaw, "power", "power");
+    return;
+  }
+
+  if (command == "ir-save-off") {
+    saveLastIrCapture(offIrRaw, &offIrRawLen, &hasOffIrRaw, "off", "off");
+    return;
+  }
+
+  if (command == "ir-save-fan") {
+    saveLastIrCapture(fanIrRaw, &fanIrRawLen, &hasFanIrRaw, "fan", "fan");
+    return;
+  }
+
+  if (command.startsWith("ir-save-cool ")) {
+    String value = command.substring(String("ir-save-cool ").length());
+    value.trim();
+    int setpoint = value.toInt();
+    if (setpoint < RAW_COOL_PROFILE_MIN_C || setpoint > RAW_COOL_PROFILE_MAX_C) {
+      Serial.print("⚠️ Setpoint COOL harus di rentang ");
+      Serial.print(RAW_COOL_PROFILE_MIN_C);
+      Serial.print("-");
+      Serial.print(RAW_COOL_PROFILE_MAX_C);
+      Serial.println(" C");
+      return;
+    }
+    char label[16];
+    snprintf(label, sizeof(label), "cool-%d", setpoint);
+    char storageKey[16];
+    snprintf(storageKey, sizeof(storageKey), "cool_%d", setpoint);
+    saveLastIrCapture(coolIrRaw[setpoint], &coolIrRawLen[setpoint], &hasCoolIrRaw[setpoint],
+                      label, storageKey);
+    return;
+  }
+
+  if (command == "ir-send-last") {
+    if (!hasLastIrRaw || lastIrRawLen == 0) {
+      Serial.println("⚠️ Tidak ada capture terakhir untuk dikirim.");
+      return;
+    }
+    sendRawIrFrame(lastIrRaw, lastIrRawLen, 1, "last");
+    return;
+  }
+
+  if (command == "ir-send-power") {
+    if (!hasPowerIrRaw || powerIrRawLen == 0) {
+      Serial.println("⚠️ Belum ada frame POWER. Jalankan ir-save-power setelah capture.");
+      return;
+    }
+    sendRawIrFrame(powerIrRaw, powerIrRawLen, 1, "power");
+    return;
+  }
+
+  if (command == "ir-send-off") {
+    if (!hasOffIrRaw || offIrRawLen == 0) {
+      Serial.println("⚠️ Belum ada profil OFF raw.");
+      return;
+    }
+    sendRawIrFrame(offIrRaw, offIrRawLen, 1, "off", true);
+    return;
+  }
+
+  if (command == "ir-send-fan") {
+    if (!hasFanIrRaw || fanIrRawLen == 0) {
+      Serial.println("⚠️ Belum ada profil FAN raw.");
+      return;
+    }
+    sendRawIrFrame(fanIrRaw, fanIrRawLen, 1, "fan", true);
+    return;
+  }
+
+  if (command.startsWith("ir-send-cool ")) {
+    String value = command.substring(String("ir-send-cool ").length());
+    value.trim();
+    int setpoint = value.toInt();
+    if (setpoint < RAW_COOL_PROFILE_MIN_C || setpoint > RAW_COOL_PROFILE_MAX_C) {
+      Serial.print("⚠️ Setpoint COOL harus di rentang ");
+      Serial.print(RAW_COOL_PROFILE_MIN_C);
+      Serial.print("-");
+      Serial.print(RAW_COOL_PROFILE_MAX_C);
+      Serial.println(" C");
+      return;
+    }
+    if (!hasCoolIrRaw[setpoint] || coolIrRawLen[setpoint] == 0) {
+      Serial.println("⚠️ Belum ada profil COOL raw untuk setpoint itu.");
+      return;
+    }
+    char label[16];
+    snprintf(label, sizeof(label), "cool-%d", setpoint);
+    sendRawIrFrame(coolIrRaw[setpoint], coolIrRawLen[setpoint], 1, label, true);
+    return;
+  }
+
+  if (command == "ir-list") {
+    printRawProfileSummary();
+    return;
+  }
+
+  Serial.print("⚠️ Perintah tidak dikenal: ");
+  Serial.println(command);
+  Serial.println("   Ketik ir-help untuk melihat daftar perintah.");
+}
+
+void handleSerialInput() {
+  while (Serial.available() > 0) {
+    char c = static_cast<char>(Serial.read());
+
+    if (c == '\r') {
+      continue;
+    }
+
+    if (c == '\n') {
+      processSerialCommand(serialInputBuffer);
+      serialInputBuffer = "";
+      continue;
+    }
+
+    if (serialInputBuffer.length() < 96) {
+      serialInputBuffer += c;
+    }
+  }
+}
+
+void handleIrCapture() {
+  if (!irCaptureEnabled) {
+    return;
+  }
+
+  if (!irrecv.decode(&irResults)) {
+    return;
+  }
+
+  if (irResults.rawlen > 1) {
+    uint16_t usableLen = irResults.rawlen - 1;
+    if (usableLen > IR_MAX_RAW_LENGTH) {
+      usableLen = IR_MAX_RAW_LENGTH;
+    }
+
+    for (uint16_t i = 0; i < usableLen; i++) {
+      uint32_t rawMicros = irResults.rawbuf[i + 1] * kRawTick;
+      if (rawMicros > 65535) {
+        rawMicros = 65535;
+      }
+      lastIrRaw[i] = static_cast<uint16_t>(rawMicros);
+    }
+
+    lastIrRawLen = usableLen;
+    hasLastIrRaw = true;
+  }
+
+  Serial.println("\n📥 IR tertangkap dari remote AC:");
+  Serial.println(resultToHumanReadableBasic(&irResults));
+  Serial.println(resultToSourceCode(&irResults));
+
+  if (irResults.rawlen > IR_MAX_RAW_LENGTH + 1) {
+    Serial.print("⚠️ Raw IR dipotong ke ");
+    Serial.print(IR_MAX_RAW_LENGTH);
+    Serial.println(" sample karena batas buffer.");
+  }
+
+  Serial.println("Perintah cepat: ir-save-off | ir-save-fan | ir-save-cool 24 | ir-list | ir-help");
+  irrecv.resume();
+}
+
+const char* acModeToLabel(uint8_t mode) {
+  switch (mode) {
+    case kGreeCool:
+      return "cool";
+    case kGreeFan:
+      return "fan";
+    case kGreeDry:
+      return "dry";
+    case kGreeHeat:
+      return "heat";
+    case kGreeAuto:
+      return "auto";
+    default:
+      return "unknown";
+  }
+}
+
+const char* acFanToLabel(uint8_t fan) {
+  switch (fan) {
+    case kGreeFanAuto:
+      return "auto";
+    case kGreeFanMin:
+      return "min";
+    case kGreeFanMed:
+      return "med";
+    case kGreeFanMax:
+      return "max";
+    default:
+      return "unknown";
+  }
+}
+
+const char* acModelToLabel(gree_ac_remote_model_t model) {
+  switch (model) {
+    case gree_ac_remote_model_t::YAW1F:
+      return "yaw1f";
+    case gree_ac_remote_model_t::YBOFB:
+      return "ybofb";
+    case gree_ac_remote_model_t::YX1FSF:
+      return "yx1fsf";
+    default:
+      return "unknown";
+  }
+}
+
+uint8_t clampAcSetpoint(float tempC) {
+  if (tempC < kGreeMinTempC) {
+    return kGreeMinTempC;
+  }
+  if (tempC > kGreeMaxTempC) {
+    return kGreeMaxTempC;
+  }
+  return static_cast<uint8_t>(round(tempC));
+}
+
+uint8_t modeFromString(const String& mode) {
+  if (mode == "cool") return kGreeCool;
+  if (mode == "fan") return kGreeFan;
+  if (mode == "dry") return kGreeDry;
+  if (mode == "heat") return kGreeHeat;
+  if (mode == "auto") return kGreeAuto;
+  return acDesiredModeState;
+}
+
+uint8_t fanFromString(const String& fan) {
+  if (fan == "auto") return kGreeFanAuto;
+  if (fan == "min" || fan == "low") return kGreeFanMin;
+  if (fan == "med" || fan == "medium") return kGreeFanMed;
+  if (fan == "max" || fan == "high") return kGreeFanMax;
+  return acDesiredFanState;
+}
+
+bool setAcModelFromString(const String& modelName) {
+  if (modelName == "yaw1f") {
+    greeAc.setModel(gree_ac_remote_model_t::YAW1F);
+    return true;
+  }
+  if (modelName == "ybofb") {
+    greeAc.setModel(gree_ac_remote_model_t::YBOFB);
+    return true;
+  }
+  if (modelName == "yx1fsf" || modelName == "yx1f2f") {
+    greeAc.setModel(gree_ac_remote_model_t::YX1FSF);
+    return true;
+  }
+  return false;
+}
+
+bool hasPendingAcCommand() {
+  return acDesiredPowerState != acPowerState ||
+         acDesiredModeState != acModeState ||
+         acDesiredFanState != acFanState ||
+         acDesiredSetpointState != acSetpointState;
+}
+
+void setDesiredAcState(bool powerOn, uint8_t mode, uint8_t fan, uint8_t setpoint, const char* reason) {
+  acDesiredPowerState = powerOn;
+  acDesiredModeState = mode;
+  acDesiredFanState = fan;
+  acDesiredSetpointState = setpoint;
+  acLastReason = reason;
+}
+
+bool sendAcCommandNow(bool powerOn, uint8_t mode, uint8_t fan, uint8_t setpoint, const char* reason, bool bypassCooldown) {
+  unsigned long now = millis();
+  bool powerOffTransition = (!powerOn && acPowerState);
+  if (!bypassCooldown && !powerOffTransition && (now - lastAcCommandAt < AC_COMMAND_COOLDOWN_MS)) {
+    return false;
+  }
+  if (!bypassCooldown && (now - lastIrSendAt < IR_SEND_COOLDOWN_MS)) {
+    return false;
+  }
+
+  uint8_t appliedMode = mode;
+  uint8_t appliedSetpoint = setpoint;
+  bool sent = trySendRawAcState(powerOn, mode, fan, setpoint, bypassCooldown, &appliedMode, &appliedSetpoint);
+
+  if (!sent) {
+    greeAc.setPower(powerOn);
+    greeAc.setMode(mode);
+    greeAc.setFan(fan);
+    greeAc.setTemp(setpoint);
+    greeAc.setSwingVertical(true, kGreeSwingAuto);
+    greeAc.send();
+    lastIrSendAt = millis();
+    appliedMode = mode;
+    appliedSetpoint = setpoint;
+  }
+
+  acPowerState = powerOn;
+  acModeState = appliedMode;
+  acFanState = fan;
+  acSetpointState = appliedSetpoint;
+  acDesiredPowerState = powerOn;
+  acDesiredModeState = appliedMode;
+  acDesiredFanState = fan;
+  acDesiredSetpointState = appliedSetpoint;
+  acLastReason = reason;
+  lastAcCommandAt = millis();
+
+  Serial.print("🤖 AC command terkirim | power=");
+  Serial.print(acPowerState ? "on" : "off");
+  Serial.print(" | mode=");
+  Serial.print(acModeToLabel(acModeState));
+  Serial.print(" | fan=");
+  Serial.print(acFanToLabel(acFanState));
+  Serial.print(" | setpoint=");
+  Serial.print(acSetpointState);
+  Serial.print("C | reason=");
+  Serial.println(acLastReason);
+
+  return true;
+}
+
+bool flushPendingAcCommand() {
+  if (!hasPendingAcCommand()) {
+    return false;
+  }
+
+  return sendAcCommandNow(acDesiredPowerState, acDesiredModeState, acDesiredFanState,
+                          acDesiredSetpointState, acLastReason.c_str(), false);
+}
+
+void printClosedLoopStatus() {
+  Serial.println("Closed-loop status:");
+  Serial.print("  enabled: ");
+  Serial.println(closedLoopEnabled ? "true" : "false");
+  Serial.print("  target source: ");
+  Serial.println(targetSource);
+  Serial.print("  target temp: ");
+  Serial.print(effectiveTargetTempC, 1);
+  Serial.println(" C");
+  Serial.print("  control band: ");
+  Serial.println(closedLoopBand);
+  Serial.print("  AC power: ");
+  Serial.println(acPowerState ? "on" : "off");
+  Serial.print("  AC mode: ");
+  Serial.println(acModeToLabel(acModeState));
+  Serial.print("  AC fan: ");
+  Serial.println(acFanToLabel(acFanState));
+  Serial.print("  AC model: ");
+  Serial.println(acModelToLabel(greeAc.getModel()));
+  Serial.print("  AC setpoint: ");
+  Serial.print(acSetpointState);
+  Serial.println(" C");
+  Serial.print("  Last reason: ");
+  Serial.println(acLastReason);
+  Serial.print("  Pending command: ");
+  Serial.println(hasPendingAcCommand() ? "yes" : "no");
+  if (hasSensorSnapshot) {
+    Serial.print("  Last room temp: ");
+    Serial.print(lastMeasuredTempC, 1);
+    Serial.println(" C");
+    Serial.print("  Last humidity: ");
+    Serial.print(lastMeasuredHumidityPercent, 1);
+    Serial.println(" %");
+    if (!isnan(lastMeasuredHeatIndexC)) {
+      Serial.print("  Heat index: ");
+      Serial.print(lastMeasuredHeatIndexC, 1);
+      Serial.println(" C");
+    }
+    Serial.print("  Control temp: ");
+    Serial.print(lastControlTempC, 1);
+    Serial.println(" C");
+  }
+  printRawProfileSummary();
+}
+
+void handleCloudControlMessage(const char* topic, const byte* payload, unsigned int length) {
+  (void)topic;
+
+  const size_t maxPayload = 511;
+  size_t copyLen = length < maxPayload ? length : maxPayload;
+  char message[512];
+  memcpy(message, payload, copyLen);
+  message[copyLen] = '\0';
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, message);
+  if (err) {
+    String raw = String(message);
+    raw.trim();
+    raw.toLowerCase();
+
+    if (raw == "cl-enable") {
+      closedLoopEnabled = true;
+      Serial.println("📥 Cloud command: closed-loop enabled");
+      triggerClosedLoopRecheck("cloud_cl_enable");
+      return;
+    }
+    if (raw == "cl-disable") {
+      closedLoopEnabled = false;
+      Serial.println("📥 Cloud command: closed-loop disabled");
+      return;
+    }
+
+    Serial.println("⚠️ Payload cloud tidak valid JSON dan tidak dikenali.");
+    return;
+  }
+
+  bool hasDirectAcState = false;
+  bool applyNow = false;
+
+  bool desiredPower = acDesiredPowerState;
+  uint8_t desiredMode = acDesiredModeState;
+  uint8_t desiredFan = acDesiredFanState;
+  uint8_t desiredSetpoint = acDesiredSetpointState;
+
+  if (doc["closed_loop_enabled"].is<bool>()) {
+    closedLoopEnabled = doc["closed_loop_enabled"].as<bool>();
+  }
+
+  float targetCandidate = NAN;
+  if (extractTargetTempFromPayload(doc, &targetCandidate)) {
+    setMlTargetTemp(targetCandidate, "ml");
+  }
+
+  if (doc["clear_ml_target"].is<bool>() && doc["clear_ml_target"].as<bool>()) {
+    clearMlTargetTemp();
+  }
+
+  if (doc["power"].is<bool>()) {
+    desiredPower = doc["power"].as<bool>();
+    hasDirectAcState = true;
+  }
+
+  if (doc["mode"].is<const char*>()) {
+    String mode = doc["mode"].as<String>();
+    mode.toLowerCase();
+    desiredMode = modeFromString(mode);
+    hasDirectAcState = true;
+  }
+
+  if (doc["fan"].is<const char*>()) {
+    String fan = doc["fan"].as<String>();
+    fan.toLowerCase();
+    desiredFan = fanFromString(fan);
+    hasDirectAcState = true;
+  }
+
+  if (doc["setpoint_temp"].is<float>() || doc["setpoint_temp"].is<int>()) {
+    desiredSetpoint = clampAcSetpoint(doc["setpoint_temp"].as<float>());
+    hasDirectAcState = true;
+  } else if (doc["setpoint"].is<float>() || doc["setpoint"].is<int>()) {
+    desiredSetpoint = clampAcSetpoint(doc["setpoint"].as<float>());
+    hasDirectAcState = true;
+  }
+
+  if (doc["apply_now"].is<bool>()) {
+    applyNow = doc["apply_now"].as<bool>();
+  }
+
+  if (hasDirectAcState) {
+    setDesiredAcState(desiredPower, desiredMode, desiredFan, desiredSetpoint, "cloud_command");
+  }
+
+  if (applyNow) {
+    flushPendingAcCommand();
+  } else if (!hasDirectAcState && (closedLoopEnabled || !isnan(targetCandidate))) {
+    triggerClosedLoopRecheck("cloud_ml_update");
+  }
+
+  printClosedLoopStatus();
+}
+
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("\n📩 C2D command diterima dari topic: ");
+  Serial.println(topic);
+  handleCloudControlMessage(topic, payload, length);
+}
+
+void applyClosedLoopControl(float suhuCelsius, float kelembaban) {
+  lastMeasuredTempC = suhuCelsius;
+  lastMeasuredHumidityPercent = kelembaban;
+  lastControlTempC = calculateControlTemperature(suhuCelsius, kelembaban, &lastMeasuredHeatIndexC);
+  hasSensorSnapshot = !isnan(suhuCelsius);
+
+  if (hasMlTargetTemp) {
+    effectiveTargetTempC = mlTargetTempC;
+    targetSource = "ml";
+  } else {
+    effectiveTargetTempC = DEFAULT_TARGET_TEMP_C;
+    targetSource = "default";
+  }
+
+  if (!closedLoopEnabled || isnan(suhuCelsius)) {
+    closedLoopBand = closedLoopEnabled ? "waiting_sensor" : "manual_pause";
+    return;
+  }
+
+  uint8_t targetSetpoint = clampAcSetpoint(effectiveTargetTempC);
+  float hotStartThreshold = effectiveTargetTempC + TEMP_HYSTERESIS_UP_C;
+  float coolThreshold = effectiveTargetTempC + TEMP_HYSTERESIS_UP_C;
+  float fanThreshold = effectiveTargetTempC - TEMP_HYSTERESIS_DOWN_C;
+  bool humidityValid = !isnan(kelembaban);
+  bool feelsHot = !isnan(lastControlTempC) && lastControlTempC >= coolThreshold;
+  bool roomReachedTarget = suhuCelsius <= fanThreshold;
+  bool feelsComfortable = !isnan(lastControlTempC) &&
+                          lastControlTempC <= (effectiveTargetTempC + FAN_MODE_MAX_FEELS_LIKE_MARGIN_C);
+  bool humidityTooHighForFan = humidityValid && kelembaban > FAN_MODE_MAX_HUMIDITY_PERCENT;
+
+  if (!hasMlTargetTemp && HOT_START_THRESHOLD_C > hotStartThreshold) {
+    hotStartThreshold = HOT_START_THRESHOLD_C;
+  }
+
+  if (!acDesiredPowerState && !isnan(lastControlTempC) && lastControlTempC >= hotStartThreshold) {
+    closedLoopBand = "start_cooling";
+    setDesiredAcState(true, kGreeCool, kGreeFanAuto, targetSetpoint,
+                      lastMeasuredHeatIndexC > suhuCelsius ? "auto_feels_hot_start" : "auto_hot_start");
+    flushPendingAcCommand();
+    return;
+  }
+
+  if (!acDesiredPowerState) {
+    closedLoopBand = "standby";
+    return;
+  }
+
+  if (feelsHot) {
+    closedLoopBand = "cooling";
+    setDesiredAcState(true, kGreeCool, kGreeFanAuto, targetSetpoint,
+                      lastMeasuredHeatIndexC > suhuCelsius ? "auto_feels_hot_cooling" : "auto_need_cooling");
+  } else if (roomReachedTarget && feelsComfortable && !humidityTooHighForFan) {
+    closedLoopBand = "fan_maintain";
+    setDesiredAcState(true, kGreeFan, kGreeFanAuto, targetSetpoint, "auto_target_reached_fan");
+  } else if (roomReachedTarget && humidityTooHighForFan) {
+    closedLoopBand = "hold_cool_humidity";
+    setDesiredAcState(true, kGreeCool, kGreeFanAuto, targetSetpoint, "auto_hold_cool_high_humidity");
+  } else {
+    closedLoopBand = (acDesiredModeState == kGreeCool) ? "hold_cool" : "hold_fan";
+  }
+
+  flushPendingAcCommand();
 }
 
 // Struktur untuk hasil pembacaan tegangan
@@ -170,6 +1308,7 @@ VoltageReading readACVoltage() {
   // PLN Indonesia: 50Hz = 20ms per cycle, sample 2000 untuk ~10 cycle (akurasi lebih baik)
   int numSamples = 2000;
   float sumSquares = 0;
+  float sumVoltage = 0;
   long sumADC = 0;
   
   for (int i = 0; i < numSamples; i++) {
@@ -179,18 +1318,23 @@ VoltageReading readACVoltage() {
     
     // Konversi ADC ke tegangan (0-3.3V)
     float voltage = (adcValue * VREF) / ADC_COUNTS;
-    
-    // Kurangi offset DC (karena sensor output sekitar 1.65V untuk 0V AC)
-    float voltageAC = voltage - (VREF / 2.0);
-    
-    // Kuadratkan nilai untuk perhitungan RMS
-    sumSquares += (voltageAC * voltageAC);
+
+    // Hitung statistik sample untuk RMS AC dengan offset DC dinamis.
+    // Ini lebih stabil daripada offset statis 1.65V yang bisa meleset antar modul.
+    sumVoltage += voltage;
+    sumSquares += (voltage * voltage);
     
     delayMicroseconds(200);  // Delay kecil untuk sampling (5kHz sampling rate)
   }
   
+  float meanVoltage = sumVoltage / numSamples;
+  float variance = (sumSquares / numSamples) - (meanVoltage * meanVoltage);
+  if (variance < 0.0f) {
+    variance = 0.0f;
+  }
+
   // Hitung nilai RMS (Root Mean Square)
-  float rms = sqrt(sumSquares / numSamples);
+  float rms = sqrt(variance);
   
   // Hitung rata-rata ADC
   int avgADC = sumADC / numSamples;
@@ -203,7 +1347,7 @@ VoltageReading readACVoltage() {
   result.rms = rms;
   result.adcRaw = avgADC;
   
-  if (rms > RMS_THRESHOLD && actualVoltage > VOLTAGE_THRESHOLD) {
+  if (rms > RMS_THRESHOLD && actualVoltage > VOLTAGE_THRESHOLD && actualVoltage <= VOLTAGE_MAX_VALID) {
     result.voltage = actualVoltage;
     result.isConnected = true;
   } else {
@@ -397,6 +1541,12 @@ void reconnectMQTT() {
     // Koneksi dengan SAS Token
     if (client.connect(deviceId, mqtt_username.c_str(), sasToken.c_str())) {
       Serial.println("✓ Terhubung ke Azure IoT Hub!");
+      if (client.subscribe(mqtt_c2d_topic.c_str())) {
+        Serial.print("✓ Subscribe C2D topic: ");
+        Serial.println(mqtt_c2d_topic);
+      } else {
+        Serial.println("⚠️ Gagal subscribe C2D topic.");
+      }
     } else {
       Serial.print("✗ Gagal, rc=");
       Serial.print(client.state());
@@ -423,6 +1573,12 @@ void setup() {
   Serial.println("===========================================");
   
   Serial.println("⚠️  KESELAMATAN: Pastikan sensor terpasang dengan benar!");
+  Serial.print("   DHT11 DATA: GPIO ");
+  Serial.println(DHTPIN);
+  Serial.print("   IR TX LED: GPIO ");
+  Serial.println(IR_TX_PIN);
+  Serial.print("   IR RX KY-022 (OUT): GPIO ");
+  Serial.println(IR_RX_PIN);
   Serial.println("   ZMPT101B:");
   Serial.println("   - Input: Fase & Netral dari stopkontak 220V");
   Serial.println("   - Output: VCC, GND, OUT ke ESP32 GPIO35");
@@ -434,6 +1590,38 @@ void setup() {
   
   // Inisialisasi sensor DHT
   dht.begin();
+
+  rawIrStorageReady = rawIrPrefs.begin("acraw", false);
+  if (rawIrStorageReady) {
+    loadStoredRawProfiles();
+    Serial.println("💾 Raw IR profiles loaded dari flash.");
+    printRawProfileSummary();
+  } else {
+    Serial.println("⚠️ Gagal membuka storage raw IR (Preferences).");
+  }
+
+  // Inisialisasi IR untuk mode capture dan mode send command AC
+  irsend.begin();
+  irrecv.enableIRIn();
+  greeAc.begin();
+  greeAc.setPower(acPowerState);
+  greeAc.setMode(acModeState);
+  greeAc.setFan(acFanState);
+  greeAc.setTemp(acSetpointState);
+  greeAc.setSwingVertical(true, kGreeSwingAuto);
+
+  acDesiredPowerState = acPowerState;
+  acDesiredModeState = acModeState;
+  acDesiredFanState = acFanState;
+  acDesiredSetpointState = acSetpointState;
+
+  Serial.println("\n📡 IR stack aktif (capture + transmitter)");
+  Serial.println("   Mode capture default: OFF (hindari noise KY-022 saat closed-loop otomatis).");
+  Serial.println("   Aktifkan capture bila perlu debug: ir-capture-on");
+  Serial.println("   Arahkan remote AC Gree ke KY-022 hanya saat capture aktif.");
+  Serial.println("   Ketik ir-help di serial monitor untuk perintah capture/kirim uji.");
+  Serial.println("   Untuk model Gree yang tidak cocok library, simpan profil raw: off, fan, cool-24, dst.");
+  Serial.println("   Closed-loop aktif: AC otomatis COOL/FAN berbasis suhu-terasa, kelembaban, dan target ML.");
   
   // Inisialisasi ADC untuk sensor tegangan
   analogReadResolution(ADC_BITS);  // Set resolusi ADC 12-bit
@@ -470,6 +1658,7 @@ void setup() {
   
   // Konfigurasi MQTT dengan buffer size lebih besar untuk Azure IoT Hub
   client.setServer(mqtt_server.c_str(), mqtt_port);
+  client.setCallback(mqttCallback);
   client.setBufferSize(1024);  // Buffer lebih besar untuk JSON + overhead
   client.setKeepAlive(60);     // Keep alive 60 detik (lebih responsif)
   client.setSocketTimeout(60); // Socket timeout 60 detik (lebih toleran)
@@ -484,12 +1673,22 @@ void setup() {
   
   Serial.println("\n🔧 STATUS KALIBRASI:");
   Serial.println("   TEGANGAN (ZMPT101B):");
-  Serial.println("   ✓ Sudah dikalibrasi untuk PLN 220V Indonesia");
-  Serial.println("   ✓ Faktor kalibrasi: 680 (220V / 0.32V RMS)");
+  Serial.println("   ✓ Target grid: 220V PLN Indonesia");
+  Serial.print("   ✓ Faktor kalibrasi awal: ");
+  Serial.println(VOLTAGE_CALIBRATION, 1);
+  Serial.print("   ✓ Rentang valid: ");
+  Serial.print(VOLTAGE_THRESHOLD, 0);
+  Serial.print("V - ");
+  Serial.print(VOLTAGE_MAX_VALID, 0);
+  Serial.println("V");
   Serial.println("   ARUS (SCT013-000):");
-  Serial.println("   ✓ Burden resistor: 62 ohm (rangkaian sederhana tanpa bias)");
+  Serial.print("   ✓ Burden resistor: ");
+  Serial.print(BURDEN_RESISTOR, 0);
+  Serial.println(" ohm");
   Serial.println("   ✓ Ratio: 2000:1 (100A primary / 50mA secondary)");
-  Serial.println("   ✓ Threshold: 0.05V RMS (~0.8A minimum)\n");
+  Serial.print("   ✓ Threshold RMS arus: ");
+  Serial.print(CURRENT_RMS_THRESHOLD, 3);
+  Serial.println(" V\n");
   Serial.println("   📌 CARA KALIBRASI ARUS:");
   Serial.println("   1. Jepit SCT013 pada kabel FASE beban (misal: lampu 100W)");
   Serial.println("   2. Nyalakan beban dan catat 'RMS mentah (I)' dari Serial Monitor");
@@ -505,6 +1704,10 @@ void setup() {
 
 void loop() {
   ensureWiFiConnected();
+
+  handleSerialInput();
+  handleIrCapture();
+  flushPendingAcCommand();
 
   unsigned long currentEpoch = time(nullptr);
   if (sasToken != "" && currentEpoch > 0 && currentEpoch >= (sasTokenExpiry - SAS_TOKEN_REFRESH_WINDOW)) {
@@ -551,7 +1754,8 @@ void loop() {
     // Cek apakah pembacaan gagal setelah retry
     if (isnan(kelembaban) || isnan(suhuCelsius) || isnan(suhuFahrenheit)) {
       Serial.println("⚠️ Gagal membaca DHT11! Cek:");
-      Serial.println("   1. Kabel DATA di GPIO 4");
+      Serial.print("   1. Kabel DATA di GPIO ");
+      Serial.println(DHTPIN);
       Serial.println("   2. VCC ke 3.3V atau 5V");
       Serial.println("   3. GND ke GND");
       Serial.println("   4. Pull-up resistor 10kΩ (DATA-VCC)");
@@ -562,6 +1766,9 @@ void loop() {
     
     // Hitung heat index
     float heatIndexC = dht.computeHeatIndex(suhuCelsius, kelembaban, false);
+
+    // Evaluasi closed-loop otomatis berbasis suhu saat ini dan target ML/default.
+    applyClosedLoopControl(suhuCelsius, kelembaban);
     
     // Baca tegangan AC dengan validasi
     VoltageReading voltageData = readACVoltage();
@@ -599,6 +1806,11 @@ void loop() {
     Serial.print("Heat Index: ");
     Serial.print(heatIndexC);
     Serial.println(" °C");
+
+    Serial.print("Control Temp: ");
+    Serial.print(lastControlTempC, 1);
+    Serial.print(" °C | Band: ");
+    Serial.println(closedLoopBand);
     
     Serial.print("Tegangan AC (RMS): ");
     Serial.print(voltageData.voltage);
@@ -623,6 +1835,26 @@ void loop() {
     Serial.print("Daya (Power): ");
     Serial.print(power, 1);
     Serial.println(" W");
+
+    Serial.print("AC State: ");
+    Serial.print(acPowerState ? "ON" : "OFF");
+    Serial.print(" | Mode: ");
+    Serial.print(acModeToLabel(acModeState));
+    Serial.print(" | Fan: ");
+    Serial.print(acFanToLabel(acFanState));
+    Serial.print(" | Setpoint: ");
+    Serial.print(acSetpointState);
+    Serial.println(" C");
+
+    Serial.print("Closed-loop: ");
+    Serial.print(closedLoopEnabled ? "aktif" : "nonaktif");
+    Serial.print(" | Target: ");
+    Serial.print(effectiveTargetTempC, 1);
+    Serial.print(" C (");
+    Serial.print(targetSource);
+    Serial.print(") | Humidity gate fan <= ");
+    Serial.print(FAN_MODE_MAX_HUMIDITY_PERCENT, 0);
+    Serial.println("%");
     
     // Buat JSON document
      JsonDocument doc;
@@ -635,9 +1867,25 @@ void loop() {
      doc["status_arus"] = currentData.isConnected ? "terhubung" : "tidak_terhubung";
      doc["deviceId"] = deviceId;
      doc["timestamp"] = getIsoTimestampUTC();
+     if (!isnan(heatIndexC)) {
+       doc["heat_index"] = round(heatIndexC * 10) / 10.0;
+     }
     
     // Serialize JSON ke string
-    char jsonBuffer[256];
+    doc["closed_loop_enabled"] = closedLoopEnabled;
+    doc["target_temp"] = round(effectiveTargetTempC * 10) / 10.0;
+    doc["target_source"] = targetSource;
+    doc["control_temp"] = round(lastControlTempC * 10) / 10.0;
+    doc["control_band"] = closedLoopBand;
+    doc["fan_humidity_gate"] = FAN_MODE_MAX_HUMIDITY_PERCENT;
+    doc["ac_power"] = acPowerState ? "on" : "off";
+    doc["ac_mode"] = acModeToLabel(acModeState);
+    doc["ac_fan"] = acFanToLabel(acFanState);
+    doc["ac_setpoint"] = acSetpointState;
+    doc["ac_last_reason"] = acLastReason;
+    doc["ac_pending_command"] = hasPendingAcCommand();
+
+    char jsonBuffer[640];
     serializeJson(doc, jsonBuffer);
     
     // Tampilkan JSON yang akan dikirim
