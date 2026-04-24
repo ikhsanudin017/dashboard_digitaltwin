@@ -117,7 +117,7 @@ const mapAuthError = error => {
   if (error.code === 'auth/popup-blocked') return 'Popup login diblokir browser. Izinkan popup lalu coba lagi.'
   if (error.code === 'auth/cancelled-popup-request') return 'Permintaan popup sebelumnya dibatalkan. Coba login sekali lagi.'
   if (error.code === 'auth/unauthorized-domain') return 'Domain ini belum diizinkan di Firebase Authentication.'
-  if (error.code === 'auth/operation-not-allowed') return 'Provider Google belum diaktifkan di Firebase Console.'
+  if (error.code === 'auth/operation-not-allowed') return 'Metode login ini belum diaktifkan di Firebase Console.'
   if (error.code === 'auth/configuration-not-found') return 'Konfigurasi Google Sign-In di Firebase belum lengkap.'
   if (error.code === 'auth/auth-domain-config-required') return 'Auth domain Firebase belum benar atau belum dikonfigurasi.'
   if (error.code === 'auth/invalid-api-key') return 'Firebase API key tidak valid.'
