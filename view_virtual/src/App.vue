@@ -165,6 +165,8 @@ const {
   isAuthReady,
   isSigningIn,
   authError,
+  pendingRedirect,
+  clearPendingRedirect,
   getAdminRoleStatus,
   isFirebaseConfigured,
   signInAsAdmin,
@@ -209,7 +211,7 @@ onMounted(() => {
   syncAdminSessionState()
 })
 
-watch(user, nextUser => {
+watch(user, (nextUser, prevUser) => {
   if (!nextUser) {
     clearAdminSessionTimer()
     clearAdminSession()
@@ -218,6 +220,16 @@ watch(user, nextUser => {
   }
 
   syncAdminSessionState()
+
+  // Redirect to dashboard when user authenticates:
+  // 1. Google redirect login success (user just returned from OAuth)
+  // 2. Direct login success (prevUser was null, user just became authenticated)
+  if (pendingRedirect.value) {
+    clearPendingRedirect()
+    finalizeUserLogin()
+  } else if (!prevUser) {
+    finalizeUserLogin()
+  }
 })
 
 watch(

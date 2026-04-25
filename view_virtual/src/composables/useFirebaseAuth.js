@@ -22,6 +22,7 @@ const isSigningIn = ref(false)
 const authError = ref('')
 
 let authObserverInitialized = false
+let pendingRedirect = ref(false)
 const credentialDomain = String(import.meta.env.VITE_AUTH_DEFAULT_DOMAIN || '').trim().toLowerCase()
 const localAdminEmail = String(import.meta.env.VITE_LOCAL_ADMIN_EMAIL || '').trim().toLowerCase()
 const localAdminPassword = String(import.meta.env.VITE_LOCAL_ADMIN_PASSWORD || '').trim()
@@ -145,9 +146,15 @@ const initializeAuthObserver = () => {
     return
   }
 
-  getRedirectResult(auth).catch(error => {
-    authError.value = mapAuthError(error)
-  })
+  getRedirectResult(auth)
+    .then(result => {
+      if (result?.user) {
+        pendingRedirect.value = true
+      }
+    })
+    .catch(error => {
+      authError.value = mapAuthError(error)
+    })
 
   onAuthStateChanged(
     auth,
@@ -167,6 +174,10 @@ const initializeAuthObserver = () => {
   // NOTE: authObserverInitialized is NOT set here.
   // It is set INSIDE the onAuthStateChanged callback above,
   // so isAuthReady only becomes true after Firebase has resolved the initial state.
+}
+
+const clearPendingRedirect = () => {
+  pendingRedirect.value = false
 }
 
 export function useFirebaseAuth() {
@@ -405,6 +416,8 @@ export function useFirebaseAuth() {
     authError,
     isAuthenticated: computed(() => Boolean(user.value)),
     isFirebaseConfigured,
+    pendingRedirect,
+    clearPendingRedirect,
     getAdminRoleStatus,
     requestPasswordReset,
     signInAsAdmin,
