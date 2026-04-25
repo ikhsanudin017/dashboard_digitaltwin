@@ -154,15 +154,19 @@ const initializeAuthObserver = () => {
     currentUser => {
       user.value = currentUser || localAdminProfile.value
       isAuthReady.value = true
+      authObserverInitialized = true
     },
     error => {
       authError.value = mapAuthError(error)
       user.value = localAdminProfile.value
       isAuthReady.value = true
+      authObserverInitialized = true
     }
   )
 
-  authObserverInitialized = true
+  // NOTE: authObserverInitialized is NOT set here.
+  // It is set INSIDE the onAuthStateChanged callback above,
+  // so isAuthReady only becomes true after Firebase has resolved the initial state.
 }
 
 export function useFirebaseAuth() {
