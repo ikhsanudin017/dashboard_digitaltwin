@@ -60,11 +60,13 @@ router.beforeEach(async to => {
     clearAdminSession()
   }
 
+  // Root route: redirect based on auth state
   if (to.name === 'root') {
     if (!loggedIn) return '/login'
     return adminSessionActive ? '/admin' : '/dashboard'
   }
 
+  // Admin routes: require auth + admin role
   if (to.meta.requiresAdmin) {
     if (!loggedIn || !adminSessionActive) return '/admin/login'
 
@@ -74,41 +76,31 @@ router.beforeEach(async to => {
       await signOutUser()
       return '/admin/login'
     }
+    return true
   }
 
+  // Protected routes: require auth only
   if (to.meta.requiresAuth && !loggedIn) {
-    return to.meta.requiresAdmin ? '/admin/login' : '/login'
+    return '/login'
   }
 
-  if (to.name === 'user-dashboard' && adminSessionActive) {
-    return '/admin'
-  }
-
-  if ((to.name === 'user-login' || to.name === 'user-dashboard') && loggedIn) {
-    const adminRole = await getAdminRoleStatus({ forceRefresh: false })
-    if (adminRole.success && adminSessionActive) {
-      return '/admin'
-    }
-    // Admin email logged in as user → let them proceed to dashboard
-    // They can manually navigate to /admin/login if needed
-    if (adminRole.success) {
-      return '/dashboard'
-    }
-  }
-
-  if (to.name === 'admin-login' && loggedIn) {
-    const adminRole = await getAdminRoleStatus({ forceRefresh: false })
-
-    if (adminRole.success) {
-      if (adminSessionActive) return '/admin'
-      return '/admin' // Show admin login page for admin to create session
-    }
-
-    return '/dashboard'
-  }
-
+  // User login route: if already logged in → go to dashboard
   if (to.name === 'user-login' && loggedIn) {
-    return '/dashboard'
+    return adminSessionActive ? '/admin' : '/dashboard'
+  }
+
+  // Admin login route: if already logged in → go to admin dashboard
+  if (to.name === 'admin-login' && loggedIn) {
+    if (adminSessionActive) return '/admin'
+    // Check if user has admin role, if not → go to user dashboard
+    try {
+      const adminRole = await getAdminRoleStatus({ forceRefresh: false })
+      if (!adminRole.success) {
+        return '/dashboard'
+      }
+    } catch {
+      // On error, stay on admin login page
+    }
   }
 
   return true

@@ -124,25 +124,8 @@ const redirectAfterLogin = async () => {
 }
 
 const finalizeUserLogin = async () => {
-  try {
-    const adminRoleResult = await getAdminRoleStatus({ forceRefresh: true })
-
-    if (adminRoleResult.success) {
-      clearAdminSession()
-      isAdminAuthenticated.value = false
-      clearAdminSessionTimer()
-      authError.value = 'Akun admin harus login melalui halaman khusus admin.'
-      return
-    }
-
-    authError.value = ''
-    await router.replace('/dashboard')
-  } catch (error) {
-    console.error('[Auth] finalizeUserLogin error:', error)
-    // Still redirect to dashboard even if admin check fails
-    authError.value = ''
-    await router.replace('/dashboard')
-  }
+  // Simple: redirect to dashboard after successful login
+  await router.replace('/dashboard')
 }
 
 const handleAdminAuth = async credentials => {
