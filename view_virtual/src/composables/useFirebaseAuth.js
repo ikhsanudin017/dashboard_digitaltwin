@@ -153,7 +153,18 @@ const initializeAuthObserver = () => {
       }
     })
     .catch(error => {
-      authError.value = mapAuthError(error)
+      // Ignore "missing initial state" error - happens when redirect state is lost
+      // This is normal when sessionStorage is inaccessible or cleared
+      if (error?.code !== 'auth/missing-enrollment-action' && error?.code !== 'auth/unable-to-process-request') {
+        const ignoreCodes = new Set([
+          'auth/missing-enrollment-action',
+          'auth/unable-to-process-request',
+          'auth/session-storage-inaccessible'
+        ])
+        if (!ignoreCodes.has(error?.code)) {
+          authError.value = mapAuthError(error)
+        }
+      }
     })
 
   onAuthStateChanged(
@@ -206,16 +217,17 @@ export function useFirebaseAuth() {
       await signInWithPopup(auth, googleProvider)
       return { success: true }
     } catch (error) {
-      const recoverablePopupErrorCodes = new Set([
-        'auth/popup-blocked',
-        'auth/web-storage-unsupported',
-        'auth/operation-not-supported-in-this-environment'
-      ])
-
-      if (recoverablePopupErrorCodes.has(error?.code)) {
-        authError.value = 'Popup tidak bisa digunakan. Mengalihkan ke login Google halaman penuh...'
-        await signInWithGoogleRedirect()
-        return { success: true, redirected: true }
+      // Popup blocked - try fallback approach
+      if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/web-storage-unsupported') {
+        authError.value = 'Popup diblokir. Mengalihkan ke halaman login Google...'
+        // Try signInWithRedirect as last resort
+        try {
+          await signInWithRedirect(auth, googleProvider)
+          return { success: true, redirected: true }
+        } catch (redirectError) {
+          authError.value = mapAuthError(redirectError)
+          return { success: false, error: redirectError }
+        }
       }
 
       authError.value = mapAuthError(error)
