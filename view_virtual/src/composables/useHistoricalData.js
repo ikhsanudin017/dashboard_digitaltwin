@@ -13,6 +13,8 @@ const RECENT_HISTORY_LIMIT = 1000
 const historicalData = ref([])
 const isLoading = ref(false)
 
+// Parse timestamp from UTC ISO string (from Azure Storage)
+// Handles both new format (UTC ISO) and legacy format (WIB string like "2026-01-04 10:30:15 WIB")
 const toTimestamp = (value) => {
   if (!value) return 0
 
@@ -20,20 +22,31 @@ const toTimestamp = (value) => {
 
   if (typeof value === 'number') return value
 
+  // Try direct ISO parse first (new format)
   const direct = new Date(value).getTime()
   if (!Number.isNaN(direct)) return direct
 
+  // Handle legacy WIB/WITA/WIT format strings
   if (typeof value === 'string') {
     const normalized = value
-      .replace(' WIB', '+07:00')
-      .replace(' WITA', '+08:00')
-      .replace(' WIT', '+09:00')
-      .replace(' ', 'T')
+      .replace(/\s WIB$/, '+07:00')
+      .replace(/\s WITA$/, '+08:00')
+      .replace(/\s WIT$/, '+09:00')
+      .replace(/\s/, 'T')
     const parsed = new Date(normalized).getTime()
     if (!Number.isNaN(parsed)) return parsed
   }
 
   return 0
+}
+
+// Convert UTC ISO timestamp to local display string (WIB/Asia/Jakarta)
+// Use this for all user-facing timestamp displays
+const formatForDisplay = (value) => {
+  const ts = toTimestamp(value)
+  if (!ts) return ''
+  const date = new Date(ts)
+  return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
 }
 
 const formatDateInput = (value) => {

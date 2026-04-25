@@ -124,21 +124,25 @@ const redirectAfterLogin = async () => {
 }
 
 const finalizeUserLogin = async () => {
-  const adminRoleResult = await getAdminRoleStatus({ forceRefresh: true })
+  try {
+    const adminRoleResult = await getAdminRoleStatus({ forceRefresh: true })
 
-  if (adminRoleResult.success) {
-    clearAdminSession()
-    isAdminAuthenticated.value = false
-    clearAdminSessionTimer()
-    await signOutUser()
-    authError.value = 'Akun admin harus login melalui halaman khusus admin.'
-    await router.replace('/admin/login')
-    return { success: false }
+    if (adminRoleResult.success) {
+      clearAdminSession()
+      isAdminAuthenticated.value = false
+      clearAdminSessionTimer()
+      authError.value = 'Akun admin harus login melalui halaman khusus admin.'
+      return
+    }
+
+    authError.value = ''
+    await router.replace('/dashboard')
+  } catch (error) {
+    console.error('[Auth] finalizeUserLogin error:', error)
+    // Still redirect to dashboard even if admin check fails
+    authError.value = ''
+    await router.replace('/dashboard')
   }
-
-  authError.value = ''
-  await router.replace('/dashboard')
-  return { success: true }
 }
 
 const handleAdminAuth = async credentials => {

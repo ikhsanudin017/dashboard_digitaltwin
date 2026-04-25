@@ -6,6 +6,30 @@ const STORAGE_KEY = 'sensor_last_data'
 // Polling interval in milliseconds (5 seconds for near real-time)
 const POLLING_INTERVAL = 5000
 
+// Timezone offset for WIB (UTC+7)
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000
+
+// Convert UTC ISO string to local display string (WIB)
+const toLocalDisplay = (utcString) => {
+  if (!utcString) return new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
+  try {
+    const date = new Date(utcString)
+    return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+  } catch {
+    return utcString
+  }
+}
+
+// Convert UTC ISO string to Date object
+const parseTimestamp = (utcString) => {
+  if (!utcString) return null
+  try {
+    return new Date(utcString)
+  } catch {
+    return null
+  }
+}
+
 // Simpan data ke localStorage sebagai backup
 const saveLastData = (data) => {
   try {
@@ -40,7 +64,9 @@ export function useMQTT() {
     voltageStatus: 'unknown',
     currentStatus: 'unknown',
     peopleCount: 0,
-    lastPeopleUpdate: null
+    lastPeopleUpdate: null,
+    timestamp: null, // UTC ISO from storage
+    timestampDisplay: null // Local display (WIB)
   })
   
   let pollingTimer = null
@@ -94,15 +120,20 @@ export function useMQTT() {
           nextData.power = parseFloat((nextData.voltage * nextData.current).toFixed(1))
         }
         
-        sensorData.value = nextData
-        
-        console.log('🌡️ Data updated from Azure:', {
+        sensorData.value = {
+          ...nextData,
+          timestamp: data.timestamp || new Date().toISOString(),
+          timestampDisplay: toLocalDisplay(data.timestamp)
+        }
+
+        console.log('Data updated from Azure:', {
           temperature: nextData.temperature,
           humidity: nextData.humidity,
           voltage: nextData.voltage,
           current: nextData.current,
           power: nextData.power,
-          timestamp: data.timestamp
+          timestamp: data.timestamp,
+          timestampDisplay: toLocalDisplay(data.timestamp)
         })
         
         return true
@@ -142,9 +173,9 @@ export function useMQTT() {
         }
         
         sensorData.value.peopleCount = count
-        sensorData.value.lastPeopleUpdate = timestamp || new Date().toLocaleTimeString()
-        
-        console.log('👥 People count updated from Azure:', count)
+        sensorData.value.lastPeopleUpdate = timestamp ? toLocalDisplay(timestamp) : new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
+
+        console.log('People count updated from Azure:', count, 'at', sensorData.value.lastPeopleUpdate)
         return true
       }
       
@@ -185,8 +216,8 @@ export function useMQTT() {
       if (result.success) {
         // Update local state immediately
         sensorData.value.peopleCount = count
-        sensorData.value.lastPeopleUpdate = new Date().toLocaleTimeString()
-        console.log('✅ People count saved to Azure:', count)
+        sensorData.value.lastPeopleUpdate = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+        console.log('People count saved to Azure:', count)
         return true
       }
       

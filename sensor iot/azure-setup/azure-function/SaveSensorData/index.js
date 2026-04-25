@@ -56,24 +56,17 @@ module.exports = async function (context, req) {
         // Create table if not exists
         await tableClient.createTable().catch(() => {});
 
-        // Fungsi untuk mendapatkan waktu WIB (UTC+7)
-        const getWIBTime = () => {
-            const now = new Date();
-            const wibOffset = 7 * 60 * 60 * 1000; // UTC+7 dalam milliseconds
-            const wibTime = new Date(now.getTime() + wibOffset);
-            return wibTime.toISOString().replace('Z', ' WIB');
-        };
-
-        // Prepare entity
+        // Standardize timestamp to UTC ISO-8601 (same as ESP32 firmware)
+        // UI layer converts to local timezone (WIB) only for display
         const deviceId = sensorData.deviceId || "ESP32_ENERGY_MONITOR_001";
-        const timestamp = sensorData.timestamp || getWIBTime();
-        
+        const timestamp = sensorData.timestamp || new Date().toISOString();
+
         const entity = {
             partitionKey: deviceId,
             rowKey: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-            timestamp: timestamp,
+            timestamp: timestamp, // Always UTC ISO
             deviceId: deviceId,
-            receivedAt: getWIBTime()
+            receivedAt: new Date().toISOString() // Always UTC ISO
         };
 
         // Add sensor fields

@@ -195,8 +195,6 @@ File penting:
   - empty state reusable.
 - `view_virtual/src/components/DigitalTwin3D.vue`
   - wrapper / placeholder tipis untuk komponen 3D.
-- `view_virtual/src/components/AlertSettings.vue`
-  - placeholder kosong, belum selesai.
 
 #### Testing dan build frontend
 
@@ -545,7 +543,8 @@ Auth flow:
 - Azure Functions untuk read/write telemetry dan recommendation;
 - ML API lokal dan training pipeline dari Azure;
 - energy management dan estimasi biaya;
-- CI GitHub Actions dasar untuk frontend dan Azure Functions.
+- CI GitHub Actions dasar untuk frontend dan Azure Functions;
+- **timestamp standardization** — semua Azure Function menyimpan UTC ISO, konversi WIB hanya di frontend.
 
 ### 5.2 Sudah Ada, Tetapi Masih Parsial / Drift / Perlu Hardening
 
@@ -567,12 +566,12 @@ Auth flow:
 - CI
   - GitHub Actions lebih relevan daripada Azure Pipeline lama, tetapi gate kualitas belum lengkap.
 
-### 5.3 Belum Selesai / Placeholder / Debt Jelas
+### 5.3 Sudah Di-cleanup
 
-- `view_virtual/src/components/AlertSettings.vue`
-  - kosong.
-- `view_virtual/src/composables/useAlerts.js`
-  - kosong.
+- `view_virtual/src/components/AlertSettings.vue` dan `view_virtual/src/composables/useAlerts.js` — placeholder kosong yang sudah dihapus (2026-04-25). Fungsionalitas alert tertanam langsung di `AdminDashboard.vue` dan berfungsi secara penuh.
+
+### 5.4 Belum Selesai / Placeholder / Debt Jelas
+
 - closed-loop control
   - belum masuk fase implementasi aman.
 - contract validation lintas modul
@@ -588,8 +587,11 @@ Auth flow:
 
 Risiko utama yang perlu diingat saat bekerja di repo ini:
 
-1. Timestamp belum satu standar.
-- ada campuran UTC ISO dan string `WIB`.
+1. ~~Timestamp belum satu standar — ada campuran UTC ISO dan string `WIB`~~ **RESOLVED.**
+   - Semua Azure Function (`SaveSensorData`, `SavePeopleCount`, `GetTelemetryData`) menyimpan UTC ISO.
+   - `GetTelemetryData` response tetap UTC ISO, `timestamp_display` (WIB) deprecated.
+   - Frontend (`useMQTT`, `useHistoricalData`) handle konversi ke local display (WIB/Asia/Jakarta) dengan `toLocalDisplay()`.
+   - Konversi WIB hanya di layer presentasi Vue.
 
 2. Data contract lintas modul belum dibakukan penuh.
 - field sensor inti cukup konsisten.

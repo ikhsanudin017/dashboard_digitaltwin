@@ -62,12 +62,24 @@ module.exports = async function (context, req) {
     }
 };
 
-// Fungsi untuk konversi UTC ke WIB
+// Fungsi untuk format timestamp (UTC ISO di storage, UI convert ke local timezone)
+// Konversi WIB hanya dilakukan di layer presentasi (Vue), bukan di API response
 function toWIB(utcDateString) {
     const date = new Date(utcDateString);
     const wibOffset = 7 * 60 * 60 * 1000;
     const wibDate = new Date(date.getTime() + wibOffset);
     return wibDate.toISOString().replace('T', ' ').replace('Z', ' WIB').substring(0, 23) + ' WIB';
+}
+
+// Hanya untuk display di UI (opsional, bisa dihapus nanti jika frontend handle conversion)
+// Sebaiknya frontend yang handle konversi local timezone
+function formatTimestamp(utcDateString, forDisplay = false) {
+    if (!utcDateString) return null;
+    if (forDisplay) {
+        return toWIB(utcDateString);
+    }
+    // Default: return UTC ISO (konsisten dengan storage)
+    return new Date(utcDateString).toISOString();
 }
 
 async function handleLatest(context, tableClient) {
@@ -84,11 +96,14 @@ async function handleLatest(context, tableClient) {
     }
 
     if (latest) {
+        // Return UTC ISO timestamp - frontend handles timezone conversion for display
+        const timestampUtc = latest.timestamp || latest.receivedAt || new Date().toISOString();
         context.res.status = 200;
         context.res.body = {
             success: true,
             data: {
-                timestamp: toWIB(latest.timestamp || latest.receivedAt),
+                timestamp: timestampUtc, // UTC ISO - consistent with storage
+                timestamp_display: toWIB(timestampUtc), // Optional: for quick UI use (deprecated, keep for backward compat)
                 suhu: latest.suhu,
                 kelembaban: latest.kelembaban,
                 tegangan: latest.tegangan,
@@ -217,7 +232,8 @@ async function handlePeopleCount(context, connectionString, hours, limit) {
             const entityTime = new Date(entity.timestamp);
             if (entityTime >= cutoffTime) {
                 const item = {
-                    timestamp: toWIB(entity.timestamp),
+                    timestamp: entity.timestamp, // UTC ISO - consistent with storage
+                    timestamp_display: toWIB(entity.timestamp), // Optional: for quick UI use (deprecated)
                     count: entity.count || entity.jumlahOrang || 0,
                     location: entity.location || 'Ruang Utama',
                     deviceId: entity.deviceId || 'CAMERA_001'
@@ -243,7 +259,7 @@ async function handlePeopleCount(context, connectionString, hours, limit) {
             hours: hours,
             latest: {
                 count: latestCount,
-                timestamp: latestTimestamp ? toWIB(latestTimestamp.toISOString()) : null
+                timestamp: latestTimestamp ? latestTimestamp.toISOString() : null // UTC ISO
             },
             data: data
         };

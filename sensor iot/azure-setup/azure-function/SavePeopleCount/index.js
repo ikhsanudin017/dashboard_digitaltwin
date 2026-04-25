@@ -60,27 +60,20 @@ module.exports = async function (context, req) {
             // Table already exists
         }
 
-        // Fungsi untuk mendapatkan waktu WIB (UTC+7)
-        const getWIBTime = () => {
-            const now = new Date();
-            const wibOffset = 7 * 60 * 60 * 1000;
-            const wibTime = new Date(now.getTime() + wibOffset);
-            return wibTime.toISOString().replace('Z', '+07:00');
-        };
-
-        // Prepare entity
+        // Standardize timestamp to UTC ISO-8601
+        // UI layer converts to local timezone (WIB) only for display
         const deviceId = data.deviceId || "CAMERA_001";
         const count = parseInt(data.count ?? data.jumlahOrang ?? 0);
-        const timestamp = data.timestamp || getWIBTime();
-        
+        const timestamp = data.timestamp || new Date().toISOString();
+
         const entity = {
             partitionKey: deviceId,
             rowKey: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-            timestamp: timestamp,
+            timestamp: timestamp, // Always UTC ISO
             count: count,
             deviceId: deviceId,
             location: data.location || "Ruang Utama",
-            receivedAt: getWIBTime()
+            receivedAt: new Date().toISOString() // Always UTC ISO
         };
 
         // Insert to table

@@ -86,12 +86,13 @@ router.beforeEach(async to => {
 
   if ((to.name === 'user-login' || to.name === 'user-dashboard') && loggedIn) {
     const adminRole = await getAdminRoleStatus({ forceRefresh: false })
+    if (adminRole.success && adminSessionActive) {
+      return '/admin'
+    }
+    // Admin email logged in as user → let them proceed to dashboard
+    // They can manually navigate to /admin/login if needed
     if (adminRole.success) {
-      if (adminSessionActive) return '/admin'
-
-      clearAdminSession()
-      await signOutUser()
-      return '/admin/login'
+      return '/dashboard'
     }
   }
 
@@ -100,10 +101,7 @@ router.beforeEach(async to => {
 
     if (adminRole.success) {
       if (adminSessionActive) return '/admin'
-
-      clearAdminSession()
-      await signOutUser()
-      return true
+      return '/admin' // Show admin login page for admin to create session
     }
 
     return '/dashboard'
