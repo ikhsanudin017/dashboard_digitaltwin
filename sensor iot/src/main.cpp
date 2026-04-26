@@ -125,8 +125,13 @@ decode_results irResults;
 // Model Gree untuk GWC-09F5S: coba YBOFB dulu, lalu YAW1F, lalu YX1FSF.
 // Parameter 3 (inverted): false = direct GPIO → LED (tanpa transistor)
 //                          true  = jika pakai transistor NPN (sinyal terbalik)
+//build_flag IR_INVERTED di platformio.ini mengaktifkan ini otomatis
 // Ganti runtime via serial: ac-model yaw1f / ac-model ybofb / ac-model yx1fsf
+#if IR_INVERTED
+IRGreeAC greeAc(IR_TX_PIN, gree_ac_remote_model_t::YBOFB, true);
+#else
 IRGreeAC greeAc(IR_TX_PIN, gree_ac_remote_model_t::YBOFB, false);
+#endif
 WiFiClientSecure espClient;  // Gunakan WiFiClientSecure untuk TLS
 PubSubClient client(espClient);
 Preferences rawIrPrefs;
@@ -654,9 +659,13 @@ void processSerialCommand(const String& rawCommand) {
     Serial.println("  cl-target 24.0  -> set target suhu dari simulasi ML");
     Serial.println("  cl-clear-target -> hapus target ML, pakai default");
     Serial.println("  ac-resend       -> kirim ulang state AC sekarang (bypass cooldown)");
-    Serial.println("  ac-test-cool 24 -> paksa kirim COOL 24C sekarang");
-    Serial.println("  ac-model yaw1f  -> ganti model Gree (yaw1f/ybofb/yx1fsf)");
-    Serial.println("  ac-off          -> paksa kirim command AC OFF");
+    Serial.println("  ac-test-cool 24 -> kirim COOL via raw profile");
+    Serial.println("  ac-test-lib 24  -> kirim COOL via library langsung");
+    Serial.println("  ir-test-led     -> test LED IR blink (pakai kamera HP lihat)");
+    Serial.println("  ir-gpio-test    -> test GPIO4 on/off (ukur multimeter)");
+    Serial.println("  ir-direct-test  -> test kirim pattern raw via irsend");
+    Serial.println("  led-on          -> test GPIO4 langsung HIGH");
+    Serial.println("  led-off         -> test GPIO4 langsung LOW");
     return;
   }
 
@@ -729,6 +738,34 @@ void processSerialCommand(const String& rawCommand) {
     return;
   }
 
+  // Test kirim via library GreeAC (bypass raw profiles)
+  if (command.startsWith("ac-test-lib")) {
+    String value = command.substring(String("ac-test-lib").length());
+    value.trim();
+    uint8_t setpoint = 24;
+    if (value.length() > 0) {
+      setpoint = clampAcSetpoint(value.toFloat());
+    }
+    Serial.println("IR library direct test...");
+    irrecv.disableIRIn();
+    delay(5);
+    greeAc.setPower(true);
+    greeAc.setMode(kGreeCool);
+    greeAc.setFan(kGreeFanAuto);
+    greeAc.setTemp(setpoint);
+    greeAc.setSwingVertical(true, kGreeSwingAuto);
+    greeAc.send(kGreeDefaultRepeat + 1);
+    delay(20);
+    irrecv.enableIRIn();
+    Serial.print("✅ Library IR terkirim");
+    Serial.print(" | model=");
+    Serial.print(acModelToLabel(greeAc.getModel()));
+    Serial.print(" | temp=");
+    Serial.print(setpoint);
+    Serial.println("C");
+    return;
+  }
+
   if (command.startsWith("ac-model ")) {
     String value = command.substring(String("ac-model ").length());
     value.trim();
@@ -752,6 +789,67 @@ void processSerialCommand(const String& rawCommand) {
   if (command == "ir-capture-off") {
     irCaptureEnabled = false;
     Serial.println("⏸️ IR capture nonaktif.");
+    return;
+  }
+
+  if (command == "ir-test-led") {
+    Serial.println("🔴 Test LED IR blink 3x...");
+    irrecv.disableIRIn();
+    delay(5);
+    uint16_t blinkPattern[] = {500, 500, 500, 500, 500, 500};
+    for (int i = 0; i < 3; i++) {
+      irsend.sendRaw(blinkPattern, 6, 38);
+      delay(200);
+    }
+    delay(20);
+    irrecv.enableIRIn();
+    Serial.println("✅ Selesai. Lihat LED dengan kamera HP.");
+    return;
+  }
+
+  if (command == "ir-gpio-test") {
+    Serial.print("🔌 Test GPIO");
+    Serial.print(IR_TX_PIN);
+    Serial.println(" ON/OFF...");
+    irrecv.disableIRIn();
+    pinMode(IR_TX_PIN, OUTPUT);
+    digitalWrite(IR_TX_PIN, HIGH);
+    delay(1000);
+    Serial.println("   HIGH 1 detik - ukur multimeter");
+    digitalWrite(IR_TX_PIN, LOW);
+    delay(1000);
+    Serial.println("   LOW 1 detik - ukur multimeter");
+    irrecv.enableIRIn();
+    Serial.println("✅ Selesai. Cek voltage GPIO4.");
+    return;
+  }
+
+  if (command == "led-on") {
+    irrecv.disableIRIn();
+    pinMode(IR_TX_PIN, OUTPUT);
+    digitalWrite(IR_TX_PIN, HIGH);
+    Serial.println("✅ GPIO4 HIGH");
+    irrecv.enableIRIn();
+    return;
+  }
+
+  if (command == "led-off") {
+    irrecv.disableIRIn();
+    pinMode(IR_TX_PIN, OUTPUT);
+    digitalWrite(IR_TX_PIN, LOW);
+    Serial.println("✅ GPIO4 LOW");
+    irrecv.enableIRIn();
+    return;
+  }
+
+  if (command == "ir-direct-test") {
+    Serial.println("📡 Test kirim pattern raw langsung...");
+    irrecv.disableIRIn();
+    uint16_t testPattern[] = {9000, 4500, 500, 1500, 500, 1500, 500, 500};
+    irsend.sendRaw(testPattern, 8, 38);
+    delay(100);
+    irrecv.enableIRIn();
+    Serial.println("✅ Pattern terkirim");
     return;
   }
 

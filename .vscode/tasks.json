@@ -34,6 +34,9 @@
 			"type": "shell",
 			"command": "platformio run --target upload",
 			"isBackground": false,
+			"options": {
+				"cwd": "${workspaceFolder}/sensor iot"
+			},
 			"problemMatcher": [],
 			"group": "build"
 		}

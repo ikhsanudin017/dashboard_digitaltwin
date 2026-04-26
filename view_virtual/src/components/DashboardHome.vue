@@ -21,9 +21,9 @@
               <span>{{ isDarkMode ? 'Mode Terang' : 'Mode Gelap' }}</span>
             </button>
 
-            <div class="status-badge" :class="mqttConnected ? 'connected' : 'disconnected'">
+            <div class="status-badge" :class="isConnected ? 'connected' : 'disconnected'">
               <span class="status-dot"></span>
-              <span class="status-text">{{ mqttConnected ? 'Terhubung' : 'Mode DEMO' }}</span>
+              <span class="status-text">{{ isConnected ? 'Terhubung' : 'Mode DEMO' }}</span>
             </div>
 
             <div class="timestamp">
@@ -139,7 +139,7 @@ import TemperatureChart from './TemperatureChart.vue'
 import EnergyManagement from './EnergyManagement.vue'
 import HistoricalAnalytics from './HistoricalAnalytics.vue'
 import { useHistoricalData } from '../composables/useHistoricalData'
-import { useMQTT } from '../composables/useMQTT'
+import { useAzureTelemetry } from '../composables/useAzureTelemetry'
 
 const props = defineProps({
   isDarkMode: {
@@ -155,12 +155,12 @@ const props = defineProps({
 const emit = defineEmits(['toggle-theme', 'logout'])
 
 const {
-  mqttConnected,
+  isConnected,
   sensorData,
-  connectMQTT,
-  disconnectMQTT,
+  startPolling,
+  stopPolling,
   savePeopleCount
-} = useMQTT()
+} = useAzureTelemetry()
 
 const { loadHistoricalData, addDataPoint: addHistoricalDataPoint } = useHistoricalData()
 
@@ -271,7 +271,7 @@ watch(
 )
 
 onMounted(() => {
-  connectMQTT()
+  startPolling()
   loadHistoricalData()
 
   timeInterval = setInterval(() => {
@@ -280,7 +280,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  disconnectMQTT()
+  stopPolling()
   if (timeInterval) clearInterval(timeInterval)
 })
 </script>
