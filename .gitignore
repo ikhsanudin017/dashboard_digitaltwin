@@ -48,3 +48,10 @@ view_virtual/public/models/*.glb
 ml_models/.env
 .vercel
 .env*.local
+
+# ============ EXCLUDE FROM PUSH ============
+# Claude memory and docs (local only - not for git)
+CLAUDE.md
+MEMORY/
+ANALYSIS/
+ANALYSIS dan PROMPT/

@@ -65,8 +65,44 @@
     <main class="main">
       <div class="container">
         <div class="card" style="margin-bottom: 20px;">
-          <h2>🎯 Digital Twin 3D <span style="font-size: 0.8em; opacity: 0.7;">- Klik icon sensor untuk melihat data</span></h2>
+          <div class="view-toggle">
+            <h2 class="view-title">🎯 Digital Twin</h2>
+            <div class="toggle-group">
+              <button
+                :class="['toggle-btn', { active: currentView === 'geo' }]"
+                @click="currentView = 'geo'"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <span>Peta Lokasi</span>
+              </button>
+              <button
+                :class="['toggle-btn', { active: currentView === 'indoor' }]"
+                @click="currentView = 'indoor'"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>3D Indoor</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Geographic View (Cesium) -->
+          <CesiumViewer
+            v-if="currentView === 'geo'"
+            :sensor-data="sensorData"
+            :is-dark-mode="isDarkMode"
+            @toggle-indoor="currentView = 'indoor'"
+          />
+
+          <!-- Indoor 3D View (Babylon.js) -->
           <DigitalTwin3D
+            v-else
             :sensor-data="sensorData"
             :people-count="peopleCount"
             :is-dark-mode="isDarkMode"
@@ -130,6 +166,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import ACRecommendation from './ACRecommendation.vue'
 import CameraStream from './CameraStream.vue'
+import CesiumViewer from './CesiumViewer.vue'
 import DataTable from './DataTable.vue'
 import DigitalTwin3D from './DigitalTwin3D_Babylon.vue'
 import ElectricityChart from './ElectricityChart.vue'
@@ -153,6 +190,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['toggle-theme', 'logout'])
+
+const currentView = ref('geo') // 'geo' = CesiumViewer, 'indoor' = Babylon.js
 
 const {
   isConnected,
@@ -633,6 +672,84 @@ onUnmounted(() => {
   background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
   border-radius: 2px;
   animation: expandLine 0.5s ease-out;
+}
+
+/* View Toggle */
+.view-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.view-title {
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+.view-title::after {
+  display: none !important;
+}
+
+.toggle-group {
+  display: flex;
+  gap: 8px;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border-dark);
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toggle-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.toggle-btn svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .view-toggle {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .toggle-group {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    justify-content: center;
+  }
 }
 
 @keyframes expandLine {

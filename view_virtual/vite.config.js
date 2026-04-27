@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 export default defineConfig({
   plugins: [
@@ -8,36 +9,26 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        // Increase maximum file size to cache (10MB)
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-        // Cache file 3D GLB local
         runtimeCaching: [
           {
-            // Cache file GLB dari folder models
             urlPattern: /\/models\/.*\.glb$/,
             handler: 'CacheFirst',
             options: {
               cacheName: '3d-models-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 tahun
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-              rangeRequests: true // Support partial requests untuk file besar
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+              rangeRequests: true
             }
           }
         ],
-        // Pre-cache asset penting
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Jangan pre-cache file besar, biarkan runtime cache
-        globIgnores: ['**/models/**/*', '**/models/*.glb', '**/models/*.blend', '**/models/*.gltf', '**/models/*.bin', '**/models/*.png']
+        globIgnores: ['**/models/**/*', '**/models/*.glb']
       },
       manifest: {
         name: 'Digital Twin Dashboard',
         short_name: 'DTwin',
-        description: 'IoT Digital Twin Dashboard with 3D Visualization',
+        description: 'IoT Digital Twin Dashboard',
         theme_color: '#4A90A4',
         background_color: '#1a1a2e',
         display: 'standalone'
@@ -47,18 +38,18 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
-    open: true,
-    hmr: {
-      overlay: true
-    }
+    open: false
   },
   build: {
     emptyOutDir: true,
-    chunkSizeWarningLimit: 7000 // Increase chunk size warning limit (7MB) for Babylon.js
+    chunkSizeWarningLimit: 10000
   },
-  optimizeDeps: {
-    force: true
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
   },
-  clearScreen: false
+  define: {
+    CESIUM_BASE_URL: JSON.stringify('/cesium')
+  }
 })
-
