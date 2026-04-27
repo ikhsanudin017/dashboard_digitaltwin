@@ -364,10 +364,10 @@ view_virtual/src/
 | Fase | Durasi | Fitur |
 |------|--------|-------|
 | **Phase 1** | 1-2 minggu | Reactive 3D materials (`DigitalTwin3D_Babylon.vue` update) |
-| **Phase 2** | 1 minggu | Command-to-device UI (`ACRecommendation.vue` apply button) |
+| **Phase 2** | 1 minggu   | Command-to-device UI (`ACRecommendation.vue` apply button) |
 | **Phase 3** | 1-2 minggu | SignalR real-time connection |
-| **Phase 4** | 1 minggu | Alerting dashboard + notification |
-| **Phase 5** | 1 minggu | Schema validation (Zod) |
+| **Phase 4** | 1 minggu   | Alerting dashboard + notification |
+| **Phase 5** | 1 minggu   | Schema validation (Zod) |
 | **Phase 6** | 1-2 minggu | Multi-room support |
 
 ---

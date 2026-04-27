@@ -30,13 +30,16 @@ sensor iot/bridge/bridge-multi.js
 sensor iot/bridge/query-data.js
 sensor iot/bridge/query-latest.js
 
-# Environment files
+# Environment files - JANGAN PUSH!
 .env
 .env.local
+.env.production
 client_secret_*.json
 sensor iot/azure-setup/azure-function/local.settings.json
 sensor iot/include/secrets.h
 sensor iot/raspberry-pi/.env
+ml_models/.env
+.vercel
 
 # OS
 .DS_Store
@@ -45,13 +48,3 @@ Thumbs.db
 # 3D models (large files)
 view_virtual/public/models/*.blend
 view_virtual/public/models/*.glb
-ml_models/.env
-.vercel
-.env*.local
-
-# ============ EXCLUDE FROM PUSH ============
-# Claude memory and docs (local only - not for git)
-CLAUDE.md
-MEMORY/
-ANALYSIS/
-ANALYSIS dan PROMPT/
