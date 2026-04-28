@@ -9,7 +9,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB untuk bundle besar (Cesium + Babylon)
         runtimeCaching: [
           {
             urlPattern: /\/models\/.*\.glb$/,
