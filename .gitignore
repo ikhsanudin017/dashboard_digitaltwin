@@ -48,3 +48,9 @@ Thumbs.db
 # 3D models (large files)
 view_virtual/public/models/*.blend
 view_virtual/public/models/*.glb
+
+# Local-only documentation & memory (VS Code reference)
+CLAUDE.md
+MEMORY.md
+MEMORY/
+"ANALYSIS dan PROMPT/"
