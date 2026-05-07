@@ -98,7 +98,7 @@ const handleButtonClick = () => {
   padding: 40px 20px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-radius: 12px;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .empty-state.dark {
@@ -240,7 +240,7 @@ const handleButtonClick = () => {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
   min-height: 44px;
   width: 100%;
 }
@@ -289,7 +289,7 @@ const handleButtonClick = () => {
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 6px rgba(6, 182, 212, 0.3);
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
   animation: fadeIn 0.6s ease-out 0.5s both;
 }
 

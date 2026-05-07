@@ -1,5 +1,17 @@
 <template>
-  <div class="camera-stream">
+  <div class="camera-section" :class="{ 'dark': isDarkMode }">
+    <!-- Hero Banner -->
+    <div class="hero-banner">
+      <div class="hero-kicker">VISION SYSTEM</div>
+      <h2>Camera Stream</h2>
+      <p>Live monitoring dari Raspberry Pi dengan YOLO edge untuk people counting</p>
+      <div class="hero-meta">
+        <span class="meta-badge">Status: {{ isStreamActive ? 'LIVE' : 'OFFLINE' }}</span>
+        <span class="meta-badge data-count">{{ peopleCount }} Orang Terdeteksi</span>
+      </div>
+    </div>
+
+    <!-- Stream Container with Canvas Overlay -->
     <div class="stream-container">
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
@@ -7,34 +19,53 @@
         <p>Connecting to camera...</p>
       </div>
 
-      <!-- Video Stream -->
-      <img 
-        v-show="!streamError && !isLoading"
-        :src="streamUrl" 
-        alt="Camera Stream"
-        class="stream-image"
-        @load="handleLoad"
-        @error="handleError"
-      />
+      <!-- Video + Canvas Overlay -->
+      <div v-show="!streamError && !isLoading" class="video-wrapper">
+        <img
+          ref="videoImg"
+          :src="videoFeedUrl"
+          alt="Camera Stream"
+          class="stream-image"
+          crossorigin="anonymous"
+          @load="handleLoad"
+          @error="handleError"
+        />
+      </div>
 
       <!-- Error State -->
       <div v-if="streamError && !isLoading" class="stream-placeholder">
         <div class="placeholder-content">
-          <span class="icon">📹</span>
           <p class="main-message">Camera Stream Unavailable</p>
           <p class="sub-message">{{ errorMessage }}</p>
-          <button @click="refreshStream" class="camera-refresh-trigger">
-            <span class="btn-icon">🔄</span>
-            <span class="btn-text">Muat Ulang Kamera</span>
-          </button>
+          <button @click="refreshStream" class="camera-refresh-trigger">Coba Lagi</button>
         </div>
       </div>
 
       <!-- Stream Info Overlay -->
       <div v-if="!streamError && !isLoading" class="stream-overlay">
-        <div class="stream-info">
-          <div class="status-indicator" :class="{ active: isStreamActive }"></div>
-          <span>LIVE</span>
+        <span>LIVE</span>
+      </div>
+    </div>
+
+    <!-- Camera Info -->
+    <div class="camera-info-section">
+      <h3 class="section-title">Informasi Kamera</h3>
+      <div class="info-grid">
+        <div class="info-item">
+          <span class="info-label">IP Address</span>
+          <span class="info-value">{{ localCameraUrl }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Model</span>
+          <span class="info-value">Raspberry Pi 4 + Webcam</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">AI Model</span>
+          <span class="info-value">Edge YOLOv8n</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Frame Rate</span>
+          <span class="info-value">{{ isStreamActive ? '5 FPS' : 'N/A' }}</span>
         </div>
       </div>
     </div>
@@ -42,141 +73,220 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { CAMERA_STREAM_URL } from '../lib/appConfig'
+
+const props = defineProps({
+  isDarkMode: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const emit = defineEmits(['peopleCountUpdate'])
 
-// State
-const localCameraUrl = ref('http://192.168.137.205:5000')
-const streamUrl = ref('')
+const localCameraUrl = ref(CAMERA_STREAM_URL || '')
 const isLoading = ref(true)
 const streamError = ref(false)
 const errorMessage = ref('')
 const isStreamActive = ref(false)
-const streamKey = ref(0)
-let countPollingTimer = null
+const peopleCount = ref(0)
+const detections = ref([])
 
-// Computed
+// Refs for DOM elements
+const videoImg = ref(null)
+const streamKey = ref(0)
+let streamTimer = null
+let pollTimer = null
+
 const videoFeedUrl = computed(() => {
-  // Add cache busting parameter untuk force reload
-  return `${localCameraUrl.value}/video_feed?t=${streamKey.value}`
+  return `${localCameraUrl.value}/frame?t=${streamKey.value}`
 })
 
-// Fetch people count from Raspberry Pi directly
-const fetchPeopleCountFromRaspberryPi = async () => {
-  try {
-    const response = await fetch(`${localCameraUrl.value}/count`, {
-      method: 'GET',
-      headers: {
-        'ngrok-skip-browser-warning': 'true'
-      }
-    })
-    
-    if (!response.ok) {
-      console.warn('⚠️ Cannot fetch count from Raspberry Pi')
-      return
-    }
-    
-    const data = await response.json()
-    const count = data.count || 0
-    
-    console.log('📷 People count from Raspberry Pi:', count)
-    
-    // Emit ke parent component
-    emit('peopleCountUpdate', count)
-    
-  } catch (error) {
-    console.warn('⚠️ Error fetching from Raspberry Pi:', error.message)
+// Start refresh timer for image polling
+const startStreamRefresh = () => {
+  if (!streamTimer) {
+    streamTimer = setInterval(() => {
+      streamKey.value = Date.now()
+    }, 500) // ~2 FPS (reduce network load)
   }
 }
 
-const refreshStream = () => {
-  console.log('🔄 Refreshing camera stream...')
-  isLoading.value = true
-  streamError.value = false
-  errorMessage.value = ''
-  isStreamActive.value = false
-  
-  // Update stream key untuk force reload
-  streamKey.value = Date.now()
-  streamUrl.value = videoFeedUrl.value
+const stopStreamRefresh = () => {
+  if (streamTimer) {
+    clearInterval(streamTimer)
+    streamTimer = null
+  }
+}
+
+// Fetch detection data from Raspberry Pi
+const fetchDetections = async () => {
+  try {
+    const response = await fetch(`${localCameraUrl.value}/count`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    })
+
+    if (!response.ok) return
+
+    const data = await response.json()
+    peopleCount.value = data.count || 0
+    detections.value = data.detections || []
+    emit('peopleCountUpdate', peopleCount.value)
+
+  } catch (error) {
+    // Silent fail
+  }
+}
+
+const startPolling = () => {
+  fetchDetections()
+  if (!pollTimer) {
+    pollTimer = setInterval(fetchDetections, 1000) // 1 second polling
+  }
+}
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 }
 
 const handleLoad = () => {
-  console.log('✅ Stream loaded successfully')
   isLoading.value = false
   streamError.value = false
   isStreamActive.value = true
-  
-  // Start polling people count saat stream aktif
-  startCountPolling()
+  startPolling()
+  startStreamRefresh()
 }
 
-const handleError = (event) => {
-  console.error('❌ Stream error:', event)
+const handleError = () => {
   isLoading.value = false
   streamError.value = true
   isStreamActive.value = false
-  errorMessage.value = 'Kamera sedang tidak dapat diakses saat ini. Silakan coba muat ulang.'
-  
-  // Stop polling saat error
-  stopCountPolling()
-}
-
-const startCountPolling = () => {
-  // Fetch immediately
-  fetchPeopleCountFromRaspberryPi()
-  
-  // Then poll every 1 second untuk real-time update
-  if (!countPollingTimer) {
-    countPollingTimer = setInterval(() => {
-      fetchPeopleCountFromRaspberryPi()
-    }, 1000)
-    console.log('🔄 Started people count polling (1s)')
+  if (!localCameraUrl.value) {
+    errorMessage.value = 'Camera URL belum dikonfigurasi'
+  } else {
+    errorMessage.value = 'Kamera tidak dapat diakses'
   }
-}
-
-const stopCountPolling = () => {
-  if (countPollingTimer) {
-    clearInterval(countPollingTimer)
-    countPollingTimer = null
-    console.log('⏹️ Stopped people count polling')
-  }
+  stopPolling()
+  stopStreamRefresh()
 }
 
 onMounted(() => {
-  console.log('🎥 CameraStream mounted')
-  console.log('📍 Camera URL:', localCameraUrl.value)
-  
-  // Initialize stream
+  // Initial load
   setTimeout(() => {
-    refreshStream()
+    streamKey.value = Date.now()
   }, 500)
 })
 
 onUnmounted(() => {
-  console.log('CameraStream unmounted')
-  stopCountPolling()
+  stopPolling()
+  stopStreamRefresh()
 })
 </script>
 
 <style scoped>
-.camera-stream {
-  width: 100%;
-  height: 100%;
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap');
+
+.camera-section {
+  --accent: #8b5cf6;
+  --accent-dark: #7c3aed;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --success: #22c55e;
+  --danger: #ef4444;
+
+  font-family: 'IBM Plex Sans', sans-serif;
+  padding: 24px;
+  animation: fadeUp 0.4s ease;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hero-banner { margin-bottom: 24px; }
+
+.hero-kicker {
+  display: inline-block;
+  padding: 6px 12px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 20px;
+  font-family: 'Sora', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.hero-banner h2 {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px 0;
+}
+
+.hero-banner p {
+  font-size: 0.95rem;
+  color: var(--text-2);
+  margin: 0 0 16px 0;
+}
+
+.hero-meta {
   display: flex;
-  flex-direction: column;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-badge {
+  display: inline-block;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.meta-badge.data-count {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: var(--accent);
+}
+
+.section-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 16px 0;
 }
 
 .stream-container {
   position: relative;
   width: 100%;
-  aspect-ratio: 4/3;
-  background: var(--bg-secondary);
-  border-radius: 8px;
+  aspect-ratio: 16/9;
+  background: #000;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 8px var(--shadow-sm);
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .stream-image {
@@ -184,71 +294,7 @@ onUnmounted(() => {
   height: 100%;
   object-fit: contain;
   display: block;
-  background: #000;
-}
-
-.stream-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-card);
-  border: 2px dashed var(--border);
-}
-
-.placeholder-content {
-  text-align: center;
-  color: var(--text-secondary);
-  padding: 20px;
-}
-
-.placeholder-content .icon {
-  font-size: 48px;
-  display: block;
-  margin-bottom: 12px;
-}
-
-.placeholder-content .main-message {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 8px 0;
-  color: var(--text-primary);
-}
-
-.placeholder-content .sub-message {
-  font-size: 14px;
-  margin: 4px 0 16px 0;
-  opacity: 0.7;
-}
-
-.placeholder-content .offline-info {
-  text-align: left;
-  background: var(--bg-secondary);
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-top: 12px;
-}
-
-.placeholder-content .offline-info p {
-  margin: 0 0 8px 0;
-  font-weight: 500;
-}
-
-.placeholder-content .offline-info ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.placeholder-content .offline-info li {
-  margin: 4px 0;
-  opacity: 0.8;
-}
-
-.url-hint {
-  font-size: 12px;
-  opacity: 0.7;
+  will-change: contents;
 }
 
 .stream-overlay {
@@ -257,55 +303,11 @@ onUnmounted(() => {
   right: 12px;
   background: rgba(0, 0, 0, 0.7);
   padding: 6px 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   backdrop-filter: blur(8px);
-}
-
-.error-overlay {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(220, 38, 38, 0.9);
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  backdrop-filter: blur(8px);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.stream-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   color: white;
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #666;
-}
-
-.status-indicator.active {
-  background: #00ff00;
-  box-shadow: 0 0 8px #00ff00;
-  animation: pulse 2s infinite;
-}
-
-.fps-text {
-  margin-left: 8px;
-  font-size: 11px;
-  opacity: 0.8;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
 }
 
 .loading-overlay {
@@ -314,7 +316,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -336,133 +338,113 @@ onUnmounted(() => {
   to { transform: rotate(360deg); }
 }
 
-.stream-controls {
+.stream-placeholder {
+  width: 100%;
+  height: 100%;
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 2px dashed var(--border);
 }
 
-.debug-info {
-  margin-top: 8px;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 11px;
-  color: #aaa;
-  word-break: break-all;
+.placeholder-content {
+  text-align: center;
+  padding: 20px;
 }
 
-.ip-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  font-size: 14px;
+.placeholder-content .main-message {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 8px 0;
 }
 
-.ip-input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.btn-update,
-.btn-refresh {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  background: var(--primary);
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-update:hover,
-.btn-refresh:hover {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
-}
-
-.btn-refresh {
-  background: var(--success);
-}
-
-.btn-refresh:hover {
-  background: var(--success-dark);
-}
-
-.btn-refresh:disabled {
-  background: var(--border);
-  cursor: not-allowed;
-  transform: none;
+.placeholder-content .sub-message {
+  font-size: 0.9rem;
+  color: var(--text-2);
+  margin: 0 0 20px 0;
 }
 
 .camera-refresh-trigger {
-  margin-top: 20px;
   padding: 12px 24px;
-  background: var(--primary, #0284c7);
-  color: #ffffff;
+  background: var(--accent);
+  color: white;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  justify-content: center !important;
-  width: auto !important;
-  height: auto !important;
-  white-space: nowrap !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .camera-refresh-trigger:hover {
-  background: var(--primary-dark, #0369a1);
+  background: var(--accent-dark);
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
-.camera-refresh-trigger .btn-icon {
-  font-size: 16px;
-  line-height: 1;
+.camera-info-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
 }
 
-.camera-refresh-trigger .btn-text {
-  font-size: 14px;
-  line-height: 1;
-  color: #ffffff;
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
-.btn-open-local,
-.btn-refresh {
-  margin-top: 12px;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  background: var(--primary);
-  color: white;
-  font-size: 14px;
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
+.info-label {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 0.9rem;
+  color: var(--text);
   font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
 }
 
-.btn-open-local:hover,
-.btn-refresh:hover {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
+.dark {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #334155;
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f1f5f9;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
 }
 
-.note {
-  margin-top: 12px;
-  font-size: 12px;
-  opacity: 0.7;
-  font-style: italic;
+@media (max-width: 900px) {
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .camera-section {
+    padding: 16px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-meta {
+    flex-direction: column;
+  }
 }
 </style>

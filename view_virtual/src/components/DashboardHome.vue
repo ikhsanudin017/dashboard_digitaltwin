@@ -1,292 +1,296 @@
 <template>
-  <div class="app">
-    <header class="header">
-      <div class="header-container">
-        <div class="header-left">
-          <div class="logo">
-            <div class="logo-icon">
-              <img src="/logo.png" alt="TwinSpace Logo" class="logo-image" />
+  <div class="dashboard">
+    <!-- Full-Screen 3D Background -->
+    <div class="viewer-3d">
+      <CesiumViewer
+        v-if="current3DView === 'cesium'"
+        :sensor-data="sensorData"
+        :is-dark-mode="isDarkMode"
+        :show-info-card="false"
+        @toggle-indoor="current3DView = 'babylon'"
+        @switch-to-3d="current3DView = 'babylon'"
+      />
+      <DigitalTwinBabylon
+        v-else
+        :sensor-data="sensorData"
+        :people-count="peopleCount"
+        :is-dark-mode="isDarkMode"
+      />
+    </div>
+
+    <!-- ═══ LEFT SIDEBAR ═══ -->
+    <aside class="sidebar sidebar-left">
+      <div class="main-card">
+        <!-- Header -->
+        <div class="card-header">
+          <div class="header-row">
+            <div class="logo-section">
+              <img src="/logo.png" alt="Logo" class="brand-logo" />
+              <span class="brand">TWINSPACE</span>
             </div>
-            <div class="logo-copy">
-              <h1 class="logo-text">Twin Space Dashboard</h1>
-              <p class="logo-subtitle">Secure digital twin workspace</p>
-            </div>
+            <span class="status-badge" :class="isConnected ? 'online' : 'offline'">
+              <span class="dot"></span>
+              {{ isConnected ? 'ONLINE' : 'OFFLINE' }}
+            </span>
           </div>
         </div>
 
-        <div class="header-right">
-          <div class="header-actions">
-            <button class="theme-pill" type="button" @click="handleThemeToggle">
-              <span class="theme-pill-icon">{{ isDarkMode ? '☀️' : '🌙' }}</span>
-              <span>{{ isDarkMode ? 'Mode Terang' : 'Mode Gelap' }}</span>
-            </button>
+        <!-- IOT SENSOR -->
+        <div class="section-header">
+          <span>IOT SENSOR</span>
+        </div>
+        <div class="sensor-list">
+          <div class="sensor-item">
+            <span class="sensor-label">TEMP</span>
+            <span class="sensor-value temp">{{ sensorData.temperature?.toFixed(1) || '--' }}°C</span>
+          </div>
+          <div class="sensor-item">
+            <span class="sensor-label">HUMID</span>
+            <span class="sensor-value humid">{{ sensorData.humidity?.toFixed(1) || '--' }}%</span>
+          </div>
+          <div class="sensor-item">
+            <span class="sensor-label">POWER</span>
+            <span class="sensor-value power">{{ sensorData.power?.toFixed(0) || '--' }}W</span>
+          </div>
+          <div class="sensor-item">
+            <span class="sensor-label">VOLT</span>
+            <span class="sensor-value voltage">{{ sensorData.voltage?.toFixed(0) || '--' }}V</span>
+          </div>
+        </div>
 
-            <div class="status-badge" :class="isConnected ? 'connected' : 'disconnected'">
-              <span class="status-dot"></span>
-              <span class="status-text">{{ isConnected ? 'Terhubung' : 'Mode DEMO' }}</span>
-            </div>
+        <!-- AC RECOMMENDATION -->
+        <div class="section-header">
+          <span>AC TARGET</span>
+        </div>
+        <div class="ac-target-card">
+          <span class="ac-temp-value">{{ acRecommendedTemp }}°C</span>
+          <span class="ac-label">Rekomendasi</span>
+        </div>
 
-            <div class="timestamp">
-              <div class="time-section">
-                <span class="time-icon">📅</span>
-                <span class="time-text">{{ formattedDate }}</span>
+        <!-- STATS -->
+        <div class="section-header">
+          <span>STATS</span>
+        </div>
+        <div class="stats-list">
+          <div class="stat-item">
+            <span class="stat-label">PEOPLE</span>
+            <span class="stat-value">{{ peopleCount || sensorData.peopleCount || 0 }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">ENERGY</span>
+            <span class="stat-value">{{ totalEnergyWh.toFixed(1) }}Wh</span>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- ═══ RIGHT SIDEBAR ═══ -->
+    <aside class="sidebar sidebar-right">
+      <div class="main-card">
+        <!-- Time Header -->
+        <div class="card-header">
+          <span class="time-display">{{ formattedTime }}</span>
+        </div>
+
+        <!-- 3D VIEW -->
+        <div class="section-header">
+          <span>3D VIEW</span>
+        </div>
+        <div class="view-toggle">
+          <button
+            :class="['view-btn', { active: current3DView === 'cesium' }]"
+            @click="current3DView = 'cesium'"
+          >
+            Map
+          </button>
+          <button
+            :class="['view-btn', { active: current3DView === 'babylon' }]"
+            @click="current3DView = 'babylon'"
+          >
+            Indoor
+          </button>
+        </div>
+
+        <!-- FEATURES -->
+        <div class="section-header">
+          <span>FEATURES</span>
+        </div>
+        <div class="menu-grid">
+          <button class="menu-btn" @click="selectSection('energy')">
+            Energy
+          </button>
+          <button class="menu-btn" @click="selectSection('analytics')">
+            Analytics
+          </button>
+          <button class="menu-btn" @click="selectSection('camera')">
+            Vision
+          </button>
+          <button class="menu-btn" @click="selectSection('settings')">
+            Settings
+          </button>
+        </div>
+
+        <!-- THEME -->
+        <button class="theme-btn" @click="handleThemeToggle">
+          <svg v-if="isDarkMode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <span>{{ isDarkMode ? 'Light Mode' : 'Dark Mode' }}</span>
+        </button>
+
+        <!-- Footer -->
+        <div class="card-footer">
+          <span>-7.7226, 110.5190</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══ MODAL ═══ -->
+    <Teleport to="body">
+      <div v-if="activeSection !== 'overview'" class="modal-overlay" @click.self="activeSection = 'overview'">
+        <div class="modal-content">
+          <button class="modal-close" @click="activeSection = 'overview'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+
+          <div v-if="activeSection === 'energy'" class="modal-body">
+            <h2>ENERGY MANAGEMENT</h2>
+            <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" :is-admin="false" />
+          </div>
+
+          <div v-if="activeSection === 'analytics'" class="modal-body">
+            <h2>HISTORICAL ANALYTICS</h2>
+            <HistoricalAnalytics :is-dark-mode="isDarkMode" :current-people-count="peopleCount" :is-admin="false" />
+          </div>
+
+          <div v-if="activeSection === 'camera'" class="modal-body">
+            <h2>VISION SYSTEM</h2>
+            <CameraStream :is-dark-mode="isDarkMode" @people-count-update="handlePeopleCountUpdate" />
+          </div>
+
+          <div v-if="activeSection === 'settings'" class="modal-body">
+            <h2>SETTINGS</h2>
+            <div class="settings-grid">
+              <div class="settings-card">
+                <h4>Profile</h4>
+                <div class="profile-row">
+                  <img v-if="user?.photoURL" :src="user.photoURL" class="profile-avatar" referrerpolicy="no-referrer"/>
+                  <div v-else class="profile-avatar fallback">{{ userInitials }}</div>
+                  <div>
+                    <p class="profile-name">{{ displayName }}</p>
+                    <p class="profile-email">{{ user?.email || 'Operator' }}</p>
+                  </div>
+                </div>
               </div>
-              <div class="time-divider"></div>
-              <div class="time-section">
-                <span class="time-icon">🕐</span>
-                <span class="time-text">{{ formattedTime }}</span>
+              <div class="settings-card">
+                <h4>Display</h4>
+                <button class="setting-btn" @click="handleThemeToggle">
+                  {{ isDarkMode ? 'Light Mode' : 'Dark Mode' }}
+                </button>
+              </div>
+              <div class="settings-card">
+                <h4>System</h4>
+                <p>Status: <span :class="isConnected ? 'online' : 'offline'">{{ isConnected ? 'Online' : 'Offline' }}</span></p>
+                <p>Energy: {{ totalEnergyWh.toFixed(2) }} Wh</p>
               </div>
             </div>
-
-            <div class="user-chip">
-              <img
-                v-if="user?.photoURL"
-                :src="user.photoURL"
-                :alt="displayName"
-                class="user-avatar"
-                referrerpolicy="no-referrer"
-              />
-              <div v-else class="user-avatar user-avatar-fallback">{{ userInitials }}</div>
-
-              <div class="user-copy">
-                <span class="user-name">{{ displayName }}</span>
-                <span class="user-role">{{ user?.email || 'Google Workspace' }}</span>
-              </div>
-            </div>
-
-            <button class="logout-btn" type="button" @click="handleLogout">
-              Keluar
-            </button>
+            <button class="logout-btn" @click="handleLogout">LOGOUT</button>
           </div>
         </div>
       </div>
-    </header>
-
-    <main class="main">
-      <div class="container">
-        <div class="card" style="margin-bottom: 20px;">
-          <div class="view-toggle">
-            <h2 class="view-title">🎯 Digital Twin</h2>
-            <div class="toggle-group">
-              <button
-                :class="['toggle-btn', { active: currentView === 'geo' }]"
-                @click="currentView = 'geo'"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="2" y1="12" x2="22" y2="12"></line>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
-                <span>Peta Lokasi</span>
-              </button>
-              <button
-                :class="['toggle-btn', { active: currentView === 'indoor' }]"
-                @click="currentView = 'indoor'"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                  <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                </svg>
-                <span>3D Indoor</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Geographic View (Cesium) -->
-          <CesiumViewer
-            v-if="currentView === 'geo'"
-            :sensor-data="sensorData"
-            :is-dark-mode="isDarkMode"
-            @toggle-indoor="currentView = 'indoor'"
-          />
-
-          <!-- Indoor 3D View (Babylon.js) -->
-          <DigitalTwin3D
-            v-else
-            :sensor-data="sensorData"
-            :people-count="peopleCount"
-            :is-dark-mode="isDarkMode"
-          />
-        </div>
-
-        <div class="card" style="margin-bottom: 20px;">
-          <h2>📹 Live Camera Stream - People Counter</h2>
-          <CameraStream @people-count-update="handlePeopleCountUpdate" />
-        </div>
-
-        <div class="grid grid-3" style="margin-bottom: 20px;">
-          <div class="card">
-            <h2>🌡️ Suhu (24 Jam)</h2>
-            <TemperatureChart :data="temperatureData" :is-dark-mode="isDarkMode" />
-          </div>
-
-          <div class="card">
-            <h2>⚡ Konsumsi Listrik (24 Jam)</h2>
-            <ElectricityChart :data="electricityData" :is-dark-mode="isDarkMode" />
-          </div>
-
-          <div class="card">
-            <h2>👥 Jumlah Orang (Real-time)</h2>
-            <PeopleChart :data="peopleData" :is-dark-mode="isDarkMode" />
-          </div>
-        </div>
-
-        <div class="card" style="margin-top: 20px;">
-          <h2>📋 Detail Data Sensor</h2>
-          <DataTable
-            :sensor-data="sensorData"
-            :people-count="peopleCount"
-            :total-energy="totalEnergyWh"
-          />
-        </div>
-
-        <ACRecommendation
-          :sensor-data="sensorData"
-          :people-count="peopleCount"
-          :is-dark-mode="isDarkMode"
-        />
-
-        <EnergyManagement
-          :is-dark-mode="isDarkMode"
-          :current-power="sensorData.power"
-          :is-admin="false"
-        />
-
-        <HistoricalAnalytics
-          :is-dark-mode="isDarkMode"
-          :current-people-count="peopleCount"
-          :is-admin="false"
-        />
-      </div>
-    </main>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import ACRecommendation from './ACRecommendation.vue'
-import CameraStream from './CameraStream.vue'
-import CesiumViewer from './CesiumViewer.vue'
-import DataTable from './DataTable.vue'
-import DigitalTwin3D from './DigitalTwin3D_Babylon.vue'
-import ElectricityChart from './ElectricityChart.vue'
+import { computed, onMounted, onUnmounted, ref, watch, defineAsyncComponent } from 'vue'
 
-import PeopleChart from './PeopleChart.vue'
-import TemperatureChart from './TemperatureChart.vue'
-import EnergyManagement from './EnergyManagement.vue'
-import HistoricalAnalytics from './HistoricalAnalytics.vue'
+// Lazy load heavy 3D components
+const CesiumViewer = defineAsyncComponent(() =>
+  import('./CesiumViewer.vue')
+)
+const DigitalTwinBabylon = defineAsyncComponent(() =>
+  import('./DigitalTwin3D_Babylon.vue')
+)
+const CameraStream = defineAsyncComponent(() =>
+  import('./CameraStream.vue')
+)
+const EnergyManagement = defineAsyncComponent(() =>
+  import('./EnergyManagement.vue')
+)
+const HistoricalAnalytics = defineAsyncComponent(() =>
+  import('./HistoricalAnalytics.vue')
+)
+
 import { useHistoricalData } from '../composables/useHistoricalData'
 import { useAzureTelemetry } from '../composables/useAzureTelemetry'
+import { useMLPrediction } from '../composables/useMLPrediction'
 
 const props = defineProps({
-  isDarkMode: {
-    type: Boolean,
-    default: false
-  },
-  user: {
-    type: Object,
-    default: null
-  }
+  isDarkMode: { type: Boolean, default: false },
+  user: { type: Object, default: null }
 })
 
 const emit = defineEmits(['toggle-theme', 'logout'])
 
-const currentView = ref('geo') // 'geo' = CesiumViewer, 'indoor' = Babylon.js
+const activeSection = ref('overview')
+const current3DView = ref('cesium')
 
-const {
-  isConnected,
-  sensorData,
-  startPolling,
-  stopPolling,
-  savePeopleCount
-} = useAzureTelemetry()
+const { isConnected, sensorData, startPolling, stopPolling } = useAzureTelemetry()
+const { loadHistoricalData, addDataPoint } = useHistoricalData()
+const mlPrediction = useMLPrediction()
 
-const { loadHistoricalData, addDataPoint: addHistoricalDataPoint } = useHistoricalData()
-
-const temperatureData = ref({ labels: [], values: [] })
-const electricityData = ref({ labels: [], values: [] })
-const peopleData = ref({ labels: [], values: [] })
 const peopleCount = ref(0)
 const totalEnergyWh = ref(0)
 const currentTime = ref(new Date())
+const electricityData = ref({ values: [] })
 
 const SAVE_INTERVAL = 30000
 const MAX_POINTS = 60
-
 let lastSaveTimestamp = 0
 let timeInterval = null
 let lastPowerTimestamp = Date.now()
 
 const displayName = computed(() => props.user?.displayName || props.user?.email || 'Operator')
-
 const userInitials = computed(() => {
-  const source = displayName.value.trim()
-  if (!source) return 'TS'
-  return source
-    .split(' ')
-    .map(part => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+  const src = displayName.value.trim()
+  if (!src) return 'OP'
+  return src.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()
 })
-
-const formattedDate = computed(() => {
-  const options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }
-  return currentTime.value.toLocaleDateString('id-ID', options)
-})
-
 const formattedTime = computed(() => {
-  const options = { hour: '2-digit', minute: '2-digit', second: '2-digit' }
-  return currentTime.value.toLocaleTimeString('id-ID', options)
+  return currentTime.value.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 })
 
-const handleThemeToggle = () => {
-  emit('toggle-theme')
-}
+const acRecommendedTemp = computed(() => {
+  const temp = mlPrediction.acRecommendation.value?.recommendedTemp
+  return temp ? Math.round(temp) : '--'
+})
 
-const handleLogout = () => {
-  emit('logout')
-}
-
-const addChartDataPoint = (targetRef, value) => {
-  if (value === undefined || value === null || Number.isNaN(value)) return
-
-  const timestamp = new Date().toLocaleTimeString('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-
-  const labels = [...(targetRef.value.labels || []), timestamp]
-  const values = [...(targetRef.value.values || []), parseFloat(value.toFixed(2))]
-
-  if (labels.length > MAX_POINTS) {
-    labels.shift()
-    values.shift()
-  }
-
-  targetRef.value = { labels, values }
-}
+const handleThemeToggle = () => emit('toggle-theme')
+const handleLogout = () => emit('logout')
+const selectSection = (id) => { activeSection.value = id }
 
 const handlePeopleCountUpdate = async count => {
   peopleCount.value = count
-  sensorData.value.peopleCount = count
-  addChartDataPoint(peopleData, count)
-  await savePeopleCount(count, 'Ruang Utama')
+  if (sensorData.value) sensorData.value.peopleCount = count
 }
 
 watch(
   sensorData,
   newData => {
     if (!newData) return
-
-    if (typeof newData.temperature === 'number') {
-      addChartDataPoint(temperatureData, newData.temperature)
-    }
-
     if (typeof newData.power === 'number') {
-      addChartDataPoint(electricityData, newData.power)
-
+      const values = [...electricityData.value.values, parseFloat(newData.power.toFixed(2))]
+      if (values.length > MAX_POINTS) values.shift()
+      electricityData.value = { ...electricityData.value, values }
       const now = Date.now()
       const deltaHours = (now - lastPowerTimestamp) / 3600000
       if (deltaHours > 0 && deltaHours < 1) {
@@ -294,15 +298,12 @@ watch(
       }
       lastPowerTimestamp = now
     }
-
     if (typeof newData.peopleCount === 'number') {
       peopleCount.value = newData.peopleCount
-      addChartDataPoint(peopleData, newData.peopleCount)
     }
-
     const now = Date.now()
     if (now - lastSaveTimestamp >= SAVE_INTERVAL) {
-      addHistoricalDataPoint(newData)
+      addDataPoint(newData)
       lastSaveTimestamp = now
     }
   },
@@ -312,10 +313,7 @@ watch(
 onMounted(() => {
   startPolling()
   loadHistoricalData()
-
-  timeInterval = setInterval(() => {
-    currentTime.value = new Date()
-  }, 1000)
+  timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)
 })
 
 onUnmounted(() => {
@@ -325,499 +323,605 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.app {
-  min-height: 100vh;
-  position: relative;
-}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap');
 
-.header {
-  background: var(--bg-header);
+* {
+  margin: 0;
   padding: 0;
-  box-shadow: 0 2px 12px var(--shadow-sm);
-  margin-bottom: 30px;
-  border-bottom: 1px solid var(--border-dark);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  animation: slideDown 0.5s ease-out;
-  transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+.dashboard {
+  --accent: #00d4ff;
+  --bg: #0a0f1a;
+  --panel: rgba(10, 15, 30, 0.95);
+  --panel-solid: #0d1117;
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f8fafc;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+  --success: #22c55e;
+  --danger: #ef4444;
 
-.header-container {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 16px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo-icon {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'IBM Plex Sans', sans-serif;
   overflow: hidden;
 }
 
-.logo-image {
-  width: 100%;
+/* ═══ VIEWER ═══ */
+.viewer-3d {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 1;
+}
+
+/* ═══ SIDEBARS ═══ */
+.sidebar {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 220px;
+  z-index: 100;
+}
+
+.sidebar-left {
+  left: 0;
+}
+
+.sidebar-right {
+  right: 0;
+}
+
+/* Main Card - Single unified card */
+.main-card {
+  background: var(--panel);
+  border: none;
+  border-radius: 0;
+  padding: 16px 12px;
   height: 100%;
-  object-fit: contain;
-}
-
-.logo:hover .logo-icon {
-  transform: rotate(5deg) scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.logo-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
-.logo-text {
-  font-size: 24px;
-  color: #ffffff;
-  margin: 0;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  white-space: nowrap;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* Card Header */
+.card-header {
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
-.logo-subtitle {
-  margin: 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-  letter-spacing: 0.4px;
-}
-
-.header-right {
+.header-row {
   display: flex;
   align-items: center;
-  flex: 1;
-  justify-content: flex-end;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
-.header-actions {
+.logo-section {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 6px;
 }
 
-.theme-pill,
-.logout-btn,
-.admin-btn {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  padding: 10px 16px;
-  border-radius: 14px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.logo-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.brand {
+  font-family: 'Sora', sans-serif;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.2px;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
-  backdrop-filter: blur(16px);
+  color: var(--text);
 }
 
-.theme-pill:hover,
-.logout-btn:hover,
-.admin-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(8, 145, 178, 0.2);
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.admin-btn {
-  background: rgba(139, 92, 246, 0.25);
-  border-color: rgba(139, 92, 246, 0.35);
-}
-.admin-btn:hover {
-  background: rgba(139, 92, 246, 0.4);
-  box-shadow: 0 10px 24px rgba(139, 92, 246, 0.25);
-}
-
-.theme-pill-icon {
-  font-size: 14px;
+.brand-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
 }
 
 .status-badge {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 12px;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 9px;
   font-weight: 600;
-  font-size: 13px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  white-space: nowrap;
 }
 
-.status-badge:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+.status-badge.online {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
 }
 
-.status-badge.connected {
-  background: linear-gradient(135deg, rgba(39, 174, 96, 0.95) 0%, rgba(46, 213, 115, 0.95) 100%);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.status-badge.offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
 }
 
-.status-badge.disconnected {
-  background: linear-gradient(135deg, rgba(231, 76, 60, 0.95) 0%, rgba(235, 77, 75, 0.95) 100%);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
+.status-badge .dot {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: #fff;
-  animation: pulseGlow 2s infinite;
-  flex-shrink: 0;
+  background: currentColor;
+  animation: pulse 1.5s infinite;
 }
 
-.status-badge.connected .status-dot {
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 16px rgba(39, 174, 96, 0.6);
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-.status-badge.disconnected .status-dot {
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), 0 0 16px rgba(231, 76, 60, 0.6);
+.header-row2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.status-text {
+.version {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.time-display {
+  font-family: 'Sora', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  display: block;
+}
+
+/* Section Header */
+.section-header {
+  padding: 10px 0 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-header span {
+  font-family: 'Sora', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+/* Sensor List */
+.sensor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.sensor-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+.sensor-label {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.sensor-value {
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
   font-weight: 600;
 }
 
-@keyframes pulseGlow {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.15);
-  }
-}
+.sensor-value.temp { color: #00d4ff; }
+.sensor-value.humid { color: #a855f7; }
+.sensor-value.power { color: #22c55e; }
+.sensor-value.voltage { color: #f59e0b; }
 
-.timestamp {
+/* AC Target Card */
+.ac-target-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  color: var(--text-primary);
-  font-size: 13px;
+  gap: 4px;
+  padding: 16px 12px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.ac-temp-value {
+  font-family: 'Sora', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #00d4ff;
+}
+
+.ac-label {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* Stats List */
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-3);
   font-weight: 500;
-  padding: 8px 16px;
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  border: 1px solid var(--border-dark);
-  white-space: nowrap;
-  transition: all 0.3s ease;
 }
 
-.timestamp:hover {
-  background: var(--bg-card);
-  border-color: var(--border-color-hover);
+.stat-value {
+  font-family: 'Sora', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
 }
 
-.time-section {
+/* CCTV List */
+.cctv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.cctv-btn {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
+  padding: 7px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-2);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.time-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-dark);
-  opacity: 0.5;
+.cctv-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent);
 }
 
-.time-icon {
-  font-size: 14px;
-  opacity: 0.9;
+.cctv-btn.active {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.time-text {
-  font-weight: 500;
-  letter-spacing: 0.3px;
-}
-
-.user-chip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 220px;
-  padding: 8px 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(18px);
-  color: white;
-}
-
-.user-avatar {
-  width: 40px;
-  height: 40px;
+.cam-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: var(--danger);
   flex-shrink: 0;
 }
 
-.user-avatar-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.18);
-  font-weight: 800;
-}
-
-.user-copy {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.user-name,
-.user-role {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-name {
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.user-role {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.main {
-  padding-bottom: 40px;
-  animation: fadeIn 0.6s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.card h2 {
-  font-size: 22px;
-  margin-bottom: 24px;
-  color: var(--text-primary);
-  position: relative;
-  padding-bottom: 12px;
-  font-weight: 700;
-  transition: color 0.3s ease;
-}
-
-.card h2::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 60px;
-  height: 3px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-  border-radius: 2px;
-  animation: expandLine 0.5s ease-out;
+.cctv-btn.active .cam-dot {
+  background: var(--success);
 }
 
 /* View Toggle */
 .view-toggle {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.view-title {
-  margin: 0 !important;
-  padding: 0 !important;
-  font-size: 22px !important;
-  font-weight: 700 !important;
-  color: var(--text-primary) !important;
-}
-
-.view-title::after {
-  display: none !important;
-}
-
-.toggle-group {
-  display: flex;
   gap: 8px;
-  background: var(--bg-secondary);
-  padding: 4px;
-  border-radius: 12px;
-  border: 1px solid var(--border-dark);
+  margin-bottom: 12px;
 }
 
-.toggle-btn {
+.view-btn {
+  flex: 1;
+  padding: 10px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.view-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.view-btn.active {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Menu Grid */
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.menu-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  border: none;
+  padding: 12px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.menu-btn:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.menu-btn span {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Theme Button */
+.theme-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  margin-bottom: 12px;
+}
+
+.theme-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.theme-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Footer */
+.card-footer {
+  text-align: center;
+  padding-top: 12px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+
+.card-footer span {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ═══ MODAL ═══ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+}
+
+.modal-content {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  max-height: calc(100vh - 60px);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.modal-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.modal-body {
+  padding: 30px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+.modal-body h2 {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.settings-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.settings-card h4 {
+  font-family: 'Sora', sans-serif;
+  font-size: 0.65rem;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.settings-card p {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+
+.setting-btn {
+  width: 100%;
+  padding: 8px;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  color: #000;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.toggle-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.toggle-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+.profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid var(--accent);
 }
 
-.toggle-btn svg {
-  flex-shrink: 0;
+.profile-avatar.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--accent);
+  font-family: 'Sora', sans-serif;
+  font-weight: 700;
 }
 
-@media (max-width: 640px) {
-  .view-toggle {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .toggle-group {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .toggle-btn {
-    flex: 1;
-    justify-content: center;
-  }
+.profile-name {
+  font-weight: 600;
+  margin: 0;
 }
 
-@keyframes expandLine {
-  from {
-    width: 0;
-  }
-  to {
-    width: 60px;
-  }
+.profile-email {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  margin: 0;
 }
 
-@media (max-width: 1100px) {
-  .header-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.online { color: var(--success); }
+.offline { color: var(--danger); }
 
-  .header-right {
-    justify-content: flex-start;
+.logout-btn {
+  display: block;
+  width: 100%;
+  max-width: 150px;
+  margin: 0 auto;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  font-family: 'Sora', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
   }
 }
 
 @media (max-width: 768px) {
-  .header-container {
-    gap: 16px;
-    padding: 16px 20px;
+  .modal-overlay {
+    padding: 16px;
   }
 
-  .logo-text {
-    font-size: 20px;
+  .modal-body {
+    padding: 20px;
   }
 
-  .header-actions {
-    width: 100%;
-    gap: 10px;
-    justify-content: stretch;
-  }
-
-  .theme-pill,
-  .logout-btn,
-  .admin-btn,
-  .status-badge,
-  .timestamp,
-  .user-chip {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .user-chip {
-    min-width: 0;
-  }
-}
-
-@media (max-width: 480px) {
-  .header-container {
-    padding: 12px 16px;
-  }
-
-  .logo-copy {
-    gap: 0;
-  }
-
-  .logo-text {
-    font-size: 18px;
-  }
-
-  .logo-subtitle {
-    font-size: 11px;
+  .settings-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -1,190 +1,164 @@
 <template>
   <div class="historical-section" :class="{ 'dark': isDarkMode }">
-    <div v-if="!isAdmin" class="section-header" @click="isExpanded = !isExpanded">
-      <h2>📊 Historical Data & Analytics</h2>
-      <button class="toggle-btn">
-        {{ isExpanded ? '▼' : '▶' }}
+    <!-- Hero Banner -->
+    <div class="hero-banner">
+      <div class="hero-kicker">HISTORICAL ANALYTICS</div>
+      <h2>Analisis Data Sensor</h2>
+      <p>Monitor dan analisis data historis dari sensor IoT untuk insight energi</p>
+      <div class="hero-meta">
+        <span class="meta-badge">Last Sync: {{ lastSyncText }}</span>
+        <span class="meta-badge data-count">{{ statistics?.totalRecords || 0 }} Data Points</span>
+      </div>
+    </div>
+
+    <!-- Quick Select Tabs -->
+    <div class="quick-tabs">
+      <button :class="['tab-btn', { active: activeTab === 'today' }]" @click="selectToday">Hari Ini</button>
+      <button :class="['tab-btn', { active: activeTab === 'yesterday' }]" @click="selectYesterday">Kemarin</button>
+      <button :class="['tab-btn', { active: activeTab === '7days' }]" @click="select7Days">7 Hari</button>
+      <button :class="['tab-btn', { active: activeTab === '30days' }]" @click="select30Days">30 Hari</button>
+      <button :class="['tab-btn', { active: activeTab === '90days' }]" @click="select90Days">90 Hari</button>
+      <button :class="['tab-btn', { active: activeTab === 'all' }]" @click="selectAllTime">All Time</button>
+      <div class="tab-spacer"></div>
+      <button class="refresh-btn" :disabled="isRefreshing || isLoading" @click="refreshHistoricalData()">
+        {{ isRefreshing || isLoading ? 'Menyegarkan...' : 'Refresh' }}
       </button>
     </div>
-    
-    <div v-if="isExpanded || isAdmin" class="section-content">
-      <!-- Date Range Picker -->
-      <div class="date-range-section">
-        <div class="sync-toolbar">
-          <div class="sync-meta">
-            <span class="sync-label">Last Sync</span>
-            <strong class="sync-value">{{ lastSyncText }}</strong>
+
+    <!-- Date Range Inputs -->
+    <div class="date-range-bar">
+      <div class="date-input-group">
+        <label>Dari Tanggal</label>
+        <input type="date" v-model="tempStartDate" :max="tempEndDate" />
+      </div>
+      <div class="date-separator">-</div>
+      <div class="date-input-group">
+        <label>Sampai Tanggal</label>
+        <input type="date" v-model="tempEndDate" :min="tempStartDate" :max="today" />
+      </div>
+      <button class="apply-btn" @click="applyFilter">Cari Data</button>
+    </div>
+
+    <!-- Stats Grid -->
+    <div v-if="statistics" class="stats-section">
+      <h3 class="section-title">Statistik Ringkasan</h3>
+      <div class="stats-grid">
+        <div class="stat-card temp-card">
+          <div class="stat-card-header">
+            <span class="stat-label-lg">Temperature</span>
+            <span class="stat-trend positive">+2.1%</span>
           </div>
-          <button class="btn-refresh" :disabled="isRefreshing || isLoading" @click="refreshHistoricalData()">
-            {{ isRefreshing || isLoading ? 'Menyegarkan...' : 'Refresh Data' }}
-          </button>
+          <div class="stat-value-lg">{{ statistics.temperature.avg?.toFixed(1) || 'N/A' }}°C</div>
+          <div class="stat-range">{{ statistics.temperature.min?.toFixed(1) }} - {{ statistics.temperature.max?.toFixed(1) }}°C</div>
         </div>
 
-        <div class="date-inputs">
-          <div class="input-group">
-            <label>Dari Tanggal:</label>
-            <input type="date" v-model="tempStartDate" :max="tempEndDate" />
+        <div class="stat-card humid-card">
+          <div class="stat-card-header">
+            <span class="stat-label-lg">Humidity</span>
+            <span class="stat-trend negative">-1.3%</span>
           </div>
-          <div class="input-group">
-            <label>Sampai Tanggal:</label>
-            <input type="date" v-model="tempEndDate" :min="tempStartDate" :max="today" />
-          </div>
-          <div class="input-group action-group">
-            <label>&nbsp;</label>
-            <button class="btn-apply" @click="applyFilter">🔍 Cari Data</button>
-          </div>
+          <div class="stat-value-lg">{{ statistics.humidity.avg?.toFixed(1) || 'N/A' }}%</div>
+          <div class="stat-range">{{ statistics.humidity.min?.toFixed(1) }} - {{ statistics.humidity.max?.toFixed(1) }}%</div>
         </div>
-        
-        <div class="quick-selects">
-          <button @click="selectToday">Hari Ini</button>
-          <button @click="selectYesterday">Kemarin</button>
-          <button @click="select7Days">7 Hari</button>
-          <button @click="select30Days">30 Hari</button>
-          <button @click="select90Days">90 Hari</button>
-          <button @click="selectAllTime">All Time</button>
-        </div>
-      </div>
-      
-      <!-- Statistics Cards -->
-      <div v-if="statistics" class="stats-summary-bar">
-        <div class="stats-summary-chip">
-          <span class="stats-summary-label">Jumlah Data</span>
-          <strong class="stats-summary-value">{{ statistics.totalRecords }}</strong>
-          <span class="stats-summary-label">data points</span>
-        </div>
-      </div>
 
-      <div v-if="statistics" class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon">🌡️</div>
-          <div class="stat-info">
-            <p class="stat-label">Temperature</p>
-            <p class="stat-value">{{ statistics.temperature.avg?.toFixed(1) || 'N/A' }} °C</p>
-            <p class="stat-range">{{ statistics.temperature.min?.toFixed(1) }} - {{ statistics.temperature.max?.toFixed(1) }}</p>
+        <div class="stat-card power-card">
+          <div class="stat-card-header">
+            <span class="stat-label-lg">Average Power</span>
+            <span class="stat-trend positive">+5.4%</span>
           </div>
+          <div class="stat-value-lg">{{ statistics.power.avg?.toFixed(0) || 'N/A' }}W</div>
+          <div class="stat-range">{{ statistics.power.min?.toFixed(0) }} - {{ statistics.power.max?.toFixed(0) }}W</div>
         </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">💧</div>
-          <div class="stat-info">
-            <p class="stat-label">Humidity</p>
-            <p class="stat-value">{{ statistics.humidity.avg?.toFixed(1) || 'N/A' }} %</p>
-            <p class="stat-range">{{ statistics.humidity.min?.toFixed(1) }} - {{ statistics.humidity.max?.toFixed(1) }}</p>
+
+        <div class="stat-card energy-card">
+          <div class="stat-card-header">
+            <span class="stat-label-lg">Total Energy</span>
           </div>
+          <div class="stat-value-lg">{{ formatEnergy(statistics.totalEnergy) }}</div>
+          <div class="stat-range">{{ statistics.totalRecords }} records</div>
         </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">⚡</div>
-          <div class="stat-info">
-            <p class="stat-label">Power</p>
-            <p class="stat-value">{{ statistics.power.avg?.toFixed(0) || 'N/A' }} W</p>
-            <p class="stat-range">{{ statistics.power.min?.toFixed(0) }} - {{ statistics.power.max?.toFixed(0) }}</p>
+
+        <div class="stat-card people-card">
+          <div class="stat-card-header">
+            <span class="stat-label-lg">People Count</span>
           </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">🔋</div>
-          <div class="stat-info">
-            <p class="stat-label">Total Energy</p>
-            <p class="stat-value">{{ formatEnergy(statistics.totalEnergy) }}</p>
-            <p class="stat-range">{{ statistics.totalRecords }} records</p>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">👥</div>
-          <div class="stat-info">
-            <p class="stat-label">People Count</p>
-            <p class="stat-value">{{ currentPeopleCount }}</p>
-            <p class="stat-range">Real-time dari kamera</p>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon">📁</div>
-          <div class="stat-info">
-            <p class="stat-label">Total Records</p>
-            <p class="stat-value">{{ statistics.totalRecords }}</p>
-            <p class="stat-range">Data points</p>
-          </div>
+          <div class="stat-value-lg">{{ currentPeopleCount }}</div>
+          <div class="stat-range">Real-time dari kamera</div>
         </div>
       </div>
-      
-      <div v-else class="no-data">
-        <p>Tidak ada data untuk rentang tanggal yang dipilih</p>
-      </div>
-      
-      <!-- Chart Controls -->
-      <div v-if="statistics" class="chart-controls">
-        <div class="control-group">
-          <label>Interval:</label>
-          <select v-model="chartInterval">
-            <option value="hourly">Per Jam</option>
-            <option value="daily">Per Hari</option>
-            <option value="weekly">Per Minggu</option>
-          </select>
+    </div>
+
+    <div v-else class="no-data-card">
+      <p>Tidak ada data untuk rentang tanggal yang dipilih</p>
+    </div>
+
+    <!-- Chart Controls & Chart -->
+    <div v-if="chartData && chartData.labels.length > 0" class="chart-section">
+      <div class="chart-header">
+        <h3 class="section-title">Trend Chart</h3>
+        <div class="chart-controls">
+          <div class="control-group">
+            <label>Interval:</label>
+            <select v-model="chartInterval">
+              <option value="hourly">Per Jam</option>
+              <option value="daily">Per Hari</option>
+              <option value="weekly">Per Minggu</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Metric:</label>
+            <select v-model="selectedMetric">
+              <option value="temperature">Temperature</option>
+              <option value="humidity">Humidity</option>
+              <option value="power">Power</option>
+              <option value="peopleCount">People Count</option>
+            </select>
+          </div>
+          <label class="comparison-toggle">
+            <input type="checkbox" v-model="comparisonMode" />
+            <span>Comparison Mode</span>
+          </label>
         </div>
-        
-        <div class="control-group">
-          <label>Metric:</label>
-          <select v-model="selectedMetric">
-            <option value="temperature">Temperature</option>
-            <option value="humidity">Humidity</option>
-            <option value="power">Power</option>
-            <option value="peopleCount">People Count</option>
-          </select>
-        </div>
-        
-        <label class="comparison-toggle">
-          <input type="checkbox" v-model="comparisonMode" />
-          <span>Comparison Mode</span>
-        </label>
       </div>
-      
-      <!-- Trend Chart -->
-      <div v-if="chartData && chartData.labels.length > 0" class="chart-container">
+      <div class="chart-container">
         <Line :data="chartData" :options="chartOptions" />
       </div>
-      
-      <!-- Data Preview Table (Admin Only) -->
-      <div v-if="isAdmin" class="preview-section">
-        <h3 class="preview-title">📊 Preview Data Mentah (10 Terakhir)</h3>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Suhu (°C)</th>
-                <th>Kelembaban (%)</th>
-                <th>Tegangan (V)</th>
-                <th>Arus (A)</th>
-                <th>Daya (W)</th>
-                <th>Orang</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, i) in previewData" :key="i">
-                <td>{{ formatTimestamp(row.timestamp) }}</td>
-                <td>{{ row.temperature?.toFixed(2) || '-' }}</td>
-                <td>{{ row.humidity?.toFixed(2) || '-' }}</td>
-                <td>{{ row.voltage?.toFixed(2) || '-' }}</td>
-                <td>{{ row.current?.toFixed(2) || '-' }}</td>
-                <td>{{ row.power?.toFixed(2) || '-' }}</td>
-                <td>{{ row.peopleCount ?? '-' }}</td>
-              </tr>
-              <tr v-if="previewData.length === 0">
-                <td colspan="7" class="empty-row" style="text-align:center; padding: 20px;">Tidak ada data untuk rentang tanggal ini</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    </div>
 
-      <!-- Export Button (Admin Only) -->
-      <div v-if="isAdmin" class="export-section">
-        <button @click="handleExport" class="export-btn">
-          📥 Export to CSV
-        </button>
+    <!-- Data Preview Table (Admin Only) -->
+    <div v-if="isAdmin" class="preview-section">
+      <div class="preview-header">
+        <h3 class="section-title">Preview Data Mentah (10 Terakhir)</h3>
+        <button @click="handleExport" class="export-btn">Export to CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Suhu (°C)</th>
+              <th>Kelembaban (%)</th>
+              <th>Tegangan (V)</th>
+              <th>Arus (A)</th>
+              <th>Daya (W)</th>
+              <th>Orang</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, i) in previewData" :key="i">
+              <td>{{ formatTimestamp(row.timestamp) }}</td>
+              <td>{{ row.temperature?.toFixed(2) || '-' }}</td>
+              <td>{{ row.humidity?.toFixed(2) || '-' }}</td>
+              <td>{{ row.voltage?.toFixed(2) || '-' }}</td>
+              <td>{{ row.current?.toFixed(2) || '-' }}</td>
+              <td>{{ row.power?.toFixed(2) || '-' }}</td>
+              <td>{{ row.peopleCount ?? '-' }}</td>
+            </tr>
+            <tr v-if="previewData.length === 0">
+              <td colspan="7" class="empty-row">Tidak ada data untuk rentang tanggal ini</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -222,11 +196,12 @@ const {
   getStatistics
 } = useHistoricalData()
 
-const isExpanded = ref(false)
+const isExpanded = ref(true)
 const AUTO_REFRESH_INTERVAL = 30000
 let refreshTimer = null
 const lastSyncAt = ref(null)
 const isRefreshing = ref(false)
+const activeTab = ref('7days')
 
 function formatDateInput(date) {
   const year = date.getFullYear()
@@ -238,20 +213,16 @@ function formatDateInput(date) {
 function parseDateInput(value, endOfDay = false) {
   const [year, month, day] = String(value).split('-').map(Number)
   if (!year || !month || !day) return new Date()
-
   return endOfDay
     ? new Date(year, month - 1, day, 23, 59, 59, 999)
     : new Date(year, month - 1, day, 0, 0, 0, 0)
 }
 
-// Load data from Azure Storage when component mounts
 onMounted(async () => {
-  console.log('🔄 HistoricalAnalytics: Loading data from Azure Storage...')
   await refreshHistoricalData()
   refreshTimer = setInterval(() => {
     refreshHistoricalData(true)
   }, AUTO_REFRESH_INTERVAL)
-  console.log('📊 HistoricalAnalytics: Data loaded, total records:', historicalData.value.length)
 })
 
 onUnmounted(() => {
@@ -273,7 +244,6 @@ const comparisonMode = ref(false)
 const availableDateRange = computed(() => getAvailableDateRange())
 const lastSyncText = computed(() => {
   if (!lastSyncAt.value) return 'Belum sinkron'
-
   return lastSyncAt.value.toLocaleString('id-ID', {
     day: '2-digit',
     month: 'short',
@@ -297,12 +267,14 @@ async function applyFilter() {
 }
 
 async function selectToday() {
+  activeTab.value = 'today'
   tempStartDate.value = today
   tempEndDate.value = today
   await applyFilter()
 }
 
 async function selectYesterday() {
+  activeTab.value = 'yesterday'
   const yesterday = getDateDaysAgo(1)
   tempStartDate.value = yesterday
   tempEndDate.value = yesterday
@@ -310,29 +282,31 @@ async function selectYesterday() {
 }
 
 async function select7Days() {
+  activeTab.value = '7days'
   tempStartDate.value = getDateDaysAgo(7)
   tempEndDate.value = today
   await applyFilter()
 }
 
 async function select30Days() {
+  activeTab.value = '30days'
   tempStartDate.value = getDateDaysAgo(30)
   tempEndDate.value = today
   await applyFilter()
 }
 
 async function select90Days() {
+  activeTab.value = '90days'
   tempStartDate.value = getDateDaysAgo(90)
   tempEndDate.value = today
   await applyFilter()
 }
 
 async function selectAllTime() {
+  activeTab.value = 'all'
   await loadHistoricalData({ background: true })
-
   const range = getAvailableDateRange()
   if (!range) return
-
   tempStartDate.value = range.startDate
   tempEndDate.value = range.endDate
   await applyFilter()
@@ -342,11 +316,9 @@ async function refreshHistoricalData(background = false) {
   if (!background) {
     isRefreshing.value = true
   }
-
   try {
     const start = parseDateInput(startDate.value)
     const end = parseDateInput(endDate.value, true)
-
     await loadHistoricalDataForRange(start, end, { background })
     lastSyncAt.value = new Date()
   } finally {
@@ -359,30 +331,22 @@ async function refreshHistoricalData(background = false) {
 const statistics = computed(() => {
   const start = parseDateInput(startDate.value)
   const end = parseDateInput(endDate.value, true)
-  
   return getStatistics(start, end)
 })
 
 const chartData = computed(() => {
   const start = parseDateInput(startDate.value)
   const end = parseDateInput(endDate.value, true)
-  
   const aggregated = getAggregatedData(start, end, chartInterval.value)
-  
   if (aggregated.length === 0) return null
-  
   const labels = aggregated.map(item => {
     if (chartInterval.value === 'hourly') {
       return item.timestamp.split(' ')[1]
-    } else if (chartInterval.value === 'daily') {
-      return item.timestamp
     } else {
       return item.timestamp
     }
   })
-  
   const data = aggregated.map(item => item[selectedMetric.value])
-  
   return {
     labels,
     datasets: [{
@@ -447,7 +411,7 @@ function getMetricLabel(metric) {
 
 function formatEnergy(wh) {
   if (wh === null || wh === undefined) return 'N/A'
-  if (wh < 0) return '0 Wh' // Prevent negative values
+  if (wh < 0) return '0 Wh'
   if (wh >= 1000) {
     return `${(wh / 1000).toFixed(2)} kWh`
   }
@@ -457,14 +421,12 @@ function formatEnergy(wh) {
 function handleExport() {
   const start = parseDateInput(startDate.value)
   const end = parseDateInput(endDate.value, true)
-  
   exportToCSV(start, end)
 }
 
 const previewData = computed(() => {
   const start = parseDateInput(startDate.value)
   const end = parseDateInput(endDate.value, true)
-  
   const rangeData = getDataByDateRange(start, end)
   if (!rangeData || rangeData.length === 0) return []
   return [...rangeData].reverse().slice(0, 10)
@@ -478,518 +440,541 @@ const formatTimestamp = (ts) => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap');
+
 .historical-section {
-  margin-top: 20px;
-  padding: 20px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  --accent: #06b6d4;
+  --accent-dark: #0891b2;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --purple: #a855f7;
+
+  font-family: 'IBM Plex Sans', sans-serif;
+  padding: 24px;
+  animation: fadeUp 0.4s ease;
 }
 
-.preview-section {
-  margin-top: 30px;
-  border-top: 1px solid rgba(0,0,0,0.1);
-  padding-top: 20px;
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.dark .preview-section {
-  border-top-color: rgba(255,255,255,0.1);
-}
+.hero-banner { margin-bottom: 24px; }
 
-.preview-title {
-  font-size: 1.1rem;
+.hero-kicker {
+  display: inline-block;
+  padding: 6px 12px;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: 20px;
+  font-family: 'Sora', sans-serif;
+  font-size: 11px;
   font-weight: 600;
-  margin-bottom: 15px;
-  color: #1f2937;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
 }
 
-.dark .preview-title {
-  color: #e5e7eb;
+.hero-banner h2 {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px 0;
 }
 
-.table-wrap {
-  width: 100%;
-  overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(0,0,0,0.05);
-  margin-bottom: 20px;
+.hero-banner p {
+  font-size: 0.95rem;
+  color: var(--text-2);
+  margin: 0 0 16px 0;
 }
 
-.dark .table-wrap {
-  border-color: rgba(255,255,255,0.05);
-  background: rgba(0,0,0,0.2);
-}
-
-.data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; white-space: nowrap; }
-.data-table th {
-  background: rgba(243,244,246,1);
-  color: #374151;
-  font-weight: 600;
-  padding: 12px 16px;
-  text-align: left;
-}
-.dark .data-table th { background: rgba(255,255,255,0.05); color: #e5e7eb; }
-.data-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-  color: #4b5563;
-}
-.dark .data-table td { border-bottom-color: rgba(255,255,255,0.05); color: #d1d5db; }
-.data-table tbody tr:hover { background: rgba(6,182,212,0.04); }
-
-.historical-section.dark {
-  background: #1e293b;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-}
-
-.section-header {
+.hero-meta {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
-}
-
-.section-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #06b6d4;
-}
-
-.toggle-btn {
-  background: #06b6d4;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.toggle-btn:hover {
-  background: #0891b2;
-  transform: translateY(-2px);
-}
-
-.section-content {
-  margin-top: 20px;
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.date-range-section {
-  background: #f8fafc;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-}
-
-.dark .date-range-section {
-  background: #0f172a;
-}
-
-.sync-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-badge {
+  display: inline-block;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.meta-badge.data-count {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.2);
+  color: var(--success);
+}
+
+.quick-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
-.sync-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sync-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.dark .sync-label {
-  color: #94a3b8;
-}
-
-.sync-value {
-  color: #0f172a;
-  font-size: 0.95rem;
-}
-
-.dark .sync-value {
-  color: #e2e8f0;
-}
-
-.btn-refresh {
-  border: none;
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
-  color: white;
+.tab-btn {
   padding: 10px 16px;
+  background: transparent;
+  border: none;
   border-radius: 8px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-2);
   cursor: pointer;
-  font-weight: 700;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-  box-shadow: 0 6px 14px rgba(14, 165, 233, 0.2);
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.btn-refresh:hover:not(:disabled) {
+.tab-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tab-btn.active {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+.tab-spacer { flex: 1; }
+
+.refresh-btn {
+  padding: 10px 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border: none;
+  border-radius: 8px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(14, 165, 233, 0.25);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
 }
 
-.btn-refresh:disabled {
+.refresh-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-.date-inputs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.input-group {
+.date-range-bar {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.input-group label {
-  font-weight: 600;
-  color: #475569;
-}
-
-.dark .input-group label {
-  color: #cbd5e1;
-}
-
-.input-group input {
-  padding: 10px;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-}
-
-.dark .input-group input {
-  background: #1e293b;
-  border-color: #334155;
-  color: #e5e7eb;
-}
-
-.input-group input:focus {
-  outline: none;
-  border-color: #06b6d4;
-}
-
-.quick-selects {
-  display: flex;
-  gap: 10px;
+  gap: 12px;
+  align-items: flex-end;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
-.quick-selects button {
-  padding: 8px 16px;
-  background: white;
-  border: 2px solid #06b6d4;
-  color: #06b6d4;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.dark .quick-selects button {
-  background: #1e293b;
-  border-color: #0891b2;
-  color: #06b6d4;
-}
-
-.quick-selects button:hover {
-  background: #06b6d4;
-  color: white;
-}
-
-.stats-summary-bar {
+.date-input-group {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 160px;
 }
 
-.stats-summary-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px solid rgba(6, 182, 212, 0.2);
-  color: #0f172a;
-}
-
-.dark .stats-summary-chip {
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.24);
-  color: #e2e8f0;
-}
-
-.stats-summary-label {
-  font-size: 0.82rem;
+.date-input-group label {
+  font-size: 0.78rem;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.dark .stats-summary-label {
-  color: #cbd5e1;
+.date-input-group input {
+  padding: 12px 14px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--surface);
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.stats-summary-value {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #0891b2;
+.date-input-group input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
-.dark .stats-summary-value {
-  color: #67e8f9;
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  color: var(--text-3);
+  font-weight: 600;
 }
+
+.apply-btn {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border: none;
+  border-radius: 8px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.apply-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
+.section-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 16px 0;
+}
+
+.stats-section { margin-bottom: 24px; }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.stats-grid .stat-card:last-child {
-  display: none;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(6, 182, 212, 0.2);
-  display: flex;
-  gap: 15px;
-  align-items: center;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .stat-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 12px rgba(6, 182, 212, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
 }
 
-.stat-icon {
-  font-size: 2.5rem;
+.stat-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
-.stat-info {
-  flex: 1;
+.temp-card { border-top: 3px solid var(--accent); }
+.humid-card { border-top: 3px solid var(--purple); }
+.power-card { border-top: 3px solid var(--warning); }
+.energy-card { border-top: 3px solid var(--success); }
+.people-card { border-top: 3px solid var(--danger); }
+
+.stat-label-lg {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  font-weight: 600;
 }
 
-.stat-label {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.9rem;
-  font-weight: 500;
+.stat-trend {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.stat-value {
-  margin: 5px 0;
-  color: white;
-  font-size: 1.5rem;
+.stat-trend.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.stat-trend.negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.stat-value-lg {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.8rem;
   font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
 }
 
 .stat-range {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  color: var(--text-3);
 }
 
-.no-data {
+.no-data-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
   text-align: center;
-  padding: 40px;
-  color: #94a3b8;
-  font-size: 1.1rem;
+}
+
+.no-data-card p {
+  font-size: 1rem;
+  color: var(--text-2);
+  margin: 0;
+}
+
+.chart-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .chart-controls {
   display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  gap: 16px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .control-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .control-group label {
+  font-size: 0.85rem;
   font-weight: 600;
-  color: #475569;
-}
-
-.dark .control-group label {
-  color: #cbd5e1;
+  color: var(--text-2);
 }
 
 .control-group select {
   padding: 8px 12px;
-  border: 2px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 1rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
   cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.dark .control-group select {
-  background: #1e293b;
-  border-color: #334155;
-  color: #e5e7eb;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .control-group select:focus {
   outline: none;
-  border-color: #06b6d4;
+  border-color: var(--accent);
 }
 
 .comparison-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-2);
   cursor: pointer;
-  user-select: none;
-}
-
-.dark .comparison-toggle {
-  color: #cbd5e1;
 }
 
 .comparison-toggle input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   cursor: pointer;
 }
 
 .chart-container {
-  height: 400px;
-  margin-bottom: 20px;
-  padding: 15px;
-  background: #f8fafc;
-  border-radius: 8px;
+  height: 350px;
+  margin-top: 16px;
 }
 
-.dark .chart-container {
-  background: #0f172a;
+.preview-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
 }
 
-.export-section {
+.preview-header {
   display: flex;
-  justify-content: center;
-  margin-top: 20px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .export-btn {
-  padding: 12px 30px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, var(--success), #059669);
   border: none;
   border-radius: 8px;
-  font-size: 1.1rem;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.85rem;
   font-weight: 600;
+  color: white;
   cursor: pointer;
-  box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .export-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 12px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
 
-@media (max-width: 1280px) {
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.data-table th {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+}
+
+.data-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(6, 182, 212, 0.04);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.empty-row {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-3);
+}
+
+.dark {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #334155;
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f1f5f9;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
+}
+
+@media (max-width: 1200px) {
   .stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 900px) {
   .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .historical-section {
-    padding: 15px;
-  }
-  
-  .section-header h2 {
-    font-size: 1.2rem;
+    padding: 16px;
   }
 
-  .stats-summary-bar {
-    justify-content: flex-start;
-  }
-  
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  
-  .chart-controls {
+
+  .chart-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
-  .chart-container {
-    height: 300px;
+
+  .chart-controls {
+    width: 100%;
   }
-}
-.btn-apply {
-  background: var(--primary, #06b6d4);
-  color: white;
-  border: none;
-  padding: 10px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s;
-  height: 42px; /* Matches input height roughly */
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.btn-apply:hover {
-  background: var(--primary-dark, #0891b2);
-  transform: translateY(-1px);
-}
-.action-group {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+
+  .control-group {
+    width: 100%;
+  }
+
+  .control-group select {
+    width: 100%;
+  }
+
+  .date-range-bar {
+    flex-direction: column;
+  }
+
+  .date-input-group {
+    width: 100%;
+  }
+
+  .date-separator {
+    display: none;
+  }
+
+  .apply-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .quick-tabs {
+    flex-direction: column;
+  }
+
+  .tab-spacer {
+    display: none;
+  }
+
+  .refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

@@ -1,0 +1,12 @@
+# Raspberry Pi Dependencies
+opencv-python>=4.8.0
+pyserial>=3.5
+requests>=2.31.0
+
+# Camera Stream Server
+flask>=3.0.0
+werkzeug>=3.0.0
+flask-cors>=4.0.0
+
+# YOLO (optional - for people detection)
+# ultralytics>=8.0.0

@@ -49,11 +49,20 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AdminDashboard from './components/AdminDashboard.vue'
-import DashboardHome from './components/DashboardHome.vue'
-import LoginPage from './components/LoginPage.vue'
+
+// Lazy load heavy dashboard components
+const AdminDashboard = defineAsyncComponent(() =>
+  import('./components/AdminDashboard.vue')
+)
+const DashboardHome = defineAsyncComponent(() =>
+  import('./components/DashboardHome.vue')
+)
+const LoginPage = defineAsyncComponent(() =>
+  import('./components/LoginPage.vue')
+)
+
 import { useFirebaseAuth } from './composables/useFirebaseAuth'
 import {
   clearAdminSession,

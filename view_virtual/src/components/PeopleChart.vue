@@ -189,7 +189,7 @@ const chartOptions = computed(() => {
   box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .people-count-display::before {

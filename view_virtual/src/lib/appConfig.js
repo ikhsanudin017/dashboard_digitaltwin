@@ -12,12 +12,12 @@ export const ML_API_URL =
   readEnv('VITE_ML_API_URL') || 'http://localhost:5000/api'
 
 // Cesium & Google Maps API Keys
-export const CESIUM_ION_TOKEN = readEnv('VITE_CESIUM_ION_TOKEN')
+export const CESIUM_ION_TOKEN = readEnv('VITE_CESIUM_ION_TOKEN') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiOTM2NDJmNC1jZmEzLTQ2OWEtOTU2MS1kZTY0ZTkzNGY3MGMiLCJpZCI6NDI0MzM2LCJpYXQiOjE3Nzc0Nzg5ODF9.8YOYunQZWR7KNEzSajwLN_5KTSXFyP-TGwuJfahkXMI'
 export const GOOGLE_MAPS_API_KEY = readEnv('VITE_GOOGLE_MAPS_API_KEY')
 
 // Camera configuration
 export const CAMERA_STREAM_URL =
-  readEnv('VITE_CAMERA_STREAM_URL') || 'http://192.168.137.205:5000'
+  readEnv('VITE_CAMERA_STREAM_URL') || ''
 
 // Write API Key for sensitive operations (should use backend in production)
 export const AZURE_FUNCTION_WRITE_KEY = readEnv('VITE_AZURE_FUNCTION_WRITE_KEY') || ''

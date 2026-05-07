@@ -3,7 +3,7 @@ import { AZURE_FUNCTION_URL, AZURE_FUNCTION_WRITE_KEY } from '../lib/appConfig'
 
 const STORAGE_KEY = 'sensor_last_data'
 
-// Polling interval in milliseconds (5 seconds for near real-time)
+// Polling interval in milliseconds (5 seconds to match ESP32 sensor interval)
 const POLLING_INTERVAL = 5000
 
 // Convert UTC ISO string to local display string (WIB)
@@ -74,10 +74,16 @@ export function useAzureTelemetry() {
     saveLastData(newData)
   }, { deep: true })
 
-  // Fetch latest sensor data dari Azure Function
-  const fetchLatestFromAzure = async () => {
+  // Fetch latest sensor data dari Azure Function with retry
+  const fetchLatestFromAzure = async (retryCount = 0, maxRetries = 3) => {
     try {
-      const response = await fetch(`${AZURE_FUNCTION_URL}/telemetry/latest`)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+
+      const response = await fetch(`${AZURE_FUNCTION_URL}/telemetry/latest`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -138,6 +144,13 @@ export function useAzureTelemetry() {
 
       return false
     } catch (error) {
+      // Retry logic for network errors
+      if (retryCount < maxRetries && (error.name === 'AbortError' || error.message.includes('fetch'))) {
+        console.log(`🔄 Retry ${retryCount + 1}/${maxRetries} untuk fetch data...`)
+        return new Promise(resolve => setTimeout(() => {
+          resolve(fetchLatestFromAzure(retryCount + 1, maxRetries))
+        }, 1000 * (retryCount + 1))) // Exponential backoff
+      }
       console.error('❌ Error fetching dari Azure:', error.message)
       return false
     }

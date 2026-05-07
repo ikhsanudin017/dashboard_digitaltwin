@@ -1,43 +1,29 @@
 <template>
   <div class="cesium-viewer">
-    <!-- Map Container -->
     <div ref="cesiumContainer" class="cesium-container"></div>
 
-    <!-- Loading Overlay -->
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-spinner">
         <div class="spinner"></div>
-        <p class="loading-text">Memuat 3D View...</p>
+        <p class="loading-text">Memuat Peta...</p>
         <p class="loading-sub">{{ loadingStatus }}</p>
       </div>
     </div>
 
-    <!-- Error State -->
     <div v-if="loadError" class="error-overlay">
       <div class="error-content">
-        <p class="error-message">{{ loadError }}</p>
-        <button class="retry-btn" @click="initViewer">Coba Lagi</button>
+        <h3>Error</h3>
+        <p>{{ loadError }}</p>
+        <button @click="initViewer">🔄 Coba Lagi</button>
       </div>
     </div>
 
-    <!-- Info Card -->
-    <div v-if="isReady" class="info-card">
+    <div v-if="isReady && showInfoCard" class="info-card">
       <div class="card-header">
-        <span class="card-icon">🏠</span>
-        <span class="card-title">Digital Twin Home</span>
+        <span class="card-icon">🗺️</span>
+        <span class="card-title">3D Map</span>
       </div>
-      <div class="card-coords">
-        <span>{{ formatCoord(housePosition.lat) }}, {{ formatCoord(housePosition.lon) }}</span>
-      </div>
-      <div class="card-actions">
-        <button class="card-btn" @click="flyToHome">🎯 Lokasi</button>
-        <button class="card-btn" @click="toggle3D">📐 {{ is3DMode ? '2D' : '3D' }}</button>
-      </div>
-    </div>
-
-    <!-- Instructions -->
-    <div v-if="isReady" class="instructions">
-      <span>🖱️ Drag untuk rotate • Scroll untuk zoom • Klik kanan untuk tilt</span>
+      <button class="card-btn" @click="emit('switch-to-3d')">🏠 Indoor</button>
     </div>
   </div>
 </template>
@@ -45,43 +31,32 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as Cesium from 'cesium'
-import { CESIUM_ION_TOKEN, GOOGLE_MAPS_API_KEY } from '@/lib/appConfig'
 
-// Fallback to empty string if not configured via env
-const CESIUM_TOKEN = CESIUM_ION_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkZTljMmFmOC1lMjVmLTRiOTktOGZhMy00OTVkMDQzZDA3YjgiLCJpZCI6NDIzOTQ1LCJpYXQiOjE3NzcyNjg3Nzh9.GGZCNgx3n-vIlj-hphyjGIA4uIeR9e3-aXKkMq8Sp5I'
-const GOOGLE_API_KEY = GOOGLE_MAPS_API_KEY || 'AIzaSyBlQk4kTmrf-yWcM1wrLwSGlyxRvVqPP3M'
+const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiOTM2NDJmNC1jZmEzLTQ2OWEtOTU2MS1kZTY0ZTkzNGY3MGMiLCJpZCI6NDI0MzM2LCJpYXQiOjE3Nzc0Nzg5ODF9.8YOYunQZWR7KNEzSajwLN_5KTSXFyP-TGwuJfahkXMI'
 
 const props = defineProps({
-  sensorData: {
-    type: Object,
-    default: () => ({})
-  }
+  sensorData: { type: Object, default: () => ({}) },
+  showInfoCard: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['toggle-indoor'])
+const emit = defineEmits(['toggle-indoor', 'switch-to-3d'])
 
-const housePosition = {
-  lat: -7.722649267245097,
-  lon: 110.51904046867396
-}
+const housePosition = { lat: -7.722649267245097, lon: 110.51904046867396 }
 
 const cesiumContainer = ref(null)
 const isLoading = ref(true)
 const isReady = ref(false)
 const loadError = ref('')
 const loadingStatus = ref('')
-const is3DMode = ref(true)
 
 let viewer = null
-
-const formatCoord = (value) => value?.toFixed(6) || '--'
 
 const initViewer = async () => {
   isLoading.value = true
   loadError.value = ''
-  loadingStatus.value = 'Memuat engine...'
+  loadingStatus.value = 'Step 1: Container...'
+  console.log('1. Mulai initViewer')
 
-  await new Promise(r => setTimeout(r, 300))
   await nextTick()
 
   if (!cesiumContainer.value) {
@@ -90,12 +65,15 @@ const initViewer = async () => {
     return
   }
 
+  loadingStatus.value = 'Step 2: Set Token...'
+  console.log('2. Set token')
+
   try {
-    Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN
+    Cesium.Ion.defaultAccessToken = CESIUM_TOKEN
+    console.log('3. Token di-set, create Viewer...')
 
-    loadingStatus.value = 'Membuat 3D globe...'
+    loadingStatus.value = 'Step 3: Create Viewer...'
 
-    // Create viewer with clean config
     viewer = new Cesium.Viewer(cesiumContainer.value, {
       animation: false,
       timeline: false,
@@ -106,135 +84,78 @@ const initViewer = async () => {
       navigationHelpButton: false,
       infoBox: false,
       selectionIndicator: false,
-      creditContainer: document.createElement('div'),
-      skyAtmosphere: new Cesium.SkyAtmosphere(),
-      requestRenderMode: false,
-      maximumRenderTimeChange: Infinity
+      creditContainer: document.createElement('div')
     })
 
-    console.log('✅ Viewer created')
+    console.log('4. Viewer dibuat!')
 
-    // Configure scene for 3D interaction
-    viewer.scene.globe.enableLighting = false
-    viewer.scene.fog.enabled = false
-    viewer.scene.skyAtmosphere.show = true
+    // Remove default Bing imagery
+    viewer.imageryLayers.removeAll()
 
-    // Enable picking and picking parameters
-    viewer.scene.requestRenderMode = false
-    viewer.scene.minimumMaximumZoom = 0
+    // Set ellipsoid terrain
+    viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider()
 
-    // Make sure terrain exaggeration is normal (1x)
-    if (viewer.scene.terrainExaggeration !== undefined) {
-      viewer.scene.terrainExaggeration = 1.0
-    }
+    // Set background color
+    viewer.scene.backgroundColor = new Cesium.Color(0.04, 0.06, 0.1, 1)
 
-    loadingStatus.value = 'Memuat 3D Photorealistic...'
+    loadingStatus.value = 'Step 4: Load 3D Tileset...'
+    console.log('5. Load 3D Tileset')
 
-    // ONLY load Google Photorealistic 3D Tiles
+    // Load 3D Tileset
     try {
-      loadingStatus.value = 'Memuat Google 3D...'
-      const googleTileset = await Cesium.createGooglePhotorealistic3DTileset({
-        accessKey: GOOGLE_API_KEY
-      })
-      viewer.scene.primitives.add(googleTileset)
-      console.log('✅ Google Photorealistic 3D Tiles loaded')
-    } catch (googleErr) {
-      console.error('❌ Google 3D failed:', googleErr.message)
-      loadError.value = 'Gagal memuat 3D Tiles. Cek API key atau koneksi internet.'
-      isLoading.value = false
-      return
+      const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(2275207)
+      viewer.scene.primitives.add(tileset)
+      console.log('6. Tileset dimuat')
+    } catch (e) {
+      console.warn('⚠️ Gagal muat tileset:', e.message)
     }
 
-    // Add house marker
+    loadingStatus.value = 'Step 5: Add Marker...'
+    console.log('7. Add marker')
+
+    // Add marker
     viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(housePosition.lon, housePosition.lat),
       point: {
-        pixelSize: 16,
+        pixelSize: 20,
         color: Cesium.Color.RED,
         outlineColor: Cesium.Color.WHITE,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY
+        outlineWidth: 3
       },
       label: {
-        text: '🏠 Digital Twin Home',
-        font: '14px sans-serif',
+        text: '📍 Digital Twin Home',
+        font: '16px Arial',
         fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.RED,
-        outlineWidth: 2,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.TOP,
-        pixelOffset: new Cesium.Cartesian2(0, 20),
-        showBackground: true,
-        backgroundColor: new Cesium.Color(0.9, 0.2, 0.2, 0.9),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -20)
       }
     })
 
-    // Fly to home location
-    loadingStatus.value = 'Navigasi ke lokasi...'
+    loadingStatus.value = 'Step 6: Fly to location...'
+    console.log('8. Fly to location')
+
     viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        housePosition.lon,
-        housePosition.lat,
-        300
-      ),
+      destination: Cesium.Cartesian3.fromDegrees(housePosition.lon, housePosition.lat, 500),
       orientation: {
         heading: Cesium.Math.toRadians(0),
         pitch: Cesium.Math.toRadians(-45),
         roll: 0
       },
-      duration: 2
+      duration: 1
     })
+
+    loadingStatus.value = 'Selesai!'
+    console.log('9. Selesai!')
 
     isLoading.value = false
     isReady.value = true
-    console.log('✅ 3D Digital Twin siap!')
 
   } catch (error) {
     console.error('❌ Error:', error)
-    loadError.value = error.message || 'Gagal memuat 3D'
+    loadError.value = error.message || 'Gagal memuat'
     isLoading.value = false
   }
-}
-
-const flyToHome = () => {
-  if (!viewer) return
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      housePosition.lon,
-      housePosition.lat,
-      300
-    ),
-    orientation: {
-      heading: Cesium.Math.toRadians(0),
-      pitch: Cesium.Math.toRadians(-45),
-      roll: 0
-    },
-    duration: 1.5
-  })
-}
-
-const toggle3D = () => {
-  if (!viewer) return
-
-  is3DMode.value = !is3DMode.value
-
-  const pitch = is3DMode.value ? -45 : -90
-
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      housePosition.lon,
-      housePosition.lat,
-      300
-    ),
-    orientation: {
-      heading: Cesium.Math.toRadians(0),
-      pitch: Cesium.Math.toRadians(pitch),
-      roll: 0
-    },
-    duration: 1
-  })
 }
 
 onUnmounted(() => {
@@ -253,40 +174,28 @@ onMounted(() => {
 .cesium-viewer {
   position: relative;
   width: 100%;
-  height: 600px;
-  min-height: 500px;
+  height: 100%;
   overflow: hidden;
-  border-radius: 12px;
-  background: #1a1a2e;
+  background: #0a0f1a;
 }
 
 .cesium-container {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  cursor: grab;
 }
 
-.cesium-container:active {
-  cursor: grabbing;
-}
-
-/* Hide all Cesium default UI */
 :deep(.cesium-viewer-toolbar) { display: none !important; }
 :deep(.cesium-viewer-bottom) { display: none !important; }
 :deep(.cesium-creditLogoContainer) { display: none !important; }
 :deep(.cesium-credit-textContainer) { display: none !important; }
 :deep(.cesium-widget) { background: transparent !important; }
-:deep(.cesium-widget-cesiumWidget) { background: transparent !important; }
-:deep(.cesium-viewer) { background: transparent !important; }
 :deep(.cesium-canvas) { width: 100% !important; height: 100% !important; }
 
-/* Loading */
 .loading-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -294,15 +203,12 @@ onMounted(() => {
   z-index: 100;
 }
 
-.loading-spinner {
-  text-align: center;
-  color: white;
-}
+.loading-spinner { text-align: center; color: white; }
 
 .spinner {
   border: 4px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  border-top: 4px solid #ef4444;
+  border-top: 4px solid #00d4ff;
   width: 50px;
   height: 50px;
   animation: spin 1s linear infinite;
@@ -314,24 +220,12 @@ onMounted(() => {
   100% { transform: rotate(360deg); }
 }
 
-.loading-text {
-  font-size: 18px;
-  font-weight: 600;
-}
+.loading-text { font-size: 18px; font-weight: 600; }
+.loading-sub { font-size: 14px; color: #94a3b8; margin-top: 8px; }
 
-.loading-sub {
-  font-size: 14px;
-  color: #94a3b8;
-  margin-top: 8px;
-}
-
-/* Error */
 .error-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -339,99 +233,46 @@ onMounted(() => {
   z-index: 100;
 }
 
-.error-content {
-  text-align: center;
-  color: white;
-}
-
-.error-message {
-  color: #fca5a5;
-  margin-bottom: 16px;
-}
-
-.retry-btn {
+.error-content { text-align: center; color: white; max-width: 400px; padding: 20px; }
+.error-content h3 { font-size: 20px; font-weight: 700; color: #fca5a5; margin-bottom: 10px; }
+.error-content p { color: #fca5a5; margin-bottom: 20px; }
+.error-content button {
   padding: 12px 24px;
-  background: #ef4444;
-  color: white;
+  background: #00d4ff;
+  color: #000;
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
 }
 
-/* Info Card */
 .info-card {
   position: absolute;
-  top: 20px;
-  left: 20px;
+  top: 8px;
+  left: 226px;
+  right: 226px;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(12px);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 16px;
-  z-index: 50;
-  min-width: 200px;
-}
-
-.card-header {
+  padding: 10px 14px;
+  z-index: 40;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  justify-content: space-between;
 }
 
-.card-icon {
-  font-size: 24px;
-}
-
-.card-title {
-  font-weight: 700;
-  color: #fca5a5;
-  font-size: 16px;
-}
-
-.card-coords {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  font-family: monospace;
-  font-size: 12px;
-  color: #f8fafc;
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-}
+.card-header { display: flex; align-items: center; gap: 8px; }
+.card-icon { font-size: 18px; }
+.card-title { font-weight: 700; color: #00d4ff; font-size: 13px; }
 
 .card-btn {
-  flex: 1;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  color: white;
-  font-size: 12px;
+  padding: 6px 10px;
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  border-radius: 4px;
+  color: #22c55e;
+  font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.card-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: #ef4444;
-}
-
-/* Instructions */
-.instructions {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.9);
-  padding: 10px 20px;
-  border-radius: 20px;
-  color: #94a3b8;
-  font-size: 12px;
-  z-index: 50;
 }
 </style>

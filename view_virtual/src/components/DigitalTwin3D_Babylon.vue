@@ -4,18 +4,7 @@
       <canvas ref="canvas" class="canvas-container"></canvas>
       
       <!-- Sensor Icons Overlay - Inside 3D View -->
-      <div class="sensor-icons-overlay">
-        <div 
-          v-for="icon in sensorIcons" 
-          :key="icon.id"
-          class="sensor-icon"
-          @click="showSensorData(icon)"
-          :title="icon.label"
-        >
-          <div class="icon-emoji">{{ icon.emoji }}</div>
-          <div class="icon-label">{{ icon.label }}</div>
-          <div class="icon-value">{{ icon.value }}</div>
-        </div>
+      <div class="sensor-icons-overlay" style="display: none;">
       </div>
     </div>
     
@@ -34,13 +23,7 @@
       </div>
     </div>
     
-    <div class="controls">
-      <button @click="resetCamera" class="btn btn-primary">🔄 Reset Kamera</button>
-      <button @click="toggleAnimation" class="btn btn-primary">
-        {{ isAnimating ? '⏸️ Pause' : '▶️ Play' }}
-      </button>
-    </div>
-    
+        
     <!-- Hover Tooltip -->
     <div v-if="hoveredMesh && !selectedItem" class="hover-tooltip">
       <span class="tooltip-icon">{{ hoveredMesh.info?.icon || '📍' }}</span>
@@ -52,16 +35,15 @@
     <div v-if="selectedItem" class="item-popup" @click="closePopup">
       <div class="popup-content" @click.stop>
         <button class="close-btn" @click="closePopup">×</button>
-        <h3>{{ selectedItem.name }}</h3>
-        <div class="popup-details">
-          <div v-for="(value, key) in selectedItem.data" :key="key" class="detail-row">
-            <span class="detail-label">{{ formatLabel(key) }}:</span>
-            <span class="detail-value">{{ formatValue(key, value) }}</span>
-          </div>
+        <div class="popup-header">
+          <span class="popup-icon">{{ selectedItem.icon || '📍' }}</span>
+          <h3>{{ selectedItem.name }}</h3>
         </div>
-        <div class="popup-status">
-          <span class="status-indicator" :class="selectedItem.status"></span>
-          {{ selectedItem.statusText }}
+        <div class="popup-metrics">
+          <div v-for="(value, key) in selectedItem.data" :key="key" class="metric-item">
+            <span class="metric-label">{{ formatLabel(key) }}</span>
+            <span class="metric-value">{{ formatValue(key, value) }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -89,7 +71,6 @@ const props = defineProps({
 })
 
 const canvas = ref(null)
-const isAnimating = ref(true)
 const selectedItem = ref(null)
 const hoveredMesh = ref(null)
 
@@ -320,7 +301,7 @@ const initBabylonJS = () => {
 
     // Render loop
     engine.runRenderLoop(() => {
-      if (scene && isAnimating.value) {
+      if (scene) {
         scene.render()
       }
     })
@@ -487,7 +468,8 @@ const showMeshPopup = (mesh, roomInfo) => {
   }
   
   selectedItem.value = {
-    name: `${roomInfo.icon} ${roomInfo.name}`,
+    name: roomInfo.name,
+    icon: roomInfo.icon,
     meshName: mesh.name,
     type: roomInfo.type,
     data: sensorData,
@@ -774,19 +756,6 @@ const zoomOut = () => {
   }
 }
 
-const toggleAnimation = () => {
-  isAnimating.value = !isAnimating.value
-}
-
-const showSensorData = (icon) => {
-  selectedItem.value = {
-    name: `Sensor ${icon.label}`,
-    data: icon.data,
-    status: 'active',
-    statusText: 'Sensor Aktif'
-  }
-}
-
 const closePopup = () => {
   selectedItem.value = null
 }
@@ -957,14 +926,35 @@ const cleanup = () => {
   margin-top: 15px;
 }
 
-.controls {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
-  z-index: 5;
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  color: white;
+}
+
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* Sensor Icons Overlay */
@@ -994,7 +984,7 @@ const cleanup = () => {
   border-radius: 16px;
   padding: 12px;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   border: 2px solid rgba(255, 255, 255, 0.5);
   position: relative;
@@ -1035,7 +1025,7 @@ const cleanup = () => {
   margin-bottom: 6px;
   text-align: center;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .sensor-icon:hover .icon-emoji {
@@ -1060,7 +1050,7 @@ const cleanup = () => {
   color: var(--text-primary);
   text-align: center;
   line-height: 1.2;
-  transition: all 0.3s;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .sensor-icon:hover .icon-value {
@@ -1075,7 +1065,7 @@ const cleanup = () => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
@@ -1101,99 +1091,95 @@ const cleanup = () => {
 
 .item-popup {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(5px);
   z-index: 100;
 }
 
 .popup-content {
-  background: white;
-  padding: 25px;
-  border-radius: 15px;
-  max-width: 400px;
-  width: 90%;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  background: #1e293b;
+  padding: 24px;
+  border-radius: 16px;
+  width: 320px;
+  max-width: 90%;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
   position: relative;
 }
 
 .close-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  background: none;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.1);
   border: none;
-  font-size: 30px;
+  font-size: 20px;
   cursor: pointer;
-  color: #999;
+  color: #94a3b8;
   line-height: 1;
-  padding: 5px 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .close-btn:hover {
-  color: #333;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.popup-icon {
+  font-size: 32px;
+  background: rgba(0, 212, 255, 0.2);
+  padding: 10px;
+  border-radius: 12px;
 }
 
 .popup-content h3 {
-  margin: 0 0 20px 0;
-  font-size: 22px;
-  color: #333;
+  margin: 0;
+  font-size: 20px;
+  color: #f8fafc;
+  font-weight: 600;
 }
 
-.popup-details {
-  margin-bottom: 20px;
+.popup-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.detail-row {
+.metric-item {
   display: flex;
   justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.detail-label {
-  font-weight: 600;
-  color: #666;
-}
-
-.detail-value {
-  color: #333;
-  font-weight: 500;
-}
-
-.popup-status {
-  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.metric-label {
+  font-size: 13px;
+  color: #94a3b8;
   font-weight: 500;
 }
 
-.status-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.status-indicator.normal {
-  background: #10b981;
-}
-
-.status-indicator.warning {
-  background: #f59e0b;
-}
-
-.status-indicator.critical {
-  background: #ef4444;
+.metric-value {
+  font-size: 16px;
+  color: #f8fafc;
+  font-weight: 700;
 }
 
 /* Hover Tooltip Styles */

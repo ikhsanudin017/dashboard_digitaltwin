@@ -1,133 +1,141 @@
 <template>
-  <div class="ac-recommendation" :class="{ 'dark': isDarkMode }">
-    <div class="section-header" @click="isExpanded = !isExpanded">
-      <h2>❄️ AC Temperature Recommendation</h2>
-      <button class="toggle-btn">
-        {{ isExpanded ? '▼' : '▶' }}
-      </button>
+  <div class="ac-section" :class="{ 'dark': isDarkMode }">
+    <!-- Hero Banner -->
+    <div class="hero-banner">
+      <div class="hero-kicker">AC RECOMMENDATION</div>
+      <h2>Rekomendasi Suhu AC</h2>
+      <p>Analisis data sensor untuk kenyamanan optimal dengan efisiensi energi</p>
+      <div class="hero-meta">
+        <span class="meta-badge">Last Update: {{ lastUpdateText }}</span>
+        <span class="meta-badge data-count">Confidence: {{ recommendation ? Math.round(recommendation.confidence * 100) + '%' : 'N/A' }}</span>
+      </div>
     </div>
 
-    <div v-if="isExpanded" class="section-content">
-      <!-- Loading State -->
-      <div v-if="isLoading" class="loading-state">
-        <div class="spinner"></div>
-        <p>Menganalisis data sensor...</p>
-      </div>
+    <!-- Loading State -->
+    <div v-if="isLoading" class="loading-state">
+      <div class="spinner"></div>
+      <p>Menganalisis data sensor...</p>
+    </div>
 
-      <!-- Error State -->
-      <div v-else-if="error" class="error-state">
-        <p>❌ {{ error }}</p>
-        <button @click="fetchRecommendation" class="retry-btn">Coba Lagi</button>
-      </div>
+    <!-- Error State -->
+    <div v-else-if="error" class="error-state">
+      <p>{{ error }}</p>
+      <button @click="fetchRecommendation" class="retry-btn">Coba Lagi</button>
+    </div>
 
-      <!-- Recommendation Display -->
-      <div v-else-if="recommendation" class="recommendation-container">
-        <!-- Main Recommendation Card -->
-        <div class="main-card">
-          <div class="card-header">
-            <span class="card-icon">{{ recommendation.emoji }}</span>
-            <span class="card-title">Rekomendasi Suhu AC</span>
-          </div>
-          
-          <div class="recommendation-value">
-            <div class="temp-display">
-              <span class="temp-number">{{ Math.round(recommendation.recommendedTemp) }}</span>
-              <span class="temp-unit">°C</span>
-            </div>
-          </div>
-
-          <div class="recommendation-info">
-            <p class="comfort-level">{{ recommendation.comfortLevel }}</p>
-            <p class="reason">{{ recommendation.reason }}</p>
-          </div>
-
-          <!-- Quick Action Buttons -->
-          <div class="action-buttons">
-            <button 
-              class="action-btn decrease" 
-              @click="adjustTemp(-1)"
-              title="Decrease 1°C"
-            >
-              ❄️ Lebih Dingin
-            </button>
-            <button 
-              class="action-btn apply" 
-              @click="applyRecommendation"
-              title="Apply recommended temperature"
-            >
-              ✓ Terapkan
-            </button>
-            <button 
-              class="action-btn increase" 
-              @click="adjustTemp(1)"
-              title="Increase 1°C"
-            >
-              🔥 Lebih Hangat
-            </button>
-          </div>
+    <!-- Recommendation Display -->
+    <div v-else-if="recommendation" class="recommendation-content">
+      <!-- Main Card -->
+      <div class="main-card">
+        <div class="main-card-header">
+          <span class="card-label">Rekomendasi Suhu AC</span>
+          <span class="comfort-badge" :class="getComfortClass()">
+            {{ recommendation.comfortLevel }}
+          </span>
         </div>
 
-        <!-- Overview Cards Grid -->
-        <div class="overview-grid">
-          <div class="overview-card energy">
-            <div class="card-header">
-              <span class="card-icon">⚡</span>
-              <span class="card-title">Penghematan Energi</span>
+        <div class="temp-display">
+          <span class="temp-number">{{ Math.round(recommendation.recommendedTemp) }}</span>
+          <span class="temp-unit">°C</span>
+        </div>
+
+        <div class="main-card-info">
+          <p class="reason-text">{{ recommendation.reason }}</p>
+        </div>
+
+        <div class="action-buttons">
+          <button class="action-btn decrease" @click="adjustTemp(-1)">- 1°C</button>
+          <button class="action-btn apply" @click="applyRecommendation">Terapkan</button>
+          <button class="action-btn increase" @click="adjustTemp(1)">+ 1°C</button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-section">
+        <h3 class="section-title">Statistik</h3>
+        <div class="stats-grid">
+          <div class="stat-card energy-card">
+            <div class="stat-card-header">
+              <span class="stat-label-lg">Penghematan Energi</span>
+              <span class="stat-trend positive">+{{ recommendation.energySavingPercent }}%</span>
             </div>
-            <div class="card-value">{{ recommendation.energySavingPercent }}%</div>
-            <div class="card-subtitle">Perkiraan hemat dibanding 24°C</div>
-            <div class="card-progress">
+            <div class="stat-value-lg">{{ recommendation.energySavingPercent }}%</div>
+            <div class="stat-subvalue">Perkiraan hemat dibanding 24°C</div>
+            <div class="stat-progress">
               <div class="progress-bar">
-                <div 
-                  class="progress-fill energy-fill" 
-                  :style="{ width: recommendation.energySavingPercent + '%' }"
-                ></div>
+                <div class="progress-fill energy-fill" :style="{ width: recommendation.energySavingPercent + '%' }"></div>
               </div>
             </div>
           </div>
-          
-          <div class="overview-card comfort">
-            <div class="card-header">
-              <span class="card-icon">😊</span>
-              <span class="card-title">Tingkat Kenyamanan</span>
+
+          <div class="stat-card comfort-card">
+            <div class="stat-card-header">
+              <span class="stat-label-lg">Tingkat Kenyamanan</span>
             </div>
-            <div class="card-value">{{ getComfortScore() }}/100</div>
-            <div class="card-subtitle">{{ recommendation.comfortLevel }}</div>
-            <div class="card-status" :class="getComfortClass()">
+            <div class="stat-value-lg">{{ getComfortScore() }}/100</div>
+            <div class="stat-subvalue">{{ recommendation.comfortLevel }}</div>
+            <div class="stat-status" :class="getComfortClass()">
               {{ getComfortLabel() }}
             </div>
           </div>
-          
-          <div class="overview-card confidence">
-            <div class="card-header">
-              <span class="card-icon">🎯</span>
-              <span class="card-title">Akurasi Prediksi</span>
+
+          <div class="stat-card confidence-card">
+            <div class="stat-card-header">
+              <span class="stat-label-lg">Akurasi Prediksi</span>
             </div>
-            <div class="card-value">{{ Math.round(recommendation.confidence * 100) }}%</div>
-            <div class="card-subtitle">Tingkat kepercayaan AI</div>
-            <div class="card-progress">
+            <div class="stat-value-lg">{{ Math.round(recommendation.confidence * 100) }}%</div>
+            <div class="stat-subvalue">Tingkat kepercayaan AI</div>
+            <div class="stat-progress">
               <div class="progress-bar">
-                <div 
-                  class="progress-fill confidence-fill" 
-                  :style="{ width: (recommendation.confidence * 100) + '%' }"
-                ></div>
+                <div class="progress-fill confidence-fill" :style="{ width: (recommendation.confidence * 100) + '%' }"></div>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Refresh Info -->
-        <div class="refresh-info">
-          <p>Data sensor dianalisis secara real-time untuk memberikan rekomendasi terbaik</p>
-          <button @click="fetchRecommendation" class="refresh-btn">🔄 Refresh Sekarang</button>
+      <!-- Sensor Factors -->
+      <div class="factors-section">
+        <h3 class="section-title">Faktor Sensor</h3>
+        <div class="factors-grid">
+          <div class="factor-item">
+            <span class="factor-label">Suhu Ambient</span>
+            <span class="factor-value">{{ localSensorData.suhu.toFixed(1) }}°C</span>
+          </div>
+          <div class="factor-item">
+            <span class="factor-label">Kelembaban</span>
+            <span class="factor-value">{{ localSensorData.kelembaban.toFixed(1) }}%</span>
+          </div>
+          <div class="factor-item">
+            <span class="factor-label">Jumlah Orang</span>
+            <span class="factor-value">{{ localSensorData.jumlahOrang }}</span>
+          </div>
+          <div class="factor-item">
+            <span class="factor-label">Daya Listrik</span>
+            <span class="factor-value">{{ localSensorData.daya.toFixed(0) }}W</span>
+          </div>
+          <div class="factor-item">
+            <span class="factor-label">Tegangan</span>
+            <span class="factor-value">{{ localSensorData.tegangan.toFixed(0) }}V</span>
+          </div>
+          <div class="factor-item">
+            <span class="factor-label">Waktu</span>
+            <span class="factor-value">{{ timeOfDay }}</span>
+          </div>
         </div>
       </div>
 
-      <!-- Empty State -->
-      <div v-else class="empty-state">
-        <p>Tidak ada data rekomendasi</p>
-        <button @click="fetchRecommendation" class="fetch-btn">Ambil Rekomendasi</button>
+      <!-- Auto Update Status -->
+      <div class="auto-update-status">
+        <span class="status-dot"></span>
+        <p>Update otomatis saat data sensor berubah</p>
       </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else class="empty-state">
+      <p>Tidak ada data rekomendasi</p>
+      <button @click="fetchRecommendation" class="fetch-btn">Ambil Rekomendasi</button>
     </div>
   </div>
 </template>
@@ -160,16 +168,13 @@ export default {
   },
   setup() {
     const mlPrediction = useMLPrediction();
-
-    return {
-      mlPrediction
-    };
+    return { mlPrediction };
   },
   data() {
     return {
       recommendation: null,
       isLoading: false,
-      isExpanded: false,
+      isExpanded: true,
       error: null,
       lastUpdateTime: null,
       refreshInterval: null,
@@ -180,40 +185,58 @@ export default {
         arus: 0.5,
         daya: 100,
         jumlahOrang: 0
-      },
-      mlModelInfo: null
+      }
     };
   },
   computed: {
-    adjustedTemp() {
-      return this.recommendation?.recommendedTemp || 24;
+    lastUpdateText() {
+      if (!this.lastUpdateTime) return 'Belum update';
+      return this.lastUpdateTime;
+    },
+    timeOfDay() {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 12) return 'Pagi';
+      if (hour >= 12 && hour < 15) return 'Siang';
+      if (hour >= 15 && hour < 18) return 'Sore';
+      if (hour >= 18 && hour < 21) return 'Malam';
+      return 'Malam Hari';
     }
   },
   watch: {
-    // Update local sensor data when props change
     sensorData: {
       handler(newData) {
         if (newData) {
+          const oldSuhu = this.localSensorData.suhu;
+          const newSuhu = newData.temperature || newData.suhu || 25;
+          const newKelembaban = newData.humidity || newData.kelembaban || 60;
+          const newDaya = newData.power || newData.daya || 100;
+
           this.localSensorData = {
-            suhu: newData.temperature || newData.suhu || 25,
-            kelembaban: newData.humidity || newData.kelembaban || 60,
+            suhu: newSuhu,
+            kelembaban: newKelembaban,
             tegangan: newData.voltage || newData.tegangan || 220,
             arus: newData.current || newData.arus || 0.5,
-            daya: newData.power || newData.daya || 100,
+            daya: newDaya,
             jumlahOrang: this.peopleCount || 0
           };
-          // Auto refresh prediction when sensor data changes significantly
-          this.fetchRecommendation();
+
+          // Auto-update recommendation when sensor data changes significantly
+          const suhuDiff = Math.abs(newSuhu - (oldSuhu || 0));
+          if (suhuDiff >= 0.5 || this.recommendation === null) {
+            this.fetchRecommendation();
+          }
         }
       },
       deep: true
     },
     peopleCount(newCount) {
-      this.localSensorData.jumlahOrang = newCount || 0;
+      if (newCount !== this.localSensorData.jumlahOrang) {
+        this.localSensorData.jumlahOrang = newCount || 0;
+        this.fetchRecommendation();
+      }
     }
   },
   mounted() {
-    // Initialize with props data
     if (this.sensorData) {
       this.localSensorData = {
         suhu: this.sensorData.temperature || this.sensorData.suhu || 25,
@@ -224,13 +247,7 @@ export default {
         jumlahOrang: this.peopleCount || 0
       };
     }
-    
     this.fetchRecommendation();
-    this.getMLModelInfo();
-    // Auto refresh every 2 minutes untuk update prediction
-    this.refreshInterval = setInterval(() => {
-      this.fetchRecommendation();
-    }, 2 * 60 * 1000);
   },
   beforeUnmount() {
     if (this.refreshInterval) {
@@ -243,21 +260,16 @@ export default {
         this.isLoading = true;
         this.error = null;
 
-        // PRIORITAS 1: Fetch data sensor terbaru dari Azure
         await this.fetchLatestSensorData();
-        
-        // PRIORITAS 2: Get ML prediction
         const mlResult = await this.mlPrediction.getPrediction(this.localSensorData);
-        
+
         if (mlResult.success) {
-          // Format recommendation dari ML prediction
           const ac = this.mlPrediction.acRecommendation.value;
           const energy = this.mlPrediction.energyPrediction.value;
           const meta = this.mlPrediction.predictionMeta.value || {};
-          
+
           this.recommendation = {
             recommendedTemp: ac.recommendedTemp,
-            emoji: this.getEmoji(ac.mode),
             comfortLevel: this.getComfortLevel(ac.mode),
             reason: ac.action,
             energySavingPercent: this.calculateSaving(ac.recommendedTemp),
@@ -279,34 +291,29 @@ export default {
               monthlyCost: energy.monthlyCostIDR
             }
           };
-          
+
           this.updateLastUpdateTime();
-          console.log('[AC] ML Prediction loaded from:', mlResult.source);
         } else {
-          // Fallback ke Azure Function langsung
           await this.fetchFromAzureFunction();
         }
       } catch (err) {
         this.error = `Error: ${err.message || 'Failed to fetch data'}`;
-        console.error('AC Recommendation error:', err);
       } finally {
         this.isLoading = false;
       }
     },
-    
+
     async fetchLatestSensorData() {
       try {
-        // Ambil data sensor terbaru dari window.latestSensorData (dari MQTT)
         if (window.latestSensorData) {
           this.localSensorData = { ...this.localSensorData, ...window.latestSensorData };
         }
-        
-        // Atau fetch dari Azure Function
+
         const response = await fetch(
           `${AZURE_FUNCTION_URL}/telemetry/latest`,
           { timeout: 5000 }
         );
-        
+
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
@@ -324,14 +331,12 @@ export default {
         console.warn('Could not fetch latest sensor data:', err.message);
       }
     },
-    
+
     async fetchFromAzureFunction() {
       try {
         const response = await fetch(`${AZURE_FUNCTION_URL}/ac-recommendation/latest-with-recommendation`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
         });
 
@@ -341,27 +346,11 @@ export default {
           const recommendation = payload.data.recommendation;
           this.recommendation = {
             recommendedTemp: recommendation.recommendedTemp || recommendation.recommended_temp || 24,
-            emoji: recommendation.emoji || this.getEmoji(recommendation.mode),
             comfortLevel: recommendation.comfortLevel || this.getComfortLevel(recommendation.mode),
             reason: recommendation.reason || recommendation.action || 'Pertahankan suhu AC',
             energySavingPercent: recommendation.energySavingPercent || this.calculateSaving(recommendation.recommendedTemp || 24),
             confidence: this.normalizeConfidenceScore(recommendation.confidence),
-            factors: recommendation.factors || {
-              ambient_temp: this.localSensorData.suhu,
-              humidity: this.localSensorData.kelembaban,
-              people_count: this.localSensorData.jumlahOrang || 0,
-              power_consumption: (this.localSensorData.daya / 1000).toFixed(2),
-              current_hour: new Date().getHours()
-            },
-            mlSource: 'azure_function',
-            sourceTag: 'azure_function:prediction',
-            fallbackLevel: 0,
-            traceId: payload.trace_id || null,
-            energyPrediction: {
-              watt: this.localSensorData.daya,
-              dailyKwh: (this.localSensorData.daya * 24) / 1000,
-              monthlyCost: ((this.localSensorData.daya * 24 * 30) / 1000) * 1444.70
-            }
+            factors: recommendation.factors || {}
           };
 
           this.updateLastUpdateTime();
@@ -378,363 +367,283 @@ export default {
       const percent = numeric <= 1 ? numeric * 100 : numeric;
       return Math.max(0, Math.min(1, percent / 100));
     },
-    
-    getEmoji(mode) {
-      if (mode === 'cooling') return '❄️';
-      if (mode === 'eco') return '🌱';
-      return '✅';
-    },
-    
+
     getComfortLevel(mode) {
       if (mode === 'cooling') return 'Perlu Pendinginan';
       if (mode === 'eco') return 'Mode Hemat Energi';
       return 'Nyaman';
     },
-    
+
     calculateSaving(temp) {
-      // Setiap 1 derajat naik dari 24°C hemat ~6% energi
       const saving = Math.max(0, (temp - 24) * 6);
       return Math.min(30, Math.round(saving));
     },
-    
-    async getMLModelInfo() {
-      const result = await this.mlPrediction.getModelInfo();
-      if (result.success) {
-        this.mlModelInfo = result.data;
-      }
-    },
+
     adjustTemp(delta) {
       const currentTemp = this.recommendation.recommendedTemp;
       const newTemp = Math.max(20, Math.min(28, currentTemp + delta));
-      
       this.$emit('temp-adjusted', {
         original: currentTemp,
         adjusted: newTemp
       });
     },
+
     applyRecommendation() {
       this.$emit('apply-recommendation', {
         temperature: this.recommendation.recommendedTemp,
         comfortLevel: this.recommendation.comfortLevel
       });
-      
-      // Show confirmation
       alert(`AC temperature set to ${this.recommendation.recommendedTemp}°C (${this.recommendation.comfortLevel})`);
     },
+
     updateLastUpdateTime() {
       const now = new Date();
-      this.lastUpdateTime = now.toLocaleString('id-ID', {
+      this.lastUpdateTime = now.toLocaleTimeString('id-ID', {
         hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        minute: '2-digit'
       });
     },
-    
-    // Helper methods untuk status
+
     getComfortScore() {
       if (!this.recommendation) return 0;
       const temp = this.recommendation.recommendedTemp;
-      // Optimal range 24-26°C = 100 points
       if (temp >= 24 && temp <= 26) return 100;
       if (temp >= 22 && temp < 24) return 85;
       if (temp > 26 && temp <= 27) return 90;
       return 70;
     },
-    
+
     getComfortClass() {
       const score = this.getComfortScore();
       if (score >= 90) return 'status-excellent';
       if (score >= 75) return 'status-success';
       return 'status-warning';
     },
-    
+
     getComfortLabel() {
       const score = this.getComfortScore();
       if (score >= 90) return 'Sangat Nyaman';
       if (score >= 75) return 'Nyaman';
       return 'Cukup Nyaman';
-    },
-    
-    getTempStatus(temp) {
-      if (temp < 20) return 'Sangat Dingin';
-      if (temp < 24) return 'Dingin';
-      if (temp <= 27) return 'Nyaman';
-      if (temp <= 30) return 'Hangat';
-      return 'Panas';
-    },
-    
-    getHumidityStatus(humidity) {
-      if (humidity < 30) return 'Sangat Kering';
-      if (humidity < 40) return 'Kering';
-      if (humidity <= 60) return 'Optimal';
-      if (humidity <= 70) return 'Lembab';
-      return 'Sangat Lembab';
-    },
-    
-    getOccupancyLevel(count) {
-      if (count === 0) return 'Kosong';
-      if (count === 1) return 'Rendah';
-      if (count <= 3) return 'Sedang';
-      if (count <= 5) return 'Ramai';
-      return 'Sangat Ramai';
-    },
-    
-    getPowerStatus(kw) {
-      const watt = parseFloat(kw) * 1000;
-      if (watt < 100) return 'Sangat Rendah';
-      if (watt < 500) return 'Rendah';
-      if (watt <= 1500) return 'Normal';
-      if (watt <= 2500) return 'Tinggi';
-      return 'Sangat Tinggi';
-    },
-    
-    getTimeOfDay(hour) {
-      if (hour >= 5 && hour < 12) return 'Pagi';
-      if (hour >= 12 && hour < 15) return 'Siang';
-      if (hour >= 15 && hour < 18) return 'Sore';
-      if (hour >= 18 && hour < 21) return 'Malam';
-      return 'Malam Hari';
-    },
-    
-    getTimeAgo() {
-      if (!this.lastUpdateTime) return 'Baru saja';
-      return 'Baru saja';
     }
   }
 };
 </script>
 
 <style scoped>
-.ac-recommendation {
-  margin-top: 20px;
-  padding: 20px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap');
+
+.ac-section {
+  --accent: #3b82f6;
+  --accent-dark: #2563eb;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #94a3b8;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --purple: #a855f7;
+
+  font-family: 'IBM Plex Sans', sans-serif;
+  padding: 24px;
+  animation: fadeUp 0.4s ease;
 }
 
-.ac-recommendation.dark {
-  background: #1e293b;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.section-header {
+.hero-banner { margin-bottom: 24px; }
+
+.hero-kicker {
+  display: inline-block;
+  padding: 6px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 20px;
+  font-family: 'Sora', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.hero-banner h2 {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px 0;
+}
+
+.hero-banner p {
+  font-size: 0.95rem;
+  color: var(--text-2);
+  margin: 0 0 16px 0;
+}
+
+.hero-meta {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.section-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.meta-badge {
+  display: inline-block;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-2);
 }
 
-.toggle-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.meta-badge.data-count {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: var(--accent);
 }
 
-.toggle-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+.section-title {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 16px 0;
 }
 
-.section-content {
-  margin-top: 20px;
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Loading State */
 .loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 60px 20px;
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #2196f3;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
-.loading-state p {
-  font-size: 1em;
-  color: #666;
-}
-
-/* Error State */
 .error-state {
-  background: #fee;
-  border: 1px solid #fcc;
-  border-radius: 8px;
-  padding: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  padding: 24px;
   text-align: center;
-}
-
-.ac-recommendation.dark .error-state {
-  background: #3c2a2a;
-  border-color: #663333;
+  color: var(--danger);
 }
 
 .retry-btn {
-  background: #ff6b6b;
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: var(--danger);
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+  border-radius: 8px;
+  font-weight: 600;
   cursor: pointer;
-  margin-top: 15px;
-  font-size: 0.95em;
 }
 
-.retry-btn:hover {
-  background: #ff5252;
-}
-
-/* Recommendation Container */
-.recommendation-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Main Recommendation Card */
 .main-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 12px;
-  padding: 30px;
+  border-radius: 16px;
+  padding: 32px;
   text-align: center;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  margin-bottom: 24px;
 }
 
-.ac-recommendation.dark .main-card {
-  background: linear-gradient(135deg, #1a365d 0%, #2d1b69 100%);
-}
-
-.card-header {
+.main-card-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
   margin-bottom: 20px;
-  justify-content: center;
 }
 
-.card-icon {
-  font-size: 2em;
+.card-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
 }
 
-.card-title {
-  font-size: 1.2em;
+.comfort-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
-}
-
-.recommendation-value {
-  margin: 20px 0;
-}
-
-.emoji {
-  font-size: 4em;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .temp-display {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
   justify-content: center;
+  gap: 4px;
+  margin-bottom: 16px;
 }
 
 .temp-number {
-  font-size: 5em;
+  font-family: 'Sora', sans-serif;
+  font-size: 5rem;
   font-weight: 700;
   line-height: 1;
 }
 
 .temp-unit {
-  font-size: 2em;
+  font-size: 2rem;
   opacity: 0.9;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
-.recommendation-info {
-  margin: 20px 0;
+.main-card-info {
+  margin-bottom: 24px;
 }
 
-.comfort-level {
-  font-size: 1.3em;
-  font-weight: 600;
-  margin: 0 0 10px 0;
-}
-
-.reason {
-  font-size: 1em;
+.reason-text {
+  font-size: 1rem;
   opacity: 0.9;
-  margin: 0;
   line-height: 1.5;
+  margin: 0;
 }
 
-/* Action Buttons */
 .action-buttons {
   display: flex;
-  gap: 10px;
-  margin-top: 25px;
+  gap: 12px;
   justify-content: center;
-  flex-wrap: wrap;
 }
 
 .action-btn {
   flex: 1;
-  min-width: 120px;
+  max-width: 140px;
   padding: 12px 20px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.95em;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.9rem;
   font-weight: 600;
-  transition: all 0.3s ease;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
   background: rgba(255, 255, 255, 0.1);
   color: white;
 }
 
 .action-btn:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .action-btn.apply {
@@ -747,333 +656,237 @@ export default {
   background: #f0f0f0;
 }
 
-/* Overview Cards Grid */
-.overview-grid {
+.stats-section { margin-bottom: 24px; }
+
+.stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-  margin: 20px 0;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
 }
 
-.overview-card {
-  background: white;
-  border-radius: 12px;
-  padding: 25px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  border-left: 4px solid #667eea;
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
 }
 
-.ac-recommendation.dark .overview-card {
-  background: #2a2a2a;
-  border-left-color: #764ba2;
-}
-
-.overview-card:hover {
+.stat-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
 }
 
-.overview-card.energy {
-  border-left-color: #4caf50;
-}
-
-.overview-card.comfort {
-  border-left-color: #2196f3;
-}
-
-.overview-card.confidence {
-  border-left-color: #ff9800;
-}
-
-.overview-card .card-header {
+.stat-card-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
-  justify-content: flex-start;
+  margin-bottom: 12px;
 }
 
-.overview-card .card-icon {
-  font-size: 1.8em;
-}
+.energy-card { border-top: 3px solid var(--success); }
+.comfort-card { border-top: 3px solid var(--accent); }
+.confidence-card { border-top: 3px solid var(--warning); }
 
-.overview-card .card-title {
-  font-size: 1em;
+.stat-label-lg {
+  font-size: 0.85rem;
+  color: var(--text-2);
   font-weight: 600;
-  color: #666;
 }
 
-.ac-recommendation.dark .overview-card .card-title {
-  color: #aaa;
+.stat-trend {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.overview-card .card-value {
-  font-size: 2.5em;
+.stat-trend.positive {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.stat-value-lg {
+  font-family: 'Sora', sans-serif;
+  font-size: 1.8rem;
   font-weight: 700;
-  margin: 10px 0;
-  color: #667eea;
+  color: var(--text);
+  margin-bottom: 4px;
 }
 
-.ac-recommendation.dark .overview-card .card-value {
-  color: #8b9dff;
+.stat-subvalue {
+  font-size: 0.85rem;
+  color: var(--text-3);
+  margin-bottom: 12px;
 }
 
-.overview-card .card-subtitle {
-  font-size: 0.9em;
-  color: #888;
-  margin-bottom: 15px;
-}
-
-.ac-recommendation.dark .overview-card .card-subtitle {
-  color: #999;
-}
-
-.overview-card .card-status {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.85em;
-  font-weight: 600;
-  margin-top: 10px;
-}
-
-.card-status.status-excellent {
-  background: rgba(76, 175, 80, 0.2);
-  color: #4caf50;
-}
-
-.card-status.status-success {
-  background: rgba(33, 150, 243, 0.2);
-  color: #2196f3;
-}
-
-.card-status.status-warning {
-  background: rgba(255, 152, 0, 0.2);
-  color: #ff9800;
-}
-
-.card-progress {
-  margin-top: 15px;
-}
+.stat-progress { margin-top: auto; }
 
 .progress-bar {
-  height: 8px;
-  background: #e0e0e0;
-  border-radius: 4px;
+  width: 100%;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
   overflow: hidden;
-}
-
-.ac-recommendation.dark .progress-bar {
-  background: #404040;
+  margin-bottom: 6px;
 }
 
 .progress-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 3px;
   transition: width 0.5s ease;
 }
 
 .energy-fill {
-  background: linear-gradient(90deg, #4caf50, #66bb6a);
+  background: linear-gradient(90deg, var(--success), #059669);
 }
 
 .confidence-fill {
-  background: linear-gradient(90deg, #ff9800, #ffa726);
+  background: linear-gradient(90deg, var(--warning), #d97706);
 }
 
-/* Stats Section */
-.stats-section {
-  margin: 30px 0;
-}
-
-.stats-section h3 {
-  font-size: 1.3em;
-  margin-bottom: 20px;
+.stat-status {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: #333;
 }
 
-.ac-recommendation.dark .stats-section h3 {
-  color: #e0e0e0;
+.status-excellent {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
 }
 
-.stats-grid {
+.status-success {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+
+.status-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--warning);
+}
+
+.factors-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.factors-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 15px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
-.stat-card {
-  background: white;
-  border-radius: 10px;
-  padding: 20px;
+.factor-item {
   display: flex;
-  align-items: center;
-  gap: 15px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
-  border: 1px solid #f0f0f0;
-}
-
-.ac-recommendation.dark .stat-card {
-  background: #2a2a2a;
-  border-color: #404040;
-}
-
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-}
-
-.stat-icon {
-  font-size: 2.5em;
-  flex-shrink: 0;
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-label {
-  margin: 0 0 5px 0;
-  font-size: 0.85em;
-  color: #888;
-  font-weight: 500;
-}
-
-.ac-recommendation.dark .stat-label {
-  color: #aaa;
-}
-
-.stat-value {
-  margin: 0 0 5px 0;
-  font-size: 1.5em;
-  font-weight: 700;
-  color: #333;
-}
-
-.ac-recommendation.dark .stat-value {
-  color: #e0e0e0;
-}
-
-.stat-range {
-  margin: 0;
-  font-size: 0.8em;
-  color: #2196f3;
-  font-weight: 500;
-}
-
-.ac-recommendation.dark .stat-range {
-  color: #64b5f6;
-}
-
-/* Refresh Info */
-.refresh-info {
-  text-align: center;
-  padding: 20px 0;
-  border-top: 2px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 20px;
-}
-
-.ac-recommendation.dark .refresh-info {
-  border-top-color: #404040;
-}
-
-.refresh-info p {
-  margin: 0;
-  font-size: 0.95em;
-  color: #666;
-}
-
-.ac-recommendation.dark .refresh-info p {
-  color: #aaa;
-}
-
-.refresh-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 10px 20px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface-2);
   border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.95em;
+}
+
+.factor-label {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.factor-value {
+  font-size: 1rem;
+  color: var(--text);
   font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-.refresh-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+.auto-update-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
 }
 
-.refresh-btn:active {
-  transform: translateY(0);
+.auto-update-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse-dot 2s infinite;
 }
 
-/* Empty State */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.auto-update-status p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-3);
+}
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #666;
-}
-
-.ac-recommendation.dark .empty-state {
-  color: #aaa;
+  color: var(--text-2);
 }
 
 .fetch-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+  margin-top: 16px;
   padding: 12px 24px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border: none;
   border-radius: 8px;
-  cursor: pointer;
-  margin-top: 20px;
-  font-size: 1em;
+  font-size: 1rem;
   font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  color: white;
+  cursor: pointer;
 }
 
-.fetch-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+.dark {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #334155;
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f1f5f9;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .overview-grid {
+@media (max-width: 900px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ac-section {
+    padding: 16px;
+  }
+
+  .stats-grid {
     grid-template-columns: 1fr;
   }
-  
-  .stats-grid {
+
+  .factors-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
   .action-buttons {
     flex-direction: column;
   }
-  
+
   .action-btn {
-    width: 100%;
+    max-width: 100%;
   }
 
-  .refresh-info {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .main-card {
-    padding: 20px;
-  }
-  
   .temp-number {
-    font-size: 4em;
+    font-size: 4rem;
   }
 }
 </style>
