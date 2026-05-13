@@ -189,9 +189,16 @@ export function useMLPrediction() {
     if (!AZURE_FUNCTION_URL) {
       return { success: false, error: 'Azure Function URL not configured' }
     }
-    
+
     try {
       // Azure Function expects canonical payload: suhu, kelembaban, jumlahOrang, daya, timestamp
+      console.log('[ML] Calling Azure Function with:', JSON.stringify({
+        suhu: sensorData.suhu,
+        kelembaban: sensorData.kelembaban,
+        jumlahOrang: sensorData.jumlahOrang || 0,
+        daya: sensorData.daya
+      }))
+
       const response = await axios.post(`${AZURE_FUNCTION_URL}/ac-recommendation/recommend`, {
         suhu: sensorData.suhu,
         kelembaban: sensorData.kelembaban,
@@ -203,10 +210,15 @@ export function useMLPrediction() {
         timeout: 5000
       })
 
+      console.log('[ML] Azure Function response:', JSON.stringify(response.data))
+
       const payload = response.data || {}
       const recommendation = payload.data || payload.recommendation || payload
 
-      if (payload.success === false || !recommendation) {
+      console.log('[ML] Parsed recommendation:', JSON.stringify(recommendation))
+
+      if (payload.success === false || !recommendation || (!recommendation.recommendedTemp && !recommendation.recommended_temp)) {
+        console.warn('[ML] Invalid Azure Function response')
         return { success: false, error: payload.error || 'Invalid Azure Function response contract' }
       }
 
@@ -219,19 +231,21 @@ export function useMLPrediction() {
           daily_kwh: (sensorData.daya * 24) / 1000,
           monthly_kwh: ((sensorData.daya * 24) / 1000) * 30,
           monthly_cost_idr: (((sensorData.daya * 24) / 1000) * 30) * 1444.70,
-          confidence: recommendation.confidence
+          confidence: recommendation.confidence || 0.96
         },
         ac: {
           recommended_temp: recommendation.recommendedTemp ?? recommendation.recommended_temp,
           action: recommendation.reason ?? recommendation.action,
           mode: recommendation.mode,
-          confidence: recommendation.confidence
+          confidence: recommendation.confidence || 0.96
         },
         modelVersion: recommendation.model_info?.training_date || 'azure_function',
         timestampUtc: recommendation.timestamp
       })
 
-      if (unified.ac.recommended_temp) {
+      console.log('[ML] Unified prediction:', JSON.stringify(unified.ac))
+
+      if (unified.ac && unified.ac.recommended_temp !== undefined) {
         return {
           success: true,
           data: unified,
@@ -239,6 +253,7 @@ export function useMLPrediction() {
         }
       }
 
+      console.warn('[ML] Missing recommended_temp in unified prediction')
       return { success: false, error: 'Missing recommended temperature from Azure Function' }
     } catch (err) {
       console.warn('[Azure Function] Not available:', err.message)

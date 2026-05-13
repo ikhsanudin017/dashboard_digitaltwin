@@ -33,6 +33,7 @@ const toTimestamp = (value) => {
       .replace(/\s WITA$/, '+08:00')
       .replace(/\s WIT$/, '+09:00')
       .replace(/\s/, 'T')
+      
     const parsed = new Date(normalized).getTime()
     if (!Number.isNaN(parsed)) return parsed
   }
@@ -69,9 +70,18 @@ const normalizeDataPoint = sensorData => ({
   humidity: sensorData.humidity ?? sensorData.kelembaban ?? null,
   voltage: sensorData.voltage ?? sensorData.tegangan ?? null,
   current: sensorData.current ?? sensorData.arus ?? null,
-  power: sensorData.power ?? sensorData.daya ?? null,
+  power: (sensorData.power ?? sensorData.daya ?? null),
   peopleCount: sensorData.peopleCount ?? sensorData.jumlahOrang ?? 0
 })
+
+// Validasi nilai power - filter out invalid values
+const isValidPower = (power) => {
+  if (power === null || power === undefined) return false
+  if (typeof power !== 'number') return false
+  if (isNaN(power)) return false
+  // Filter: 0 < power < 2000W (normal range untuk household)
+  return power > 0 && power < 2000
+}
 
 const buildDataPointKey = (item) => {
   return [
@@ -391,20 +401,44 @@ export function useHistoricalData() {
   const getStatistics = (startDate, endDate) => {
     const data = getDataByDateRange(startDate, endDate)
 
+    console.log('[getStatistics] Date range:', {
+      start: new Date(startDate).toISOString(),
+      end: new Date(endDate).toISOString(),
+      totalData: data.length
+    })
+
     if (data.length === 0) return null
+
+    // Check power distribution
+    const powerValues = data.map(d => d.power)
+    const invalidCount = powerValues.filter(p => !isValidPower(p)).length
+    console.log('[getStatistics] Power validation:', {
+      total: powerValues.length,
+      invalid: invalidCount,
+      valid: powerValues.length - invalidCount
+    })
+
+    // Filter data dengan validasi power
+    const validPowerData = data.filter(d => isValidPower(d.power))
+    const validPowerCount = validPowerData.length
+
+    console.log('[getStatistics] After filter:', {
+      validPowerData: validPowerData.length,
+      sample: validPowerData.slice(0, 3).map(d => ({ timestamp: d.timestamp, power: d.power }))
+    })
 
     const stats = {
       temperature: calculateStats(data.map(d => d.temperature).filter(v => v !== null)),
       humidity: calculateStats(data.map(d => d.humidity).filter(v => v !== null)),
       voltage: calculateStats(data.map(d => d.voltage).filter(v => v !== null)),
       current: calculateStats(data.map(d => d.current).filter(v => v !== null)),
-      power: calculateStats(data.map(d => d.power).filter(v => v !== null)),
+      power: calculateStats(validPowerData.map(d => d.power)),
       peopleCount: calculateStats(data.map(d => d.peopleCount).filter(v => v !== null)),
-      totalRecords: data.length
+      totalRecords: data.length,
+      validPowerRecords: validPowerCount
     }
 
-    const powerData = data
-      .filter(d => d.power !== null && d.power >= 0)
+    const powerData = validPowerData
       .sort((a, b) => toTimestamp(a.timestamp) - toTimestamp(b.timestamp))
 
     if (powerData.length > 1) {
@@ -424,6 +458,13 @@ export function useHistoricalData() {
       stats.totalEnergy = 0
     }
 
+    console.log('[getStatistics] Final result:', {
+      totalEnergy: stats.totalEnergy,
+      totalEnergyKwh: stats.totalEnergy / 1000,
+      powerDataPoints: powerData.length,
+      avgPower: stats.power?.avg
+    })
+
     return stats
   }
 
@@ -437,6 +478,7 @@ export function useHistoricalData() {
     getAggregatedData,
     getAvailableDateRange,
     exportToCSV,
-    getStatistics
+    getStatistics,
+    isValidPower
   }
 }

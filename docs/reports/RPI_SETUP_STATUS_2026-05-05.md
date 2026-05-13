@@ -1,10 +1,11 @@
 # Raspberry Pi Gateway Setup Status Report
 
-**Tanggal:** 2026-05-05 (Updated: 2026-05-07)
-**Status:** BLOCKED - Multiple Issues Found
-**IP:** 192.168.1.2 (Ethernet), 192.168.1.14 (WiFi)
+**Tanggal:** 2026-05-05 (Updated: 2026-05-08)
+**Status:** WiFi Reconnected
+**IP:** 192.168.1.7 (WiFi), 192.168.1.2 (Ethernet)
 **OS:** Debian GNU/Linux 13 (trixie)
 **Hostname:** digitaltwin
+**SSID:** Umi 123
 
 ---
 
@@ -24,7 +25,7 @@ Webcam tidak dapat berjalan karena **3 masalah utama** yang saling terkait. Semu
 | FHD Webcam | ✅ Detected | /dev/video0, USB 0c45:636d Microdia |
 | USB Flash Drive (7.5GB) | ✅ Ready | Mounted at /mnt/storage |
 | Ethernet | ✅ Connected | 192.168.1.2 |
-| WiFi | ✅ Connected | 192.168.1.14 |
+| WiFi | ✅ Connected | 192.168.1.7 (SSID: Umi 123) |
 
 ---
 
@@ -317,3 +318,34 @@ File `yolo_cam.py` yang di-copy dari Mac ke RPi melalui SCP menjadi corrupted ka
 4. [ ] Test ESP32 data integration
 
 ---
+
+## 11. Updated: 2026-05-08 - WiFi SSID Change
+
+### What Changed:
+| Item | Before | After |
+|------|--------|-------|
+| SSID | Umi | Umi 123 |
+| WiFi IP | 192.168.1.14 | 192.168.1.7 |
+| Password | (unchanged) | tanyaumi |
+
+### Connection Status:
+| Interface | Status | IP |
+|-----------|--------|-----|
+| wlan0 (WiFi) | ✅ Connected | 192.168.1.7 |
+| eth0 (Ethernet) | ✅ Connected | 192.168.1.2 |
+
+### SSH Commands (Updated):
+```bash
+# WiFi SSH (new)
+ssh digitaltwin@192.168.1.7
+sshpass -p 'digitaltwin' ssh digitaltwin@192.168.1.7
+
+# Ethernet SSH (old)
+ssh digitaltwin@192.168.1.2
+sshpass -p 'digitaltwin' ssh digitaltwin@192.168.1.2
+```
+
+### Notes:
+- Hostname `digitaltwin` tetap sama
+- WiFi auto-reconnect via NetworkManager sudah aktif
+- Flash drive `/mnt/storage` tetap berfungsi dengan UUID yang sama

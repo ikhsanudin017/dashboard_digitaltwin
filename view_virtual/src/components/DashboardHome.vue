@@ -283,10 +283,21 @@ const handlePeopleCountUpdate = async count => {
   if (sensorData.value) sensorData.value.peopleCount = count
 }
 
+onMounted(() => {
+  startPolling()
+  loadHistoricalData()
+  timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)
+  // Trigger initial ML prediction
+  triggerMLPrediction()
+})
+
+// Watch for sensor data changes and update ML prediction
 watch(
   sensorData,
-  newData => {
+  async (newData) => {
     if (!newData) return
+
+    // Update electricity data
     if (typeof newData.power === 'number') {
       const values = [...electricityData.value.values, parseFloat(newData.power.toFixed(2))]
       if (values.length > MAX_POINTS) values.shift()
@@ -298,28 +309,46 @@ watch(
       }
       lastPowerTimestamp = now
     }
+
+    // Update people count
     if (typeof newData.peopleCount === 'number') {
       peopleCount.value = newData.peopleCount
     }
+
+    // Save to historical data
     const now = Date.now()
     if (now - lastSaveTimestamp >= SAVE_INTERVAL) {
       addDataPoint(newData)
       lastSaveTimestamp = now
     }
+
+    // Update ML prediction when sensor data changes significantly
+    if (lastSensorSuhu === null || Math.abs(newData.temperature - lastSensorSuhu) >= 1) {
+      lastSensorSuhu = newData.temperature
+      triggerMLPrediction()
+    }
   },
   { deep: true }
 )
 
-onMounted(() => {
-  startPolling()
-  loadHistoricalData()
-  timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)
-})
+// Trigger ML prediction with current sensor data
+const triggerMLPrediction = async () => {
+  try {
+    const sensorInput = {
+      suhu: sensorData.value?.temperature || sensorData.value?.suhu || 25,
+      kelembaban: sensorData.value?.humidity || sensorData.value?.kelembaban || 60,
+      daya: sensorData.value?.power || sensorData.value?.daya || 0,
+      jumlahOrang: sensorData.value?.peopleCount || peopleCount.value || 0
+    }
 
-onUnmounted(() => {
-  stopPolling()
-  if (timeInterval) clearInterval(timeInterval)
-})
+    console.log('[Dashboard] Triggering ML prediction with:', sensorInput)
+    await mlPrediction.getPrediction(sensorInput)
+  } catch (err) {
+    console.error('[Dashboard] ML prediction error:', err)
+  }
+}
+
+let lastSensorSuhu = null
 </script>
 
 <style scoped>

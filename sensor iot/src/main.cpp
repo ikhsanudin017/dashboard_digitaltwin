@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#include <HTTPClient.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
@@ -38,6 +40,14 @@
 
 #ifndef IOT_DEVICE_KEY
 #define IOT_DEVICE_KEY "CHANGE_ME_DEVICE_KEY"
+#endif
+
+#ifndef RPI_GATEWAY_URL
+#define RPI_GATEWAY_URL "http://192.168.1.14:5001/api/collect"
+#endif
+
+#ifndef USE_RPI_GATEWAY
+#define USE_RPI_GATEWAY 1  // 1 = Kirim ke RPi Gateway, 0 = skip
 #endif
 
 // ===== TINYML MODULE - Lightweight ML for ESP32 =====
@@ -396,6 +406,7 @@ void handleSerialInput();
 void processSerialCommand(const String& rawCommand);
 bool sendRawIrFrame(uint16_t* frame, uint16_t frameLen, uint8_t repeatCount, const char* label,
                     bool bypassCooldown = false);
+void sendToRPiGateway(const char* jsonBuffer);
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 void handleCloudControlMessage(const char* topic, const byte* payload, unsigned int length);
 void printClosedLoopStatus();
@@ -1819,6 +1830,59 @@ String generateSasToken(const char* key, String url, long expiry) {
   return sasToken;
 }
 
+// Kirim data ke RPi Gateway via HTTP POST
+void sendToRPiGateway(const char* jsonBuffer) {
+  #if USE_RPI_GATEWAY
+  // Pastikan WiFi masih terhubung
+  ensureWiFiConnected();
+
+  HTTPClient http;
+  WiFiClient wifiClient;
+
+  Serial.print("📤 Mengirim ke RPi Gateway: ");
+  Serial.println(RPI_GATEWAY_URL);
+
+  if (http.begin(wifiClient, RPI_GATEWAY_URL)) {
+    http.addHeader("Content-Type", "application/json");
+    http.setTimeout(5000);  // 5 detik timeout
+
+    int httpCode = http.POST(jsonBuffer);
+
+    if (httpCode > 0) {
+      String response = http.getString();
+      Serial.print("✓ HTTP POST success (");
+      Serial.print(httpCode);
+      Serial.print("): ");
+      Serial.println(response);
+
+      #if USE_RPI_GATEWAY
+      successCount++;
+      #endif
+    } else {
+      Serial.print("✗ HTTP POST failed: ");
+      Serial.println(http.errorToString(httpCode).c_str());
+
+      #if USE_RPI_GATEWAY
+      failCount++;
+      #endif
+    }
+
+    http.end();
+  } else {
+    Serial.println("✗ Gagal koneksi ke RPi Gateway");
+    #if USE_RPI_GATEWAY
+    failCount++;
+    #endif
+  }
+
+  Serial.print("   Stats - Sukses: ");
+  Serial.print(successCount);
+  Serial.print(", Gagal: ");
+  Serial.print(failCount);
+  Serial.println();
+  #endif
+}
+
 // Fungsi untuk koneksi ulang ke Azure IoT Hub
 void reconnectMQTT() {
   ensureWiFiConnected();
@@ -1992,19 +2056,25 @@ void setup() {
   espClient.setHandshakeTimeout(30); // TLS handshake timeout
   
   // Konfigurasi MQTT dengan buffer size lebih besar untuk Azure IoT Hub
+  #if !USE_RPI_GATEWAY
   client.setServer(mqtt_server.c_str(), mqtt_port);
   client.setCallback(mqttCallback);
   client.setBufferSize(1024);  // Buffer lebih besar untuk JSON + overhead
   client.setKeepAlive(60);     // Keep alive 60 detik (lebih responsif)
   client.setSocketTimeout(60); // Socket timeout 60 detik (lebih toleran)
-  
-  Serial.println("\n📡 Konfigurasi Azure IoT Hub selesai");
+  #endif
+
+  Serial.println("\n📡 Konfigurasi selesai");
+  Serial.print("   Gateway mode: ");
+  #if USE_RPI_GATEWAY
+  Serial.println("RPi HTTP Gateway");
+  Serial.print("   RPi URL: ");
+  Serial.println(RPI_GATEWAY_URL);
+  #else
+  Serial.println("Azure IoT Hub MQTT");
   Serial.print("   IoT Hub: ");
   Serial.println(mqtt_server);
-  Serial.print("   Port: ");
-  Serial.println(mqtt_port);
-  Serial.print("   Device ID: ");
-  Serial.println(deviceId);
+  #endif
   
   Serial.println("\n🔧 STATUS KALIBRASI:");
   Serial.println("   TEGANGAN (ZMPT101B):");
@@ -2031,9 +2101,14 @@ void setup() {
   Serial.println("   4. Jika tidak akurat, sesuaikan: BURDEN_RESISTOR = (RMS_mentah × 2000) / Arus_sebenarnya");
   Serial.println("   5. Contoh: RMS=0.014V, Arus=0.45A -> R = (0.014×2000)/0.45 = 62Ω\n");
   
-  // Koneksi awal ke MQTT
+  // Koneksi awal (skip jika pakai RPi Gateway)
+  #if !USE_RPI_GATEWAY
   reconnectMQTT();
-  
+  #else
+  Serial.println("\n✓ Mode RPi Gateway aktif - tidak perlu koneksi MQTT");
+  Serial.println("   Data akan dikirim via HTTP POST ke RPi setiap 5 detik");
+  #endif
+
   delay(100);
 }
 
@@ -2044,6 +2119,8 @@ void loop() {
   handleIrCapture();
   flushPendingAcCommand();
 
+  // Skip SAS token refresh jika pakai RPi Gateway (tidak butuh MQTT)
+  #if !USE_RPI_GATEWAY
   unsigned long currentEpoch = time(nullptr);
   if (sasToken != "" && currentEpoch > 0 && currentEpoch >= (sasTokenExpiry - SAS_TOKEN_REFRESH_WINDOW)) {
     Serial.println("\n⏳ SAS Token hampir expired, refresh koneksi MQTT...");
@@ -2053,16 +2130,17 @@ void loop() {
 
   // Maintain koneksi MQTT - panggil loop() sesering mungkin
   client.loop();
-  
+
   // Cek koneksi hanya jika terputus
   if (!client.connected()) {
     Serial.println("\n⚠️ Koneksi MQTT terputus, reconnecting...");
     reconnectMQTT();
   }
-  
+
   // Panggil client.loop() lagi untuk process incoming messages
   client.loop();
-  
+  #endif
+
   unsigned long now = millis();
   
   // Kirim data setiap interval waktu
@@ -2308,6 +2386,13 @@ void loop() {
        doc["heat_index"] = round(heatIndexC * 10) / 10.0;
      }
 
+     // ESP32 Health Data
+     doc["health"]["esp32_temp_c"] = round(temperatureRead() * 10) / 10.0;
+     doc["health"]["free_heap_bytes"] = ESP.getFreeHeap();
+     doc["health"]["wifi_rssi_dbm"] = WiFi.RSSI();
+     doc["health"]["cpu_freq_mhz"] = getCpuFrequencyMhz();
+     doc["health"]["uptime_seconds"] = (millis() / 1000);  // ESP32 uptime in seconds
+
      // TinyML data
      doc["tinyml"]["anomaly"] = anomaly.isAnomaly;
      doc["tinyml"]["anomaly_confidence"] = anomaly.confidence;
@@ -2340,40 +2425,51 @@ void loop() {
     Serial.print("JSON: ");
     Serial.println(jsonBuffer);
     
+    // KIRIM DATA KE RPI GATEWAY (HTTP POST)
+    #if USE_RPI_GATEWAY
+    sendToRPiGateway(jsonBuffer);
+    #else
     // Pastikan koneksi masih aktif sebelum publish
     if (!client.connected()) {
       Serial.println("⚠️ Koneksi terputus, reconnecting sebelum kirim...");
       reconnectMQTT();
     }
-    
-    // Publish data ke Azure IoT Hub
+
+    // Legacy: Kirim ke Azure IoT Hub jika USE_RPI_GATEWAY = 0
+    if (!client.connected()) {
+      Serial.println("⚠️ Koneksi terputus, reconnecting sebelum kirim...");
+      reconnectMQTT();
+    }
+
     if (client.publish(mqtt_topic.c_str(), jsonBuffer, false)) {
       successCount++;
-      Serial.print("✓ Data terkirim! (Total sukses: ");
+      Serial.print("✓ Data terkirim ke Azure! (Total sukses: ");
       Serial.print(successCount);
       Serial.print(", Gagal: ");
       Serial.print(failCount);
       Serial.println(")");
-      
-      // Maintain connection setelah publish - panggil loop() beberapa kali
+
       for (int i = 0; i < 10; i++) {
         client.loop();
         delay(50);
       }
-     } else {
-       failCount++;
-       Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
-       Serial.print("   MQTT State: ");
-       Serial.println(client.state());
-       Serial.println("   Memaksa reconnect untuk percobaan berikutnya...");
-       client.disconnect();
-       sasToken = "";
-     }
-    
+    } else {
+      failCount++;
+      Serial.println("✗ Gagal mengirim data ke Azure IoT Hub");
+      Serial.print("   MQTT State: ");
+      Serial.println(client.state());
+      Serial.println("   Memaksa reconnect untuk percobaan berikutnya...");
+      client.disconnect();
+      sasToken = "";
+    }
+    #endif
+
     Serial.println("=================================");
   }
-  
-  // Maintain MQTT connection saat idle
+
+  // Maintain MQTT connection saat idle (jika tidak pakai RPi Gateway)
+  #if !USE_RPI_GATEWAY
   client.loop();
+  #endif
   delay(100);
 }

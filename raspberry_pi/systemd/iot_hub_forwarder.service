@@ -1,0 +1,18 @@
+[Unit]
+Description=Digital Twin IoT Hub Forwarder
+After=network.target local_api.service
+Requires=local_api.service
+
+[Service]
+Type=simple
+User=digitaltwin
+WorkingDirectory=/mnt/storage
+Environment="PATH=/mnt/storage/venv_new/bin"
+ExecStart=/mnt/storage/venv_new/bin/python3 /mnt/storage/iot_hub_forwarder.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/mnt/storage/iot_hub_forwarder.log
+StandardError=append:/mnt/storage/iot_hub_forwarder.log
+
+[Install]
+WantedBy=multi-user.target

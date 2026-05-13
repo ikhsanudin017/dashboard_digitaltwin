@@ -83,9 +83,9 @@ function formatTimestamp(utcDateString, forDisplay = false) {
 }
 
 async function handleLatest(context, tableClient) {
-    // Support kedua device ID
+    // Support ESP32 device IDs AND RPi Gateway (new architecture)
     const entities = tableClient.listEntities({
-        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor'" }
+        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor' or PartitionKey eq 'RASPBERRY_PI_GATEWAY_001'" }
     });
 
     let latest = null;
@@ -109,7 +109,8 @@ async function handleLatest(context, tableClient) {
                 tegangan: latest.tegangan,
                 arus: latest.arus,
                 daya: latest.daya,
-                deviceId: latest.deviceId || latest.PartitionKey
+                deviceId: latest.deviceId || latest.PartitionKey,
+                people_count: latest.jumlahOrang || latest.people_count || 0 // Add people count
             }
         };
     } else {
@@ -120,9 +121,9 @@ async function handleLatest(context, tableClient) {
 
 async function handleHistory(context, tableClient, hours, limit) {
     const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
-    // Support kedua device ID
+    // Support ESP32 device IDs AND RPi Gateway (new architecture)
     const entities = tableClient.listEntities({
-        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor'" }
+        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor' or PartitionKey eq 'RASPBERRY_PI_GATEWAY_001'" }
     });
 
     const data = [];
@@ -155,9 +156,9 @@ async function handleHistory(context, tableClient, hours, limit) {
 
 async function handleStats(context, tableClient, hours) {
     const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
-    // Support kedua device ID
+    // Support ESP32 device IDs AND RPi Gateway (new architecture)
     const entities = tableClient.listEntities({
-        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor'" }
+        queryOptions: { filter: "PartitionKey eq 'ESP32_ENERGY_MONITOR_001' or PartitionKey eq 'ESP32_DHT11_Sensor' or PartitionKey eq 'RASPBERRY_PI_GATEWAY_001'" }
     });
 
     let count = 0;

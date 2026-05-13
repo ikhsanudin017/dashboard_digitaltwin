@@ -1,0 +1,131 @@
+GRAFANA DASHBOARD QUERIES
+=========================
+Datasource: monitoring hardware
+Bucket: sensor_data
+=========================
+
+===============================================================
+GAUGE PANELS (Single Value)
+===============================================================
+
+---------------------------------------------------------------
+PANEL: CPU Usage (Gauge)
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gateway")
+  |> filter(fn: (r) => r._field == "cpu_percent")
+  |> last()
+
+---------------------------------------------------------------
+PANEL: Memory Usage (Gauge)
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gateway")
+  |> filter(fn: (r) => r._field == "memory_percent")
+  |> last()
+
+---------------------------------------------------------------
+PANEL: Disk Usage (Gauge)
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gateway")
+  |> filter(fn: (r) => r._field == "disk_percent")
+  |> last()
+
+---------------------------------------------------------------
+PANEL: WiFi Signal (Gauge)
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gateway")
+  |> filter(fn: (r) => r._field == "wifi_rssi_dbm")
+  |> last()
+
+===============================================================
+TIME SERIES PANELS (Chart over time)
+===============================================================
+
+---------------------------------------------------------------
+PANEL: Temperature / Suhu
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "esp32_sensor")
+  |> filter(fn: (r) => r._field == "suhu")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: Voltage / Tegangan
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "esp32_sensor")
+  |> filter(fn: (r) => r._field == "tegangan")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: Current / Arus
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "esp32_sensor")
+  |> filter(fn: (r) => r._field == "arus")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: Power / Daya
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "esp32_sensor")
+  |> filter(fn: (r) => r._field == "daya")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: Humidity / Kelembaban
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "esp32_sensor")
+  |> filter(fn: (r) => r._field == "kelembaban")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: CPU & Memory Trend
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gateway")
+  |> filter(fn: (r) => r._field == "cpu_percent" or r._field == "memory_percent")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: CPU Temperature
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "gateway")
+  |> filter(fn: (r) => r._field == "cpu_temp_c")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+---------------------------------------------------------------
+PANEL: People Count
+---------------------------------------------------------------
+from(bucket: "sensor_data")
+  |> range(start: -1h)
+  |> filter(fn: (r) => r._measurement == "camera")
+  |> filter(fn: (r) => r._field == "people_count")
+  |> aggregateWindow(every: 1m, fn: mean)
+
+===============================================================
+CARA UPDATE PANEL:
+1. Klik "+ Add" -> "Visualization"
+2. Pilih datasource: monitoring hardware
+3. Paste query
+4. Tab "Visualization" -> set Unit sesuai kebutuhan
+5. Klik "Apply"
+6. Klik "Save dashboard"
+===============================================================

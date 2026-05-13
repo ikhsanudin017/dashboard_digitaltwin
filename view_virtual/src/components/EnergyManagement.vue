@@ -11,6 +11,16 @@
       </div>
     </div>
 
+    <!-- Sensor Status Warning -->
+    <div v-if="!hasCurrentSensor" class="sensor-warning">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span><strong>Sensor Arus (ZMPT101B) belum terhubung!</strong> Data daya hanya dari simulasi. Hubungkan sensor ACS712/ACS758 untuk pengukuran aktual.</span>
+    </div>
+
     <!-- Quick Tabs -->
     <div class="quick-tabs">
       <button :class="['tab-btn', { active: activeTab === 'today' }]" @click="setTab('today')">Hari Ini</button>
@@ -85,6 +95,9 @@
       <h3 class="section-title">Analisis Peak Usage (24 Jam)</h3>
       <div class="chart-container">
         <Bar v-if="peakChartData" :data="peakChartData" :options="peakChartOptions" />
+        <div v-else class="chart-placeholder">
+          <p>Memuat data...</p>
+        </div>
       </div>
       <div class="peak-info-grid">
         <div class="info-item">
@@ -164,10 +177,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Bar } from 'vue-chartjs'
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js'
 import { useEnergyManagement } from '../composables/useEnergyManagement'
+import { useHistoricalData } from '../composables/useHistoricalData'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -191,23 +205,56 @@ const {
   getMonthlyConsumption,
   analyzePeakUsage,
   calculateCost,
-  generateRecommendations
+  generateRecommendations,
+  getPowerData,
+  historicalData,
+  isValidPower
 } = useEnergyManagement()
 
-const localTariff = ref(settings.value.tariffPerKwh)
-const localTarget = ref(settings.value.monthlyTarget)
-const activeTab = ref('monthly')
+// Get direct access to getStatistics from useHistoricalData
+const { getStatistics } = useHistoricalData()
 
-const todayConsumption = ref(0)
-const monthlyConsumption = ref(0)
-const peakAnalysis = ref([])
+const localTariff = ref(1444.70)
+const localTarget = ref(100)
+const activeTab = ref('monthly')
 const lastUpdateAt = ref(null)
+const hasCurrentSensor = ref(false)
+
+// Reactive consumption data
+// NOTE: getStatistics returns totalEnergy in Wh, need to divide by 1000 for kWh
+const todayConsumption = computed(() => {
+  const stats = getStatistics(new Date(new Date().setHours(0, 0, 0, 0)), new Date())
+  const valWh = stats?.totalEnergy || 0
+  const valKwh = valWh / 1000 // Convert Wh to kWh
+
+  // Check if we have valid current/power data (sensor connected)
+  hasCurrentSensor.value = (stats?.validPowerRecords || 0) > 0
+
+  console.log('[EnergyManagement] Today:', {
+    totalEnergyWh: valWh,
+    totalEnergyKwh: valKwh,
+    totalRecords: stats?.totalRecords,
+    validPowerRecords: stats?.validPowerRecords,
+    avgPower: stats?.power?.avg
+  })
+  return valKwh
+})
+
+const monthlyConsumption = computed(() => {
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const stats = getStatistics(startOfMonth, now)
+  const valWh = stats?.totalEnergy || 0
+  const valKwh = valWh / 1000 // Convert Wh to kWh
+  return valKwh
+})
+
+const peakAnalysis = ref([])
 
 const updateConsumptionData = () => {
-  todayConsumption.value = getTodayConsumption()
-  monthlyConsumption.value = getMonthlyConsumption()
   peakAnalysis.value = analyzePeakUsage()
   lastUpdateAt.value = new Date()
+  console.log('[EnergyManagement] Peak analysis:', peakAnalysis.value.length, 'hours')
 }
 
 const todayCost = computed(() => calculateCost(todayConsumption.value))
@@ -217,6 +264,7 @@ const projectedMonthly = computed(() => {
   const now = new Date()
   const dayOfMonth = now.getDate()
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  if (dayOfMonth === 0) return 0
   return (monthlyConsumption.value / dayOfMonth) * daysInMonth
 })
 
@@ -250,6 +298,8 @@ const projectionStatus = computed(() => {
 })
 
 const efficiencyScore = computed(() => {
+  // If no consumption data, score is undefined
+  if (monthlyConsumption.value <= 0) return 0
   const ratio = projectedMonthly.value / settings.value.monthlyTarget
   return Math.max(0, Math.min(100, Math.round(100 - (ratio - 1) * 100)))
 })
@@ -278,7 +328,19 @@ const avgPeakHourPower = computed(() => {
 })
 
 const peakChartData = computed(() => {
-  if (peakAnalysis.value.length === 0) return null
+  if (peakAnalysis.value.length === 0) {
+    return {
+      labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+      datasets: [{
+        label: 'Daya Rata-rata (W)',
+        data: Array(24).fill(0),
+        backgroundColor: 'rgba(6, 182, 212, 0.3)',
+        borderColor: 'rgba(6, 182, 212, 0.8)',
+        borderWidth: 2
+      }]
+    }
+  }
+
   const sortedData = [...peakAnalysis.value].sort((a, b) => a.hour - b.hour)
   return {
     labels: sortedData.map(d => `${d.hour}:00`),
@@ -369,11 +431,23 @@ const getEfficiencyLabel = (score) => {
 watch(() => props.currentPower, (newPower) => {
   if (newPower && newPower > 0) {
     addEnergyDataPoint(newPower)
-    updateConsumptionData()
   }
 }, { immediate: false })
 
+// Watch historical data changes
+watch(() => historicalData.value.length, (newLength, oldLength) => {
+  console.log('[EnergyManagement] Historical data changed:', oldLength, '->', newLength, 'records')
+  console.log('[EnergyManagement] Sample data:', historicalData.value.slice(0, 3).map(d => ({
+    timestamp: d.timestamp,
+    power: d.power,
+    valid: isValidPower(d.power)
+  })))
+  updateConsumptionData()
+  generateRecommendations()
+}, { immediate: true })
+
 let recommendationInterval = null
+let updateInterval = null
 
 onMounted(() => {
   loadSettings()
@@ -382,10 +456,20 @@ onMounted(() => {
   updateConsumptionData()
   generateRecommendations()
 
+  // Refresh data periodically
   recommendationInterval = setInterval(() => {
     updateConsumptionData()
     generateRecommendations()
   }, 5 * 60 * 1000)
+
+  updateInterval = setInterval(() => {
+    updateConsumptionData()
+  }, 30 * 1000)
+})
+
+onUnmounted(() => {
+  if (recommendationInterval) clearInterval(recommendationInterval)
+  if (updateInterval) clearInterval(updateInterval)
 })
 </script>
 
@@ -415,6 +499,24 @@ onMounted(() => {
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.sensor-warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.sensor-warning svg {
+  flex-shrink: 0;
+  color: #f59e0b;
 }
 
 .hero-banner { margin-bottom: 24px; }

@@ -261,12 +261,21 @@ export default {
         this.error = null;
 
         await this.fetchLatestSensorData();
+
+        // Log data being sent to ML
+        console.log('[AC] Calling ML prediction with:', this.localSensorData);
+
         const mlResult = await this.mlPrediction.getPrediction(this.localSensorData);
 
         if (mlResult.success) {
           const ac = this.mlPrediction.acRecommendation.value;
           const energy = this.mlPrediction.energyPrediction.value;
           const meta = this.mlPrediction.predictionMeta.value || {};
+
+          console.log('[AC] ML Result from:', mlResult.source, {
+            recommendedTemp: ac.recommendedTemp,
+            action: ac.action
+          });
 
           this.recommendation = {
             recommendedTemp: ac.recommendedTemp,
@@ -323,8 +332,12 @@ export default {
               tegangan: parseFloat(data.data.tegangan) || this.localSensorData.tegangan,
               arus: parseFloat(data.data.arus) || this.localSensorData.arus,
               daya: parseFloat(data.data.daya) || this.localSensorData.daya,
-              jumlahOrang: parseInt(data.data.jumlahOrang) || 0
+              // Support both field names: people_count (API) and jumlahOrang
+              jumlahOrang: parseInt(data.data.people_count || data.data.jumlahOrang) || 0
             };
+
+            // Log for debugging
+            console.log('[AC] Updated sensor data:', this.localSensorData);
           }
         }
       } catch (err) {

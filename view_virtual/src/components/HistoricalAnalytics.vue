@@ -46,7 +46,9 @@
         <div class="stat-card temp-card">
           <div class="stat-card-header">
             <span class="stat-label-lg">Temperature</span>
-            <span class="stat-trend positive">+2.1%</span>
+            <span :class="['stat-trend', temperatureTrend.isPositive ? 'positive' : 'negative']">
+              {{ temperatureTrend.percent === 'N/A' ? 'N/A' : (temperatureTrend.current > temperatureTrend.previous ? '+' : '') + temperatureTrend.percent + '%' }}
+            </span>
           </div>
           <div class="stat-value-lg">{{ statistics.temperature.avg?.toFixed(1) || 'N/A' }}°C</div>
           <div class="stat-range">{{ statistics.temperature.min?.toFixed(1) }} - {{ statistics.temperature.max?.toFixed(1) }}°C</div>
@@ -55,7 +57,9 @@
         <div class="stat-card humid-card">
           <div class="stat-card-header">
             <span class="stat-label-lg">Humidity</span>
-            <span class="stat-trend negative">-1.3%</span>
+            <span :class="['stat-trend', humidityTrend.isPositive ? 'positive' : 'negative']">
+              {{ humidityTrend.percent === 'N/A' ? 'N/A' : (humidityTrend.current > humidityTrend.previous ? '+' : '') + humidityTrend.percent + '%' }}
+            </span>
           </div>
           <div class="stat-value-lg">{{ statistics.humidity.avg?.toFixed(1) || 'N/A' }}%</div>
           <div class="stat-range">{{ statistics.humidity.min?.toFixed(1) }} - {{ statistics.humidity.max?.toFixed(1) }}%</div>
@@ -64,7 +68,9 @@
         <div class="stat-card power-card">
           <div class="stat-card-header">
             <span class="stat-label-lg">Average Power</span>
-            <span class="stat-trend positive">+5.4%</span>
+            <span :class="['stat-trend', powerTrend.isPositive ? 'positive' : 'negative']">
+              {{ powerTrend.percent === 'N/A' ? 'N/A' : ((powerTrend.current || 0) > (powerTrend.previous || 0) ? '+' : '') + powerTrend.percent + '%' }}
+            </span>
           </div>
           <div class="stat-value-lg">{{ statistics.power.avg?.toFixed(0) || 'N/A' }}W</div>
           <div class="stat-range">{{ statistics.power.min?.toFixed(0) }} - {{ statistics.power.max?.toFixed(0) }}W</div>
@@ -334,6 +340,96 @@ const statistics = computed(() => {
   return getStatistics(start, end)
 })
 
+// Use computed properties that depend on reactive startDate/endDate
+const temperatureTrend = computed(() => {
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
+  return getTrendForMetric('temperature', start, end)
+})
+
+const humidityTrend = computed(() => {
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
+  return getTrendForMetric('humidity', start, end)
+})
+
+const powerTrend = computed(() => {
+  const start = parseDateInput(startDate.value)
+  const end = parseDateInput(endDate.value, true)
+  return getTrendForMetric('power', start, end)
+})
+
+// Helper function that uses reactive values
+function getTrendForMetric(metric, start, end) {
+  if (!start || !end) return { percent: 'N/A', isPositive: true, current: null, previous: null }
+
+  const periodMs = end - start
+  if (periodMs <= 0) return { percent: 'N/A', isPositive: true, current: null, previous: null }
+
+  // Access reactive historicalData to ensure dependency tracking
+  const _ = historicalData.value.length
+
+  const currentStats = getStatistics(start, end)
+  if (!currentStats) return { percent: 'N/A', isPositive: true, current: null, previous: null }
+
+  const current = currentStats[metric]?.avg
+  if (current === null || current === undefined) return { percent: 'N/A', isPositive: true, current: null, previous: null }
+
+  // Previous period calculation
+  const prevEnd = new Date(start.getTime() - 1)
+  const prevStart = new Date(start.getTime() - periodMs - 1)
+  const prevStats = getStatistics(prevStart, prevEnd)
+
+  // If no previous period data, compare first half vs second half of current period
+  if (!prevStats || prevStats[metric]?.avg === null || prevStats[metric]?.avg === undefined) {
+    const midpoint = new Date((start.getTime() + end.getTime()) / 2)
+    const firstHalfStats = getStatistics(start, midpoint)
+    const secondHalfStats = getStatistics(midpoint, end)
+
+    const firstHalf = firstHalfStats?.[metric]?.avg
+    const secondHalf = secondHalfStats?.[metric]?.avg
+
+    if (firstHalf && secondHalf && firstHalf > 0) {
+      const percent = ((secondHalf - firstHalf) / firstHalf) * 100
+      let isPositive
+      if (metric === 'power') {
+        isPositive = percent <= 0
+      } else {
+        isPositive = percent >= 0
+      }
+      return {
+        percent: Math.abs(percent).toFixed(1),
+        isPositive,
+        current: secondHalf,
+        previous: firstHalf,
+        note: 'vs periode pertama'
+      }
+    }
+
+    return { percent: 'N/A', isPositive: true, current, previous: null }
+  }
+
+  const previous = prevStats[metric]?.avg
+  if (previous === null || previous === undefined || previous === 0) {
+    return { percent: 'N/A', isPositive: true, current, previous }
+  }
+
+  const percent = ((current - previous) / previous) * 100
+  let isPositive
+  if (metric === 'power') {
+    isPositive = percent <= 0
+  } else {
+    isPositive = percent >= 0
+  }
+
+  return {
+    percent: Math.abs(percent).toFixed(1),
+    isPositive,
+    current,
+    previous
+  }
+}
+
 const chartData = computed(() => {
   const start = parseDateInput(startDate.value)
   const end = parseDateInput(endDate.value, true)
@@ -347,19 +443,40 @@ const chartData = computed(() => {
     }
   })
   const data = aggregated.map(item => item[selectedMetric.value])
-  return {
-    labels,
-    datasets: [{
-      label: getMetricLabel(selectedMetric.value),
-      data,
-      borderColor: '#06b6d4',
-      backgroundColor: 'rgba(6, 182, 212, 0.1)',
+
+  const datasets = [{
+    label: getMetricLabel(selectedMetric.value),
+    data,
+    borderColor: '#06b6d4',
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    tension: 0.4,
+    fill: true,
+    pointRadius: 4,
+    pointHoverRadius: 6
+  }]
+
+  // Add comparison dataset
+  if (comparisonMode.value) {
+    const periodMs = end - start
+    const prevEnd = new Date(start.getTime() - 1)
+    const prevStart = new Date(start.getTime() - periodMs - 1)
+    const prevAggregated = getAggregatedData(prevStart, prevEnd, chartInterval.value)
+    const prevData = prevAggregated.map(item => item[selectedMetric.value])
+
+    datasets.push({
+      label: `Prev: ${getMetricLabel(selectedMetric.value)}`,
+      data: prevData,
+      borderColor: '#a855f7',
+      backgroundColor: 'rgba(168, 85, 247, 0.1)',
       tension: 0.4,
       fill: true,
       pointRadius: 4,
-      pointHoverRadius: 6
-    }]
+      pointHoverRadius: 6,
+      borderDash: [5, 5]
+    })
   }
+
+  return { labels, datasets }
 })
 
 const chartOptions = computed(() => ({

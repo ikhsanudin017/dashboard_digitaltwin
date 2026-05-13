@@ -54,3 +54,6 @@ CLAUDE.md
 MEMORY.md
 MEMORY/
 "ANALYSIS dan PROMPT/"
+
+# Claude Code internal files
+.claude/
