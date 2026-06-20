@@ -42,9 +42,10 @@ logger = logging.getLogger(__name__)
 IOT_HUB_NAME = "iothub-digitaltwin-2026"
 IOT_HUB_HOST = f"{IOT_HUB_NAME}.azure-devices.net"
 
-# Device credentials (from Azure CLI)
-DEVICE_ID = "RASPBERRY_PI_GATEWAY_001"
-DEVICE_KEY = "44Wf9Bd557KxEXiQSNxAOUrD4GWjuBx56D2lK1Qw7mg="
+# Device credentials (load from environment to avoid committing secrets)
+DEVICE_ID = os.environ.get('IOT_DEVICE_ID', 'RASPBERRY_PI_GATEWAY_001')
+DEVICE_KEY = os.environ.get('IOT_DEVICE_KEY', '')
+IOT_FORWARDING_ENABLED = bool(DEVICE_KEY)
 
 # Local API URL
 LOCAL_API_URL = os.environ.get('LOCAL_API_URL', 'http://localhost:5001')
@@ -97,9 +98,19 @@ class IoTHubRestForwarder:
 
     def generate_token(self):
         """Generate/refresh SAS token"""
+        # If no device key is configured, skip token generation
+        if not IOT_FORWARDING_ENABLED:
+            logger.warning("IOT forwarding disabled: IOT_DEVICE_KEY not set")
+            self.sas_token = None
+            return
+
         # Use hub hostname only (lowercase) for the URI
-        self.sas_token = generate_sas_token(IOT_HUB_HOST.lower(), DEVICE_KEY)
-        logger.info("SAS token generated")
+        try:
+            self.sas_token = generate_sas_token(IOT_HUB_HOST.lower(), DEVICE_KEY)
+            logger.info("SAS token generated")
+        except Exception as e:
+            logger.error(f"Failed to generate SAS token: {e}")
+            self.sas_token = None
 
     def send_message(self, payload):
         """Send message ke IoT Hub via REST API"""
