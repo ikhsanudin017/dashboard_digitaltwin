@@ -12,7 +12,8 @@ export const ML_API_URL =
   readEnv('VITE_ML_API_URL') || 'http://localhost:5000/api'
 
 // Cesium & Google Maps API Keys
-export const CESIUM_ION_TOKEN = readEnv('VITE_CESIUM_ION_TOKEN') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiOTM2NDJmNC1jZmEzLTQ2OWEtOTU2MS1kZTY0ZTkzNGY3MGMiLCJpZCI6NDI0MzM2LCJpYXQiOjE3Nzc0Nzg5ODF9.8YOYunQZWR7KNEzSajwLN_5KTSXFyP-TGwuJfahkXMI'
+// Removed hardcoded Cesium Ion token - must be provided via environment (VITE_CESIUM_ION_TOKEN)
+export const CESIUM_ION_TOKEN = readEnv('VITE_CESIUM_ION_TOKEN') || ''
 export const GOOGLE_MAPS_API_KEY = readEnv('VITE_GOOGLE_MAPS_API_KEY')
 
 // Camera configuration
