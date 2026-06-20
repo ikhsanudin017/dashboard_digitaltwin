@@ -39,6 +39,7 @@ sensor iot/azure-setup/azure-function/local.settings.json
 sensor iot/include/secrets.h
 sensor iot/raspberry-pi/.env
 ml_models/.env
+raspberry_pi/.env
 .vercel
 
 # OS
@@ -57,3 +58,25 @@ MEMORY/
 
 # Claude Code internal files
 .claude/
+
+# User-specified large/temporary files (do NOT push)
+~$sensor_data_ALL.xlsx
+~$sensor_data_complete.xlsx
+3d digitaltwin.pmtiles
+api_endpoints.txt
+convert_glb.py
+debug_export.py
+debug_final.py
+export_azure_table.py
+screenshot2.png
+sensor_data_ALL.xlsx
+sensor_data_complete.xlsx
+sensor_data_export.csv
+sensor_data_semicolon.csv
+sensor_data_realtime_24h.xlsx
+sensor_data.xlsx
+sensor-data-full.csv
+Tangkapan Layar*.png
+TASK_CSV_Export_AzureFunction_Fix.md
+TASK_Fix_CSV_Export.txt
+TASK_Fix_Export_Function.md
