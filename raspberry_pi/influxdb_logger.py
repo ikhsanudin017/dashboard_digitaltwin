@@ -27,10 +27,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-INFLUX_URL = "http://localhost:8086"
-INFLUX_TOKEN = "digitaltwin-token-2026"
-INFLUX_ORG = "digitaltwin"
-INFLUX_BUCKET = "sensor_data"
+INFLUX_URL = os.environ.get('INFLUX_URL', 'http://localhost:8086')
+INFLUX_TOKEN = os.environ.get('INFLUX_TOKEN', '')
+INFLUX_ORG = os.environ.get('INFLUX_ORG', 'digitaltwin')
+INFLUX_BUCKET = os.environ.get('INFLUX_BUCKET', 'sensor_data')
 
 LOCAL_API_URL = os.environ.get('LOCAL_API_URL', 'http://localhost:5001')
 POLLING_INTERVAL = 10
@@ -38,6 +38,9 @@ POLLING_INTERVAL = 10
 
 def write_to_influx(client, data):
     """Write data point to InfluxDB"""
+    if not client:
+        logger.debug("InfluxDB client not configured; skipping writes")
+        return
     try:
         with client.write_api() as write_api:
             # ESP32 Sensor Data
@@ -105,7 +108,19 @@ def main():
     logger.info(f"Local API: {LOCAL_API_URL}")
     logger.info("=" * 60)
 
-    client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+    client = None
+    if INFLUX_TOKEN:
+        try:
+            if not INFLUX_TOKEN:
+                logger.warning('INFLUX_TOKEN not set; InfluxDB writes will be disabled')
+                client = None
+            else:
+                client = InfluxDBClient(url=INFLUX_URL, token=INFLUX_TOKEN, org=INFLUX_ORG)
+        except Exception as e:
+            logger.error(f"Failed to create InfluxDB client: {e}")
+            client = None
+    else:
+        logger.warning("INFLUX_TOKEN not set; InfluxDB writes disabled")
 
     try:
         while True:
@@ -125,7 +140,8 @@ def main():
     except KeyboardInterrupt:
         logger.info("Stopped")
     finally:
-        client.close()
+        if client:
+            client.close()
 
 
 if __name__ == '__main__':
