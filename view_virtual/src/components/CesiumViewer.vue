@@ -32,7 +32,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as Cesium from 'cesium'
 
-const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiOTM2NDJmNC1jZmEzLTQ2OWEtOTU2MS1kZTY0ZTkzNGY3MGMiLCJpZCI6NDI0MzM2LCJpYXQiOjE3Nzc0Nzg5ODF9.8YOYunQZWR7KNEzSajwLN_5KTSXFyP-TGwuJfahkXMI'
+const CESIUM_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI1ZjU2ZDUzYS0wZTE0LTQ2MTEtOTNiMi0zM2JlYzBlNmY3NTgiLCJpZCI6NDIzOTQ1LCJpYXQiOjE3Nzc0NjkxMzN9.k25AhtbGFkirMsdoZLhW0tTVC5ZNEBtfLkV1of-baaM'
 
 const props = defineProps({
   sensorData: { type: Object, default: () => ({}) },
@@ -92,22 +92,28 @@ const initViewer = async () => {
     // Remove default Bing imagery
     viewer.imageryLayers.removeAll()
 
+    // Add Cesium World Imagery (satellite/aerial map)
+    const imageryProvider = new Cesium.IonImageryProvider({ assetId: 2 })
+    viewer.imageryLayers.addImageryProvider(imageryProvider)
+
     // Set ellipsoid terrain
     viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider()
 
-    // Set background color
+    // Restore background color so Cesium sky works properly
     viewer.scene.backgroundColor = new Cesium.Color(0.04, 0.06, 0.1, 1)
 
     loadingStatus.value = 'Step 4: Load 3D Tileset...'
     console.log('5. Load 3D Tileset')
 
-    // Load 3D Tileset
+    // Load 3D Tileset — jika asset tidak tersedia di akun ini, skip (tetap tampil peta satelit)
     try {
-      const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(2275207)
+      const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(4786731)
       viewer.scene.primitives.add(tileset)
-      console.log('6. Tileset dimuat')
+      viewer.zoomTo(tileset)
+      console.log('✅ 3D Tileset dimuat berhasil!')
     } catch (e) {
-      console.warn('⚠️ Gagal muat tileset:', e.message)
+      console.warn('⚠️ Asset 4786731 tidak tersedia di akun Ion ini:', e.message)
+      console.log('💡 Gunakan aset yang sudah di-upload ke akun, atau gunakan model lokal (3D Tiles / glTF)')
     }
 
     loadingStatus.value = 'Step 5: Add Marker...'

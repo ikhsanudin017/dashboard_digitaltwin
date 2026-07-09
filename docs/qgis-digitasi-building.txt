@@ -1,0 +1,93 @@
+Langkah Awal di QGIS - Digitasi Building
+===========================================
+
+---
+
+1. Set Project CRS (Coordinate Reference System)
+----------------------------------------------
+
+Menu: Project → Properties → CRS
+Pilih: EPSG:4326 - WGS84
+Centang: "Enable 'on the fly' CRS transformation"
+Klik Apply → OK
+
+
+2. Add Satellite Imagery
+--------------------------------------
+
+Menu: View → Panels → Browser
+Cari: XYZ Tiles → OpenStreetMap (atau Google Satellite)
+Drag ke Layers panel
+
+Atau via OpenLayers Plugin:
+Menu: Web → OpenLayers Plugin → Google Maps → Google Satellite
+
+
+3. Zoom ke Lokasi Building
+--------------------------------------
+
+- Scroll mouse: zoom in/out
+- Klik-drag: pan
+- Cari lokasi building di satellite imagery
+
+
+4. Ukur Dimensi Building
+--------------------------------------
+
+Toolbar: Measure Line (icon ruler, atau tekan Ctrl+M)
+Klik titik A (sudut kiri bawah building)
+Klik titik B (sudut kanan bawah building)
+Baca hasil: Misal "12.3 meters"
+
+Ulang untuk lebar dan panjang
+
+CATAT:
+  - Lebar: ___ m
+  - Panjang: ___ m
+
+
+5. Dapat Koordinat 4 Sudut Building
+--------------------------------------
+
+Toolbar: Add Feature (icon polygon kuning)
+Aktifkan snapping (icon magnet) → biar presisi
+Klik 4 titik polygon mengikuti outline building
+Klik kanan → OK
+
+Right-click polygon layer → Toggle Editing (kalau belum)
+Menu: View → Panels → Identify
+Klik polygon → lihat koordinat vertices
+
+CATAT koordinat:
+  - Corner 1: [___, ___]
+  - Corner 2: [___, ___]
+  - Corner 3: [___, ___]
+  - Corner 4: [___, ___]
+
+
+6. (Optional) Export Polygon ke GeoJSON
+--------------------------------------
+
+Right-click polygon layer → Export → Save Features As
+Format: GeoJSON
+CRS: EPSG:4326
+File name: building-outline.geojson
+Klik OK
+
+
+==========================================
+Ringkasan yang Dicatat:
+==========================================
+
+DIMENSI:
+  - Lebar: ___ m
+  - Panjang: ___ m
+  - Tinggi: ___ m (dari denah/revit)
+
+KOORDINAT (4 sudut):
+  - Corner 1: [___, ___]
+  - Corner 2: [___, ___]
+  - Corner 3: [___, ___]
+  - Corner 4: [___, ___]
+
+Ukuran gedung (dari QGIS): ___m × ___m
