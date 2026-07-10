@@ -88,14 +88,38 @@ const applyBaseImagery = () => {
   if (!viewer) return
 
   const style = props.isDarkMode ? imageryStyles.dark : imageryStyles.light
-  viewer.imageryLayers.removeAll()
-    viewer.imageryLayers.addImageryProvider(
-      new Cesium.UrlTemplateImageryProvider({
-        url: style.url,
-        credit: style.credit,
-        maximumLevel: 19
-      })
-  )
+  viewer.imageryLayers.removeAll(true)
+
+  const imageryProvider = new Cesium.UrlTemplateImageryProvider({
+    url: style.url,
+    credit: style.credit,
+    maximumLevel: 19,
+    tilingScheme: new Cesium.WebMercatorTilingScheme()
+  })
+
+  viewer.imageryLayers.addImageryProvider(imageryProvider)
+}
+
+const destroyViewer = () => {
+  stopBuildingOrbit()
+
+  if (!viewer || viewer.isDestroyed()) {
+    viewer = null
+    return
+  }
+
+  if (lod3RoofPrimitive) {
+    viewer.scene.primitives.remove(lod3RoofPrimitive)
+    lod3RoofPrimitive = null
+  }
+
+  if (postRenderHandler) {
+    viewer.scene.postRender.removeEventListener(postRenderHandler)
+    postRenderHandler = null
+  }
+
+  viewer.destroy()
+  viewer = null
 }
 
 const applySceneTheme = () => {
@@ -417,7 +441,10 @@ const orbitAroundBuilding = () => {
 }
 
 const initViewer = async () => {
+  destroyViewer()
   isLoading.value = true
+  isReady.value = false
+  markerScreenPosition.value = { x: 0, y: 0, visible: false }
   loadError.value = ''
   loadingStatus.value = 'Step 1: Container...'
   console.log('1. Mulai initViewer')
@@ -451,6 +478,7 @@ const initViewer = async () => {
       navigationHelpButton: false,
       infoBox: false,
       selectionIndicator: false,
+      baseLayer: false,
       creditContainer: document.createElement('div')
     })
 
@@ -511,19 +539,7 @@ const initViewer = async () => {
 }
 
 onUnmounted(() => {
-  if (viewer) {
-    stopBuildingOrbit()
-    if (lod3RoofPrimitive) {
-      viewer.scene.primitives.remove(lod3RoofPrimitive)
-      lod3RoofPrimitive = null
-    }
-    if (postRenderHandler) {
-      viewer.scene.postRender.removeEventListener(postRenderHandler)
-      postRenderHandler = null
-    }
-    viewer.destroy()
-    viewer = null
-  }
+  destroyViewer()
 })
 
 onMounted(() => {

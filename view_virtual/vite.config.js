@@ -7,9 +7,12 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'prompt', // Beri user pilihan untuk update atau skip
+      registerType: 'autoUpdate',
       includeVersion: true, // Track version untuk debugging
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB untuk bundle besar (Cesium + Babylon)
         runtimeCaching: [
           {

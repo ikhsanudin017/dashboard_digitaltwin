@@ -759,7 +759,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  disstartPolling()
+  stopPolling()
 })
 </script>
 
