@@ -148,8 +148,8 @@ const props = defineProps({
 const emit = defineEmits(['toggle-indoor', 'location-selected'])
 
 const housePosition = {
-  lat: -7.722649267245097,
-  lon: 110.51897609565907
+  lat: -7.7229652607057515,
+  lon: 110.5187030823394
 }
 
 const mapContainer = ref(null)

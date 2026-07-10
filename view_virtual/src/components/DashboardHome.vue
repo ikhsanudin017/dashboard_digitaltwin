@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="dashboard" :class="{ dark: isDarkMode }">
     <!-- Full-Screen 3D Background -->
     <div class="viewer-3d">
       <CesiumViewer
@@ -26,7 +26,7 @@
           <div class="header-row">
             <div class="logo-section">
               <img src="/logo.png" alt="Logo" class="brand-logo" />
-              <span class="brand">TWINSPACE</span>
+              <span class="brand">TWINUVO</span>
             </div>
             <span class="status-badge" :class="isConnected ? 'online' : 'offline'">
               <span class="dot"></span>
@@ -145,14 +145,19 @@
 
         <!-- Footer -->
         <div class="card-footer">
-          <span>-7.7226, 110.5190</span>
+          <span>-7.7230, 110.5187</span>
         </div>
       </div>
     </aside>
 
     <!-- ═══ MODAL ═══ -->
     <Teleport to="body">
-      <div v-if="activeSection !== 'overview'" class="modal-overlay" @click.self="activeSection = 'overview'">
+      <div
+        v-if="activeSection !== 'overview'"
+        class="modal-overlay"
+        :class="{ dark: isDarkMode }"
+        @click.self="activeSection = 'overview'"
+      >
         <div class="modal-content">
           <button class="modal-close" @click="activeSection = 'overview'">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -189,12 +194,6 @@
                     <p class="profile-email">{{ user?.email || 'Operator' }}</p>
                   </div>
                 </div>
-              </div>
-              <div class="settings-card">
-                <h4>Display</h4>
-                <button class="setting-btn" @click="handleThemeToggle">
-                  {{ isDarkMode ? 'Light Mode' : 'Dark Mode' }}
-                </button>
               </div>
               <div class="settings-card">
                 <h4>System</h4>
@@ -361,22 +360,47 @@ let lastSensorSuhu = null
 }
 
 .dashboard {
-  --accent: #00d4ff;
-  --bg: #0a0f1a;
-  --panel: rgba(10, 15, 30, 0.95);
-  --panel-solid: #0d1117;
-  --border: rgba(255, 255, 255, 0.1);
-  --text: #f8fafc;
-  --text-2: #94a3b8;
+  --accent: #0891b2;
+  --accent-strong: #0e7490;
+  --accent-soft: rgba(8, 145, 178, 0.11);
+  --bg: linear-gradient(135deg, #f8fafc 0%, #eef7fb 52%, #f7fbf5 100%);
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-solid: #f8fafc;
+  --surface-soft: rgba(15, 23, 42, 0.04);
+  --surface-hover: rgba(15, 23, 42, 0.07);
+  --button-soft: rgba(255, 255, 255, 0.78);
+  --border: rgba(15, 23, 42, 0.12);
+  --text: #0f172a;
+  --text-2: #475569;
   --text-3: #64748b;
-  --success: #22c55e;
-  --danger: #ef4444;
+  --success: #059669;
+  --danger: #dc2626;
+  --sidebar-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
 
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
   font-family: 'IBM Plex Sans', sans-serif;
   overflow: hidden;
+}
+
+.dashboard.dark {
+  --accent: #00d4ff;
+  --accent-strong: #22d3ee;
+  --accent-soft: rgba(0, 212, 255, 0.15);
+  --bg: #0a0f1a;
+  --panel: rgba(10, 15, 30, 0.95);
+  --panel-solid: #0d1117;
+  --surface-soft: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --button-soft: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f8fafc;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --sidebar-shadow: none;
 }
 
 /* ═══ VIEWER ═══ */
@@ -411,13 +435,16 @@ let lastSensorSuhu = null
 /* Main Card - Single unified card */
 .main-card {
   background: var(--panel);
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 0;
   padding: 16px 12px;
   height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0;
+  box-shadow: var(--sidebar-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 /* Card Header */
@@ -540,7 +567,8 @@ let lastSensorSuhu = null
   justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-soft);
+  border: 1px solid transparent;
   border-radius: 6px;
 }
 
@@ -556,9 +584,9 @@ let lastSensorSuhu = null
   font-weight: 600;
 }
 
-.sensor-value.temp { color: #00d4ff; }
+.sensor-value.temp { color: var(--accent-strong); }
 .sensor-value.humid { color: #a855f7; }
-.sensor-value.power { color: #22c55e; }
+.sensor-value.power { color: var(--success); }
 .sensor-value.voltage { color: #f59e0b; }
 
 /* AC Target Card */
@@ -568,8 +596,8 @@ let lastSensorSuhu = null
   align-items: center;
   gap: 4px;
   padding: 16px 12px;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, rgba(168, 85, 247, 0.1) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 10px;
   margin-bottom: 12px;
 }
@@ -578,7 +606,7 @@ let lastSensorSuhu = null
   font-family: 'Sora', sans-serif;
   font-size: 28px;
   font-weight: 700;
-  color: #00d4ff;
+  color: var(--accent-strong);
 }
 
 .ac-label {
@@ -598,7 +626,8 @@ let lastSensorSuhu = null
   justify-content: space-between;
   align-items: center;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-soft);
+  border: 1px solid transparent;
   border-radius: 6px;
 }
 
@@ -640,12 +669,12 @@ let lastSensorSuhu = null
 }
 
 .cctv-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-hover);
   border-color: var(--accent);
 }
 
 .cctv-btn.active {
-  background: rgba(0, 212, 255, 0.15);
+  background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -672,7 +701,7 @@ let lastSensorSuhu = null
 .view-btn {
   flex: 1;
   padding: 10px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-2);
@@ -684,11 +713,11 @@ let lastSensorSuhu = null
 }
 
 .view-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-hover);
 }
 
 .view-btn.active {
-  background: rgba(0, 212, 255, 0.15);
+  background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
@@ -708,7 +737,7 @@ let lastSensorSuhu = null
   align-items: center;
   gap: 6px;
   padding: 12px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-2);
@@ -717,7 +746,7 @@ let lastSensorSuhu = null
 }
 
 .menu-btn:hover {
-  background: rgba(0, 212, 255, 0.15);
+  background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -735,7 +764,7 @@ let lastSensorSuhu = null
   gap: 8px;
   width: 100%;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--button-soft);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-2);
@@ -772,15 +801,50 @@ let lastSensorSuhu = null
 
 /* ═══ MODAL ═══ */
 .modal-overlay {
+  --accent: #0891b2;
+  --accent-strong: #0e7490;
+  --accent-soft: rgba(8, 145, 178, 0.1);
+  --panel-solid: #f8fafc;
+  --surface-soft: rgba(255, 255, 255, 0.78);
+  --surface-hover: rgba(15, 23, 42, 0.07);
+  --button-soft: rgba(255, 255, 255, 0.9);
+  --border: rgba(15, 23, 42, 0.12);
+  --text: #0f172a;
+  --text-2: #475569;
+  --text-3: #64748b;
+  --success: #059669;
+  --danger: #dc2626;
+  --modal-overlay-bg: rgba(15, 23, 42, 0.38);
+  --modal-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(5px);
+  background: var(--modal-overlay-bg);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 30px;
+}
+
+.modal-overlay.dark {
+  --accent: #00d4ff;
+  --accent-strong: #22d3ee;
+  --accent-soft: rgba(0, 212, 255, 0.15);
+  --panel-solid: #0d1117;
+  --surface-soft: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --button-soft: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #f8fafc;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --modal-overlay-bg: rgba(0, 0, 0, 0.85);
+  --modal-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
 }
 
 .modal-content {
@@ -792,6 +856,7 @@ let lastSensorSuhu = null
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: var(--modal-shadow);
 }
 
 .modal-close {
@@ -803,8 +868,8 @@ let lastSensorSuhu = null
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
+  background: var(--button-soft);
+  border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-2);
   cursor: pointer;
@@ -824,6 +889,7 @@ let lastSensorSuhu = null
   padding: 30px;
   max-height: calc(100vh - 100px);
   overflow-y: auto;
+  color: var(--text);
 }
 
 .modal-body h2 {
@@ -836,13 +902,13 @@ let lastSensorSuhu = null
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin-bottom: 20px;
 }
 
 .settings-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px;
@@ -859,19 +925,6 @@ let lastSensorSuhu = null
   font-size: 0.8rem;
   color: var(--text-2);
   margin-bottom: 4px;
-}
-
-.setting-btn {
-  width: 100%;
-  padding: 8px;
-  background: var(--accent);
-  border: none;
-  border-radius: 4px;
-  color: #000;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .profile-row {
@@ -901,6 +954,7 @@ let lastSensorSuhu = null
 .profile-name {
   font-weight: 600;
   margin: 0;
+  color: var(--text);
 }
 
 .profile-email {

@@ -31,7 +31,7 @@
     <!-- Admin Dashboard -->
     <AdminDashboard
       v-else-if="isAdminDashboardRoute"
-      :user="user || { displayName: 'Admin', email: 'admin@twinspace', photoURL: null }"
+      :user="user || { displayName: 'Admin', email: 'admin@twinuvo', photoURL: null }"
       :is-dark-mode="isDarkMode"
       @toggle-theme="toggleTheme"
       @logout="handleLogout"

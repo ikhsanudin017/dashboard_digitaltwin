@@ -6,9 +6,9 @@
     <!-- Top navigation bar -->
     <header class="topbar">
       <div class="brand">
-        <img src="/logo.png" alt="TwinSpace" class="brand-logo" />
+        <img src="/logo.png" alt="TwinUvo" class="brand-logo" />
         <div class="brand-text">
-          <strong>TwinSpace</strong>
+          <strong>TwinUvo</strong>
           <span>Digital Twin Operations</span>
         </div>
       </div>
@@ -265,7 +265,7 @@
         </div>
       </div>
 
-      <p class="footer-copy">&copy; {{ releaseYear }} TwinSpace Digital Twin Dashboard</p>
+      <p class="footer-copy">&copy; {{ releaseYear }} TwinUvo Digital Twin Dashboard</p>
     </main>
   </div>
 </template>

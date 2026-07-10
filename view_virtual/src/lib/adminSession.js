@@ -1,4 +1,4 @@
-const ADMIN_SESSION_STORAGE_KEY = 'twinspace_admin_session_expires_at'
+const ADMIN_SESSION_STORAGE_KEY = 'twinuvo_admin_session_expires_at'
 
 const parseTimestamp = value => {
   const timestamp = Date.parse(String(value || ''))

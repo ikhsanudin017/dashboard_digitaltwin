@@ -1,5 +1,5 @@
 <template>
-  <div class="digital-twin-3d">
+  <div class="digital-twin-3d" :class="{ dark: isDarkMode }">
     <div class="canvas-wrapper">
       <canvas ref="canvas" class="canvas-container"></canvas>
       
@@ -819,11 +819,33 @@ const cleanup = () => {
 
 <style scoped>
 .digital-twin-3d {
+  --twin-overlay: rgba(248, 250, 252, 0.9);
+  --twin-panel: rgba(255, 255, 255, 0.94);
+  --twin-panel-strong: #ffffff;
+  --twin-border: rgba(15, 23, 42, 0.12);
+  --twin-text: #0f172a;
+  --twin-text-soft: #475569;
+  --twin-muted: #64748b;
+  --twin-accent: #2563eb;
+  --twin-shadow: 0 22px 55px rgba(15, 23, 42, 0.18);
+
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
   border-radius: 12px;
+}
+
+.digital-twin-3d.dark {
+  --twin-overlay: rgba(15, 23, 42, 0.9);
+  --twin-panel: rgba(15, 23, 42, 0.9);
+  --twin-panel-strong: #1e293b;
+  --twin-border: rgba(255, 255, 255, 0.1);
+  --twin-text: #f8fafc;
+  --twin-text-soft: #94a3b8;
+  --twin-muted: #94a3b8;
+  --twin-accent: #3b82f6;
+  --twin-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
 }
 
 .canvas-wrapper {
@@ -853,27 +875,32 @@ const cleanup = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.9);
+  background: var(--twin-overlay);
   backdrop-filter: blur(8px);
   z-index: 10;
 }
 
 .loading-spinner {
   text-align: center;
-  color: white;
+  color: var(--twin-text);
   max-width: 350px;
   padding: 30px;
 }
 
 .spinner {
-  border: 4px solid rgba(255, 255, 255, 0.2);
+  border: 4px solid rgba(37, 99, 235, 0.16);
   border-radius: 50%;
-  border-top: 4px solid #3b82f6;
+  border-top: 4px solid var(--twin-accent);
   border-right: 4px solid #8b5cf6;
   width: 60px;
   height: 60px;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
+}
+
+.dark .spinner {
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: var(--twin-accent);
 }
 
 @keyframes spin {
@@ -885,16 +912,20 @@ const cleanup = () => {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 15px;
-  color: #f8fafc;
+  color: var(--twin-text);
 }
 
 .progress-bar-container {
   width: 100%;
   height: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.1);
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 12px;
+}
+
+.dark .progress-bar-container {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .progress-bar {
@@ -913,7 +944,7 @@ const cleanup = () => {
 
 .loading-details {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--twin-muted);
   margin-bottom: 10px;
 }
 
@@ -1103,12 +1134,13 @@ const cleanup = () => {
 }
 
 .popup-content {
-  background: #1e293b;
+  background: var(--twin-panel-strong);
   padding: 24px;
   border-radius: 16px;
   width: 320px;
   max-width: 90%;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--twin-shadow);
+  border: 1px solid var(--twin-border);
   position: relative;
 }
 
@@ -1116,11 +1148,11 @@ const cleanup = () => {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
+  background: var(--twin-panel);
+  border: 1px solid var(--twin-border);
   font-size: 20px;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--twin-text-soft);
   line-height: 1;
   padding: 6px 10px;
   border-radius: 8px;
@@ -1128,8 +1160,8 @@ const cleanup = () => {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
 }
 
 .popup-header {
@@ -1138,7 +1170,7 @@ const cleanup = () => {
   gap: 12px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--twin-border);
 }
 
 .popup-icon {
@@ -1151,7 +1183,7 @@ const cleanup = () => {
 .popup-content h3 {
   margin: 0;
   font-size: 20px;
-  color: #f8fafc;
+  color: var(--twin-text);
   font-weight: 600;
 }
 
@@ -1166,19 +1198,23 @@ const cleanup = () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.04);
   border-radius: 10px;
+}
+
+.dark .metric-item {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .metric-label {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--twin-text-soft);
   font-weight: 500;
 }
 
 .metric-value {
   font-size: 16px;
-  color: #f8fafc;
+  color: var(--twin-text);
   font-weight: 700;
 }
 
@@ -1188,7 +1224,7 @@ const cleanup = () => {
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.9);
+  background: var(--twin-panel);
   backdrop-filter: blur(10px);
   padding: 12px 20px;
   border-radius: 12px;
@@ -1196,8 +1232,8 @@ const cleanup = () => {
   align-items: center;
   gap: 10px;
   z-index: 50;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--twin-shadow);
+  border: 1px solid var(--twin-border);
   animation: fadeIn 0.2s ease;
 }
 
@@ -1219,14 +1255,14 @@ const cleanup = () => {
 .tooltip-text {
   font-size: 16px;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--twin-text);
 }
 
 .tooltip-hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--twin-muted);
   padding-left: 10px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 1px solid var(--twin-border);
 }
 
 @media (max-width: 768px) {

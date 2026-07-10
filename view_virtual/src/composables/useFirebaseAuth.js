@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth'
 import { auth, googleProvider, isFirebaseConfigured } from '../lib/firebase'
 
-const LOCAL_ADMIN_PROFILE_STORAGE_KEY = 'twinspace_local_admin_profile'
+const LOCAL_ADMIN_PROFILE_STORAGE_KEY = 'twinuvo_local_admin_profile'
 
 const user = ref(null)
 const isAuthReady = ref(false)
@@ -26,7 +26,7 @@ let pendingRedirect = ref(false)
 const credentialDomain = String(import.meta.env.VITE_AUTH_DEFAULT_DOMAIN || '').trim().toLowerCase()
 const localAdminEmail = String(import.meta.env.VITE_LOCAL_ADMIN_EMAIL || '').trim().toLowerCase()
 const localAdminPassword = String(import.meta.env.VITE_LOCAL_ADMIN_PASSWORD || '').trim()
-const localAdminName = String(import.meta.env.VITE_LOCAL_ADMIN_NAME || 'TwinSpace Admin').trim() || 'TwinSpace Admin'
+const localAdminName = String(import.meta.env.VITE_LOCAL_ADMIN_NAME || 'TwinUvo Admin').trim() || 'TwinUvo Admin'
 const adminEmailAllowlist = new Set(
   String(import.meta.env.VITE_ADMIN_EMAILS || '')
     .split(',')
