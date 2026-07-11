@@ -7,6 +7,7 @@
         :sensor-data="sensorData"
         :is-dark-mode="isDarkMode"
         :show-info-card="false"
+        :building-lod="selectedBuildingLod"
         @toggle-indoor="current3DView = 'babylon'"
         @switch-to-3d="current3DView = 'babylon'"
       />
@@ -80,6 +81,24 @@
             <span class="stat-label">ENERGY</span>
             <span class="stat-value">{{ totalEnergyWh.toFixed(1) }}Wh</span>
           </div>
+        </div>
+
+        <!-- BUILDING LOD -->
+        <div class="section-header lod-section-header">
+          <span>BUILDING LOD</span>
+        </div>
+        <div class="lod-selector" role="group" aria-label="Building LOD">
+          <button
+            v-for="option in buildingLodOptions"
+            :key="option.value"
+            type="button"
+            class="lod-btn"
+            :class="{ active: selectedBuildingLod === option.value }"
+            @click="selectedBuildingLod = option.value"
+          >
+            <span class="lod-code">LOD {{ option.value }}</span>
+            <span class="lod-name">{{ option.label }}</span>
+          </button>
         </div>
 
       </div>
@@ -242,6 +261,13 @@ const emit = defineEmits(['toggle-theme', 'logout'])
 
 const activeSection = ref('overview')
 const current3DView = ref('cesium')
+const selectedBuildingLod = ref(3)
+const buildingLodOptions = [
+  { value: 1, label: 'Massa' },
+  { value: 2, label: 'Atap' },
+  { value: 3, label: 'Fasad' },
+  { value: 4, label: 'Detail' }
+]
 
 const { isConnected, sensorData, startPolling, stopPolling } = useAzureTelemetry()
 const { loadHistoricalData, addDataPoint } = useHistoricalData()
@@ -644,6 +670,60 @@ let lastSensorSuhu = null
   color: var(--accent);
 }
 
+.lod-section-header {
+  margin-top: 12px;
+}
+
+.lod-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lod-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-height: 52px;
+  padding: 8px 9px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-family: 'IBM Plex Sans', sans-serif;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.lod-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.lod-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.lod-code {
+  font-family: 'Sora', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lod-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.lod-btn.active .lod-name {
+  color: var(--accent-strong);
+}
+
 /* CCTV List */
 .cctv-list {
   display: flex;
@@ -989,8 +1069,221 @@ let lastSensorSuhu = null
 
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 768px) {
+  .dashboard {
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .viewer-3d {
+    height: 100dvh !important;
+  }
+
   .sidebar {
+    display: block;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    z-index: 120;
+    pointer-events: none;
+  }
+
+  .sidebar-left {
+    top: 8px;
+    bottom: auto;
+    max-height: 36dvh;
+  }
+
+  .sidebar-right {
+    top: auto;
+    bottom: 42px;
+    max-height: 25dvh;
+  }
+
+  .main-card {
+    height: auto;
+    max-height: inherit;
+    padding: 8px;
+    border-radius: 12px;
+    overflow-y: auto;
+    pointer-events: auto;
+    scrollbar-width: thin;
+  }
+
+  .card-header {
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+  }
+
+  .section-header {
     display: none;
+  }
+
+  .brand-logo {
+    height: 20px;
+  }
+
+  .brand {
+    font-size: 11px;
+  }
+
+  .status-badge {
+    padding: 2px 7px;
+    font-size: 8px;
+  }
+
+  .sensor-list,
+  .stats-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+
+  .sensor-item,
+  .stat-item {
+    min-height: 32px;
+    padding: 5px 7px;
+  }
+
+  .sensor-label,
+  .stat-label {
+    font-size: 9px;
+  }
+
+  .sensor-value,
+  .stat-value {
+    font-size: 11px;
+  }
+
+  .ac-target-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    min-height: 34px;
+  }
+
+  .ac-temp-value {
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .ac-label {
+    font-size: 9px;
+  }
+
+  .lod-selector {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin-bottom: 0;
+  }
+
+  .lod-btn {
+    align-items: center;
+    min-height: 30px;
+    padding: 4px 3px;
+    text-align: center;
+  }
+
+  .lod-code {
+    font-size: 9px;
+  }
+
+  .lod-name {
+    display: none;
+  }
+
+  .time-display {
+    font-size: 16px;
+    line-height: 1.1;
+  }
+
+  .view-toggle {
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+
+  .view-btn,
+  .theme-btn {
+    min-height: 30px;
+    padding: 6px 7px;
+    font-size: 10px;
+  }
+
+  .menu-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+
+  .menu-btn {
+    min-height: 30px;
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+
+  .theme-btn {
+    margin-bottom: 0;
+  }
+
+  .card-footer {
+    display: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .sidebar-left {
+    max-height: 39dvh;
+  }
+
+  .sidebar-right {
+    max-height: 27dvh;
+  }
+
+  .main-card {
+    padding: 7px;
+  }
+
+  .sensor-list,
+  .stats-list {
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+
+  .sensor-item,
+  .stat-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .menu-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) and (max-height: 620px) {
+  .sidebar-left {
+    max-height: 33dvh;
+  }
+
+  .sidebar-right {
+    max-height: 23dvh;
+  }
+
+  .sensor-item,
+  .stat-item,
+  .lod-btn,
+  .view-btn,
+  .menu-btn,
+  .theme-btn {
+    min-height: 28px;
+  }
+
+  .ac-target-card {
+    min-height: 30px;
   }
 }
 
