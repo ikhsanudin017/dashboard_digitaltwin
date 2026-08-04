@@ -182,7 +182,7 @@ cd dashboard_digitaltwin
 ```bash
 cd view_virtual
 npm install
-cp env.example.txt .env
+cp view_virtual/.env.example view_virtual/.env
 # Edit .env dengan kredensial Anda
 npm run dev
 ```
