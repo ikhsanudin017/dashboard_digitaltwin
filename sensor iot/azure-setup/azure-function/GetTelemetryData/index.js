@@ -1,5 +1,19 @@
 const { TableClient } = require("@azure/data-tables");
 
+/**
+ * GetTelemetryData — Azure Function
+ * Base URL: https://func-digitaltwin-2026.azurewebsites.net/api
+ *
+ * Endpoints (via route/action parameter):
+ *   GET /telemetry/latest    → handleLatest()
+ *   GET /telemetry/history  → handleHistory()
+ *   GET /telemetry/stats    → handleStats()
+ *   GET /telemetry/people   → handlePeopleCount()
+ *
+ * Storage tables: SensorTelemetry (PartitionKey: ESP32_ENERGY_MONITOR_001),
+ *                 PeopleCount
+ */
+
 module.exports = async function (context, req) {
     // Enable CORS
     context.res = {

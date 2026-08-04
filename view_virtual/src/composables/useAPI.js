@@ -1,3 +1,14 @@
+/**
+ * @fileoverview useAPI — Legacy fallback API client
+ *
+ * API Endpoints consumed (only when AZURE_FUNCTION_URL unavailable):
+ *   GET  /data/suhu/24jam       → temperatureData
+ *   GET  /data/listrik/7hari     → electricityData
+ *   GET  /data/orang/realtime   → peopleData
+ *
+ * Base URL: API_BASE_URL (from appConfig.js)
+ * Primary data source is Azure Functions — this composable is a fallback only.
+ */
 import { ref } from 'vue'
 import axios from 'axios'
 import { API_BASE_URL, AZURE_FUNCTION_URL } from '../lib/appConfig'

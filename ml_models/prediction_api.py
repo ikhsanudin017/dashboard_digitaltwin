@@ -1,9 +1,17 @@
 """
-ML Prediction API Server
-Flask API untuk serving ML predictions ke dashboard
+ML Prediction API Server — Flask serving trained ML models
+Base URL: http://localhost:5000/api
 
-Jalankan: python prediction_api.py
-Endpoint: http://localhost:5000/api/predict
+Endpoints:
+  GET  /api/health      → health check + model status
+  GET  /api/model/info → model version, features, R2, MAE
+  POST /api/predict/all    → energy + AC prediction (main endpoint)
+  POST /api/predict/energy  → energy only
+  POST /api/predict/ac      → AC recommendation only
+  POST /api/reload          → reload models after retraining
+
+Models: energy_forecast_model.pkl (RandomForest), ac_recommendation_model.pkl (GradientBoosting)
+Storage: ml_models/models/*.pkl, model_config.json
 """
 
 from flask import Flask, request, jsonify

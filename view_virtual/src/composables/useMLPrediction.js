@@ -1,3 +1,19 @@
+/**
+ * @fileoverview useMLPrediction — ML prediction & AC recommendation
+ *
+ * Fallback chain (stops at first success):
+ *   1. POST /ac-recommendation/recommend         (Azure Function — cloud)
+ *   2. POST /api/predict/all                    (ML Flask API — local)
+ *   3. Local rule-based calculation              (client-side fallback)
+ *
+ * Endpoints consumed:
+ *   POST /ac-recommendation/recommend           → fetchFromAzureFunction()
+ *   POST /api/predict/all                        → fetchFromMLAPI()
+ *   GET  /api/model/info                        → getModelInfo()
+ *   POST /api/reload                            → reloadModels()
+ *
+ * Base URLs: AZURE_FUNCTION_URL, ML_API_URL (from appConfig.js)
+ */
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { AZURE_FUNCTION_URL, ML_API_URL } from '../lib/appConfig'

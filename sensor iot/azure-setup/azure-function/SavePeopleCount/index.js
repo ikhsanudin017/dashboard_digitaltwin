@@ -1,8 +1,11 @@
 const { TableClient } = require("@azure/data-tables");
 
 /**
- * Azure Function: Save People Count
- * Receives people count data via HTTP POST and stores to PeopleCount table
+ * SavePeopleCount — Azure Function
+ * POST /people/save (Base: https://func-digitaltwin-2026.azurewebsites.net/api)
+ * Headers: x-functions-key: AZURE_FUNCTION_WRITE_KEY
+ * Body: { count, deviceId?, location? }
+ * Stores to: PeopleCount Azure Storage Table
  * Used by Raspberry Pi camera or web dashboard
  */
 module.exports = async function (context, req) {

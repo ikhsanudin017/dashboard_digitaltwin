@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """
 YOLO Camera - dengan /frame endpoint untuk dashboard integration
+
+API Endpoints (Flask routes in this file):
+  GET  /          → HTML dashboard page
+  GET  /frame     → Single processed JPEG frame (YOLO detections)
+  GET  /mjpeg     → MJPEG live streaming
+  GET  /count     → JSON {count, detections, azure_connected}
+  GET  /status    → Full device status JSON
+
+Base URL: http://192.168.1.14:5000 (VITE_CAMERA_STREAM_URL)
+Camera: YOLOv8 (ultralytics), classes=[0] (person only), conf=0.35
 """
 import os
 os.environ["TORCH_LOAD_WEIGHTS_ONLY"] = "false"
