@@ -5,10 +5,15 @@
 .pio/
 .pioenvs/
 .piolibdeps/
+compile_commands.json
+.cache/
 
 # Node modules
 node_modules/
-package-lock.json
+
+# Python generated files
+__pycache__/
+*.py[cod]
 
 # Azure Functions local storage
 __blobstorage__/
@@ -30,16 +35,20 @@ sensor iot/bridge/bridge-multi.js
 sensor iot/bridge/query-data.js
 sensor iot/bridge/query-latest.js
 
-# Environment files - JANGAN PUSH!
+# Environment files — JANGAN PUSH! (keep .env.example tracked)
 .env
 .env.local
 .env.production
+!.env.example
+raspberry_pi/.env
+sensor iot/raspberry-pi/.env
+ml_models/.env
+sensor iot/.env
+sensor iot/azure-setup/.env
+view_virtual/.env
 client_secret_*.json
 sensor iot/azure-setup/azure-function/local.settings.json
 sensor iot/include/secrets.h
-sensor iot/raspberry-pi/.env
-ml_models/.env
-raspberry_pi/.env
 .vercel
 
 # OS

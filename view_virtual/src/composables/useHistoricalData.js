@@ -1,3 +1,15 @@
+/**
+ * @fileoverview useHistoricalData — Historical sensor data loader
+ *
+ * API Endpoints consumed:
+ *   GET  /telemetry/history?hours=N&limit=N  → fetchAzureHistoryWindow()
+ *   GET  /telemetry/latest                   → fetchAzureLatestPoint()
+ *
+ * Base URL: AZURE_FUNCTION_URL (from appConfig.js)
+ *
+ * Stores merged data in localStorage as backup (key: 'digitaltwin_historical_data')
+ * Uses shared ref `historicalData` so DashboardHome and HistoricalAnalytics share state.
+ */
 import { ref } from 'vue'
 import axios from 'axios'
 import { AZURE_FUNCTION_URL } from '../lib/appConfig'

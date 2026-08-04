@@ -1,5 +1,13 @@
 const { TableClient } = require("@azure/data-tables");
 
+/**
+ * GetACRecommendation — Azure Function
+ * POST /ac-recommendation/recommend  (body: suhu, kelembaban, jumlahOrang, daya)
+ * POST /ac-recommendation/latest-with-recommendation
+ * Base: https://func-digitaltwin-2026.azurewebsites.net/api
+ * Rule-based approximation — not using trained model from ml_models/
+ */
+
 // ===== AC RECOMMENDATION LOGIC =====
 // Model yang sudah di-train menggunakan Gradient Boosting dengan data REAL dari Azure Storage
 // Training Date: 10 Januari 2026

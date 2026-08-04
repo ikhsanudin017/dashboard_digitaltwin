@@ -3,6 +3,30 @@
 USB Webcam dengan People Detection AKURAT
 Menggunakan YOLO v3-tiny + Face Detection
 Terintegrasi dengan Azure IoT Hub
+
+API Endpoints (Flask routes in this file):
+  GET  /                        → HTML dashboard + MJPEG stream
+  GET  /video_feed             → MJPEG stream
+  GET  /count                  → JSON {count, azure_connected}
+  GET  /snapshot               → Single JPEG frame (100ms cache)
+  GET  /status                 → Full device status
+
+  POST /api/collect             → ESP32 sends sensor data via HTTP
+  GET  /api/latest             → Get all latest data (ESP32 + camera)
+  GET  /api/esp32              → Get ESP32 sensor data only
+  GET  /api/camera             → Get camera/people count only
+  GET  /api/health             → RPi hardware health metrics
+  GET  /api/status             → Server status and stats
+  POST /api/camera/update      → Camera service updates people count
+
+  GET  /api/admin/services     → Systemd service status (API key required)
+  POST /api/admin/service-control → Start/stop/restart systemd service
+  GET  /api/admin/system       → RPi system info
+  POST /api/admin/system        → Reboot/shutdown RPi
+  GET  /api/admin/esp32/health → ESP32 health data
+  POST /api/admin/esp32/command → Send command to ESP32
+
+Note: /api/* endpoints require header X-API-Key matching VITE_RPI_ADMIN_KEY
 """
 
 import cv2

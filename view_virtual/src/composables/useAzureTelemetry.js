@@ -1,3 +1,17 @@
+/**
+ * @fileoverview useAzureTelemetry — Azure Functions API client
+ *
+ * API Endpoints consumed:
+ *   GET  /telemetry/latest           → fetchLatestFromAzure()
+ *   GET  /telemetry/people?limit=1   → fetchPeopleCount()
+ *   POST /people/save                → savePeopleCount()
+ *
+ * Base URL: AZURE_FUNCTION_URL (from appConfig.js)
+ * Write key : AZURE_FUNCTION_WRITE_KEY
+ *
+ * Polling interval: 5000ms (matches ESP32 sensor interval)
+ */
+
 import { ref, watch, onUnmounted } from 'vue'
 import { AZURE_FUNCTION_URL, AZURE_FUNCTION_WRITE_KEY } from '../lib/appConfig'
 

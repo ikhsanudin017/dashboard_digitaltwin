@@ -1,12 +1,10 @@
 """
-Auto-Training ML System dengan Data Real dari Azure Storage
-- Otomatis fetch data terbaru dari Azure
-- Training ulang model jika ada data baru yang cukup
-- Simpan model dan update prediction API
-- Bisa dijalankan dengan scheduler (cron) atau manual
+Auto-Training ML System with data from Azure Storage
+Fetch sensor data → train models → save to ml_models/models/*.pkl
 
-Jalankan: python auto_train.py
-Atau schedule dengan cron: 0 */6 * * * cd /path/to/ml_models && python auto_train.py
+Trigger: Run manually or via cron (every 6 hours)
+Threshold: min 100 records, retrain if 50+ new records since last training
+Output: energy_forecast_model.pkl, ac_recommendation_model.pkl, model_config.json
 """
 
 import pandas as pd
