@@ -1,0 +1,10 @@
+$schema: https://azuremlschemas.azureedge.net/latest/model.schema.json
+name: twinuvo-energy-model-bundle
+version: 1
+description: Candidate native XGBoost artifacts for power estimation and t+30 forecast.
+path: ../models/azure_bundle
+type: custom_model
+tags:
+  project: twinuvo
+  status: candidate
+  forecast_horizon_minutes: "30"

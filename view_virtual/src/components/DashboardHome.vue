@@ -67,6 +67,24 @@
         <div class="ac-target-card">
           <span class="ac-temp-value">{{ acRecommendedTemp }}°C</span>
           <span class="ac-label">Rekomendasi</span>
+          <span class="ai-source-badge" :class="aiSourceClass">{{ aiSourceLabel }}</span>
+          <span class="approval-label">Perlu persetujuan pengguna</span>
+        </div>
+
+        <div class="section-header">
+          <span>AI INSIGHT</span>
+        </div>
+        <div class="ai-summary-grid">
+          <div class="ai-summary-item">
+            <span class="ai-summary-label">FORECAST +30</span>
+            <strong>{{ forecastPowerText }}</strong>
+            <small :class="forecastDeltaClass">{{ forecastDeltaText }}</small>
+          </div>
+          <div class="ai-summary-item">
+            <span class="ai-summary-label">COMFORT</span>
+            <strong>{{ comfortScoreText }}</strong>
+            <small>{{ comfortLabel }}</small>
+          </div>
         </div>
 
         <!-- STATS -->
@@ -188,12 +206,24 @@
 
           <div v-if="activeSection === 'energy'" class="modal-body">
             <h2>ENERGY MANAGEMENT</h2>
-            <EnergyManagement :is-dark-mode="isDarkMode" :current-power="sensorData.power" :is-admin="false" />
+            <EnergyManagement
+              :is-dark-mode="isDarkMode"
+              :current-power="sensorData.power"
+              :is-admin="false"
+              :ml-insight="mlInsight"
+            />
           </div>
 
           <div v-if="activeSection === 'analytics'" class="modal-body">
             <h2>HISTORICAL ANALYTICS</h2>
-            <HistoricalAnalytics :is-dark-mode="isDarkMode" :current-people-count="peopleCount" :is-admin="false" />
+            <HistoricalAnalytics
+              :is-dark-mode="isDarkMode"
+              :current-people-count="peopleCount"
+              :is-admin="false"
+              :forecast-power="forecastPower"
+              :forecast-target-time="mlPrediction.forecastMeta.value?.targetTime"
+              :forecast-source="aiSourceLabel"
+            />
           </div>
 
           <div v-if="activeSection === 'camera'" class="modal-body">
@@ -299,6 +329,47 @@ const acRecommendedTemp = computed(() => {
   const temp = mlPrediction.acRecommendation.value?.recommendedTemp
   return temp ? Math.round(temp) : '--'
 })
+
+const forecastPower = computed(() => {
+  const value = mlPrediction.energyPrediction.value?.predictedWatt
+  return Number.isFinite(value) && mlPrediction.lastPrediction.value ? value : null
+})
+const forecastPowerText = computed(() => forecastPower.value == null ? '--' : `${Math.round(forecastPower.value)}W`)
+const forecastDelta = computed(() => forecastPower.value == null ? null : forecastPower.value - Number(sensorData.value?.power || 0))
+const forecastDeltaText = computed(() => {
+  if (forecastDelta.value == null) return 'Menunggu prediksi'
+  const sign = forecastDelta.value > 0 ? '+' : ''
+  return `${sign}${forecastDelta.value.toFixed(0)}W dari sekarang`
+})
+const forecastDeltaClass = computed(() => forecastDelta.value > 0 ? 'trend-up' : 'trend-stable')
+const comfortScoreText = computed(() => {
+  const score = mlPrediction.comfortCalculation.value?.score
+  return score == null ? '--' : `${Math.round(score)}/100`
+})
+const comfortLabel = computed(() => {
+  const level = mlPrediction.comfortCalculation.value?.level
+  return ({ comfortable: 'Nyaman', warm: 'Sedikit hangat', cool: 'Sedikit dingin' })[level] || 'Menunggu analisis'
+})
+const aiSourceLabel = computed(() => {
+  const source = mlPrediction.predictionMeta.value?.source
+  if (source === 'azure_ml') return 'AZURE ML · CANDIDATE V1'
+  if (source === 'azure_function') return 'AZURE FUNCTION'
+  if (source === 'ml_api') return 'ML API'
+  if (source === 'local_calculation') return 'BASELINE LOKAL'
+  return 'MENUNGGU AI'
+})
+const aiSourceClass = computed(() => mlPrediction.predictionMeta.value?.fallback_level > 0 ? 'fallback' : 'cloud')
+const mlInsight = computed(() => ({
+  currentPower: Number(sensorData.value?.power || 0),
+  forecastPower: forecastPower.value,
+  forecastDelta: forecastDelta.value,
+  forecast: mlPrediction.forecastMeta.value,
+  comfort: mlPrediction.comfortCalculation.value,
+  recommendation: mlPrediction.acRecommendation.value,
+  scenarios: mlPrediction.recommendationScenarios.value,
+  meta: mlPrediction.predictionMeta.value,
+  sourceLabel: aiSourceLabel.value
+}))
 
 const handleThemeToggle = () => emit('toggle-theme')
 const handleLogout = () => emit('logout')
@@ -640,6 +711,43 @@ let lastSensorSuhu = null
   font-size: 10px;
   color: var(--text-3);
 }
+
+.ai-source-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.ai-source-badge.fallback { color: #d97706; background: rgba(245, 158, 11, 0.12); }
+.approval-label { font-size: 8px; color: var(--text-3); }
+
+.ai-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.ai-summary-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.ai-summary-label { font-size: 8px; color: var(--text-3); font-weight: 700; }
+.ai-summary-item strong { font-family: 'Sora', sans-serif; font-size: 13px; color: var(--accent-strong); }
+.ai-summary-item small { overflow: hidden; font-size: 8px; color: var(--text-3); text-overflow: ellipsis; white-space: nowrap; }
+.ai-summary-item small.trend-up { color: #dc2626; }
+.ai-summary-item small.trend-stable { color: var(--success); }
 
 /* Stats List */
 .stats-list {
@@ -1174,6 +1282,9 @@ let lastSensorSuhu = null
   .ac-label {
     font-size: 9px;
   }
+
+  .approval-label { display: none; }
+  .ai-summary-grid { margin-bottom: 6px; }
 
   .lod-selector {
     grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -11,6 +11,22 @@
       </div>
     </div>
 
+    <div v-if="forecastPower != null" class="forecast-marker-card">
+      <div>
+        <span class="forecast-kicker">FORECAST +30 MENIT</span>
+        <strong>{{ Math.round(forecastPower) }} W</strong>
+      </div>
+      <div>
+        <span>Target waktu</span>
+        <strong>{{ forecastTimeText }}</strong>
+      </div>
+      <div>
+        <span>Sumber</span>
+        <strong>{{ forecastSource }}</strong>
+      </div>
+      <p>Marker forecast adalah satu titik masa depan dan tidak dihitung sebagai data historis aktual.</p>
+    </div>
+
     <!-- Quick Select Tabs -->
     <div class="quick-tabs">
       <button :class="['tab-btn', { active: activeTab === 'today' }]" @click="selectToday">Hari Ini</button>
@@ -187,8 +203,15 @@ const props = defineProps({
   isAdmin: {
     type: Boolean,
     default: true
-  }
+  },
+  forecastPower: { type: Number, default: null },
+  forecastTargetTime: { type: String, default: null },
+  forecastSource: { type: String, default: 'N/A' }
 })
+
+const forecastTimeText = computed(() => props.forecastTargetTime
+  ? new Date(props.forecastTargetTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+  : 'N/A')
 
 const {
   historicalData,
@@ -585,6 +608,28 @@ const formatTimestamp = (ts) => {
 }
 
 .hero-banner { margin-bottom: 24px; }
+
+.forecast-marker-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr)) 2fr;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--accent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+.forecast-marker-card div { display: flex; flex-direction: column; gap: 4px; }
+.forecast-marker-card span, .forecast-marker-card p { color: var(--text-2); font-size: 11px; }
+.forecast-marker-card strong { color: var(--text); font-family: 'Sora', sans-serif; }
+.forecast-marker-card p { margin: 0; }
+.forecast-kicker { color: var(--accent) !important; font-weight: 800; }
+
+@media (max-width: 800px) {
+  .forecast-marker-card { grid-template-columns: 1fr 1fr; }
+  .forecast-marker-card p { grid-column: 1 / -1; }
+}
 
 .hero-kicker {
   display: inline-block;

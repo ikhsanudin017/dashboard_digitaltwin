@@ -21,6 +21,69 @@
       <span><strong>Sensor Arus (ZMPT101B) belum terhubung!</strong> Data daya hanya dari simulasi. Hubungkan sensor ACS712/ACS758 untuk pengukuran aktual.</span>
     </div>
 
+    <section class="ml-insight-panel" aria-labelledby="ml-insight-title">
+      <div class="section-header-bar">
+        <div>
+          <span class="ml-kicker">AZURE AI / ML</span>
+          <h3 id="ml-insight-title" class="section-title">Forecast & Rekomendasi</h3>
+        </div>
+        <span class="model-source" :class="{ fallback: isFallback }">{{ mlInsight.sourceLabel || 'Menunggu AI' }}</span>
+      </div>
+
+      <div class="ml-metric-grid">
+        <article class="ml-metric">
+          <span>Daya sekarang</span>
+          <strong>{{ formatWatt(mlInsight.currentPower) }}</strong>
+          <small>Telemetry sensor</small>
+        </article>
+        <article class="ml-metric forecast">
+          <span>Forecast +30 menit</span>
+          <strong>{{ formatWatt(mlInsight.forecastPower) }}</strong>
+          <small>{{ forecastChangeText }}</small>
+        </article>
+        <article class="ml-metric">
+          <span>Comfort</span>
+          <strong>{{ comfortScoreText }}</strong>
+          <small>{{ comfortLevelText }} · estimasi</small>
+        </article>
+        <article class="ml-metric">
+          <span>Target AC</span>
+          <strong>{{ recommendationTempText }}</strong>
+          <small>Memerlukan persetujuan</small>
+        </article>
+      </div>
+
+      <div v-if="mlInsight.recommendation?.action" class="recommendation-explanation">
+        <strong>{{ mlInsight.recommendation.action }}</strong>
+        <span>Rekomendasi bersifat advisory dan tidak mengontrol AC secara otomatis.</span>
+      </div>
+
+      <div v-if="mlInsight.scenarios?.length" class="scenario-section">
+        <h4>Perbandingan Skenario AC</h4>
+        <div class="scenario-list">
+          <div
+            v-for="scenario in mlInsight.scenarios"
+            :key="scenario.setpoint_c"
+            class="scenario-row"
+            :class="{ selected: scenario.setpoint_c === mlInsight.recommendation?.recommendedTemp }"
+          >
+            <strong>{{ scenario.setpoint_c }}°C</strong>
+            <span>Comfort {{ scenario.comfort_score }}/100</span>
+            <span>{{ formatWatt(scenario.estimated_power_watt) }}</span>
+            <span v-if="scenario.setpoint_c === mlInsight.recommendation?.recommendedTemp" class="selected-label">Direkomendasikan</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="model-provenance">
+        <span>Model: {{ mlInsight.meta?.model_version || 'N/A' }}</span>
+        <span>Status: Candidate</span>
+        <span>Metode: {{ mlInsight.forecast?.method || 'N/A' }}</span>
+        <span>Target: {{ formatTargetTime(mlInsight.forecast?.targetTime) }}</span>
+        <span>Fallback: {{ isFallback ? 'Ya' : 'Tidak' }}</span>
+      </div>
+    </section>
+
     <!-- Quick Tabs -->
     <div class="quick-tabs">
       <button :class="['tab-btn', { active: activeTab === 'today' }]" @click="setTab('today')">Hari Ini</button>
@@ -191,8 +254,30 @@ const props = defineProps({
   isAdmin: {
     type: Boolean,
     default: true
+  },
+  mlInsight: {
+    type: Object,
+    default: () => ({})
   }
 })
+
+const formatWatt = value => Number.isFinite(Number(value)) ? `${Math.round(Number(value))} W` : 'N/A'
+const forecastChangeText = computed(() => {
+  const delta = Number(props.mlInsight?.forecastDelta)
+  if (!Number.isFinite(delta)) return 'Menunggu prediksi'
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(0)} W dari sekarang`
+})
+const comfortScoreText = computed(() => {
+  const score = props.mlInsight?.comfort?.score
+  return score == null ? 'N/A' : `${Math.round(score)}/100`
+})
+const comfortLevelText = computed(() => ({ comfortable: 'Nyaman', warm: 'Sedikit hangat', cool: 'Sedikit dingin' })[props.mlInsight?.comfort?.level] || 'Belum tersedia')
+const recommendationTempText = computed(() => {
+  const temp = props.mlInsight?.recommendation?.recommendedTemp
+  return temp == null ? 'N/A' : `${Math.round(temp)}°C`
+})
+const isFallback = computed(() => Number(props.mlInsight?.meta?.fallback_level ?? 0) > 0)
+const formatTargetTime = value => value ? new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'N/A'
 
 const {
   settings,
@@ -520,6 +605,38 @@ onUnmounted(() => {
 }
 
 .hero-banner { margin-bottom: 24px; }
+
+.ml-insight-panel {
+  margin-bottom: 24px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.ml-kicker { display: block; margin-bottom: 4px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.model-source { padding: 6px 10px; border-radius: 999px; color: var(--success); background: rgba(34, 197, 94, .1); font-size: 10px; font-weight: 700; }
+.model-source.fallback { color: #d97706; background: rgba(245, 158, 11, .12); }
+.ml-metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+.ml-metric { display: flex; flex-direction: column; gap: 5px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.ml-metric span, .ml-metric small { color: var(--text-2); font-size: 11px; }
+.ml-metric strong { color: var(--text); font-family: 'Sora', sans-serif; font-size: 20px; }
+.ml-metric.forecast strong { color: var(--accent); }
+.recommendation-explanation { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; padding: 12px; border-left: 3px solid var(--accent); background: var(--surface-2); }
+.recommendation-explanation span { color: var(--text-2); font-size: 12px; }
+.scenario-section { margin-top: 16px; }
+.scenario-section h4 { margin-bottom: 8px; color: var(--text); }
+.scenario-list { display: grid; gap: 6px; }
+.scenario-row { display: grid; grid-template-columns: 60px 1fr 90px 120px; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: 12px; }
+.scenario-row.selected { border-color: var(--success); background: rgba(34, 197, 94, .07); }
+.selected-label { color: var(--success); font-weight: 700; }
+.model-provenance { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-3); font-size: 10px; }
+
+@media (max-width: 800px) {
+  .ml-metric-grid { grid-template-columns: 1fr 1fr; }
+  .scenario-row { grid-template-columns: 50px 1fr 75px; }
+  .selected-label { grid-column: 1 / -1; }
+}
 
 .hero-kicker {
   display: inline-block;

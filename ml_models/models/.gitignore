@@ -1,0 +1,4 @@
+# Model binaries are stored and versioned in Azure ML Model Registry.
+*
+!.gitignore
+!README.md

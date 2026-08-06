@@ -19,6 +19,76 @@ describe('useMLPrediction', () => {
     vi.clearAllMocks()
   })
 
+  it('maps the Azure ML forecast, comfort, scenarios, and provenance contract', async () => {
+    axios.post.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          timestamp_utc: '2026-08-06T03:00:00Z',
+          forecast_30m: {
+            status: 'predicted',
+            method: 'xgboost',
+            model_version: 'forecast-30m:1',
+            horizon_minutes: 30,
+            predicted_power_watt: 137.4,
+            target_time: '2026-08-06T03:30:00Z',
+            confidence_percent: null
+          },
+          comfort: {
+            comfort_score: 72,
+            comfort_level: 'warm',
+            method: 'transparent_heuristic_v1',
+            is_estimate: true
+          },
+          ac_recommendation: {
+            recommended_temp: 24,
+            action: 'Turunkan suhu AC',
+            mode: 'cooling',
+            requires_user_approval: true,
+            confidence_percent: null,
+            scenarios: [
+              { setpoint_c: 24, comfort_score: 86, estimated_power_watt: 140 }
+            ]
+          }
+        }
+      }
+    })
+
+    const prediction = useMLPrediction()
+    const result = await prediction.getPrediction({
+      suhu: 29,
+      kelembaban: 70,
+      daya: 120,
+      jumlahOrang: 5
+    })
+
+    expect(result).toMatchObject({ success: true, source: 'azure_ml' })
+    expect(prediction.energyPrediction.value.predictedWatt).toBe(137.4)
+    expect(prediction.energyPrediction.value.confidence).toBe(null)
+    expect(prediction.forecastMeta.value).toMatchObject({
+      horizonMinutes: 30,
+      targetTime: '2026-08-06T03:30:00Z',
+      status: 'predicted',
+      method: 'xgboost'
+    })
+    expect(prediction.comfortCalculation.value).toMatchObject({
+      score: 72,
+      level: 'warm',
+      isEstimate: true
+    })
+    expect(prediction.acRecommendation.value).toMatchObject({
+      recommendedTemp: 24,
+      requiresUserApproval: true,
+      confidence: null
+    })
+    expect(prediction.recommendationScenarios.value).toHaveLength(1)
+    expect(prediction.predictionMeta.value).toMatchObject({
+      source: 'azure_ml',
+      model_version: 'forecast-30m:1',
+      fallback_level: 0
+    })
+  })
+
   it('uses canonical Azure Function request/response contract and metadata', async () => {
     axios.post.mockResolvedValueOnce({
       data: {

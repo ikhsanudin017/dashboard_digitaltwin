@@ -21,6 +21,7 @@ import { AZURE_FUNCTION_URL, ML_API_URL } from '../lib/appConfig'
 const PREDICTION_SCHEMA_VERSION = '1.0.0'
 
 const FALLBACK_LEVEL_BY_SOURCE = Object.freeze({
+  azure_ml: 0,
   azure_function: 0,
   ml_api: 1,
   local_calculation: 2
@@ -80,6 +81,9 @@ const createUnifiedPrediction = ({
   sensorData,
   energy = {},
   ac = {},
+  comfort = {},
+  forecast = {},
+  recommendation = {},
   modelVersion = 'unknown',
   timestampUtc
 }) => {
@@ -106,14 +110,33 @@ const createUnifiedPrediction = ({
       daily_kwh: round(dailyKwh, 2),
       monthly_kwh: round(monthlyKwh, 2),
       monthly_cost_idr: round(monthlyCostIDR, 0),
-      confidence_percent: normalizeConfidencePercent(energy.confidence_percent ?? energy.confidence, 0)
+      confidence_percent: energy.confidence_percent == null && energy.confidence == null
+        ? null
+        : normalizeConfidencePercent(energy.confidence_percent ?? energy.confidence, 0)
     },
     ac: {
       recommended_temp: round(recommendedTemp, 1),
       action: ac.action || ac.reason || inferAction(mode),
       mode,
-      confidence_percent: normalizeConfidencePercent(ac.confidence_percent ?? ac.confidence, 0)
-    }
+      confidence_percent: ac.confidence_percent == null && ac.confidence == null
+        ? null
+        : normalizeConfidencePercent(ac.confidence_percent ?? ac.confidence, 0),
+      requires_user_approval: ac.requires_user_approval ?? recommendation.requires_user_approval ?? true
+    },
+    comfort: {
+      score: comfort.comfort_score == null ? null : round(comfort.comfort_score, 1),
+      level: comfort.comfort_level || 'unknown',
+      method: comfort.method || 'unavailable',
+      is_estimate: comfort.is_estimate ?? true
+    },
+    forecast: {
+      horizon_minutes: forecast.horizon_minutes ?? energy.forecast_horizon_minutes ?? 30,
+      target_time: forecast.target_time || null,
+      status: forecast.status || energy.status || 'unknown',
+      method: forecast.method || 'unknown'
+    },
+    scenarios: recommendation.scenarios || [],
+    limitations: recommendation.limitations || []
   }
 }
 
@@ -139,10 +162,14 @@ export function useMLPrediction() {
     mode: 'maintain',
     confidence: 0
   })
+
+  const comfortCalculation = ref({ score: null, level: 'unknown', method: 'unavailable', isEstimate: true })
+  const forecastMeta = ref({ horizonMinutes: 30, targetTime: null, status: 'unknown', method: 'unknown' })
+  const recommendationScenarios = ref([])
   
   // Computed
   const hasValidPrediction = computed(() => {
-    return lastPrediction.value !== null && energyPrediction.value.confidence > 0
+    return lastPrediction.value !== null && Number.isFinite(energyPrediction.value.predictedWatt)
   })
   
   const energyEfficiencyLevel = computed(() => {
@@ -180,6 +207,9 @@ export function useMLPrediction() {
           sensorData,
           energy: response.data.energy,
           ac: response.data.ac,
+          comfort: response.data.comfort,
+          forecast: response.data.forecast_30m,
+          recommendation: response.data.ac_recommendation,
           modelVersion: response.data.model_version ?? 'ml_api',
           timestampUtc: response.data.timestamp
         })
@@ -229,6 +259,31 @@ export function useMLPrediction() {
       console.log('[ML] Azure Function response:', JSON.stringify(response.data))
 
       const payload = response.data || {}
+      const systemResult = payload.data
+
+      if (payload.success !== false && systemResult?.forecast_30m && systemResult?.ac_recommendation) {
+        return {
+          success: true,
+          source: 'azure_ml',
+          data: createUnifiedPrediction({
+            source: 'azure_ml',
+            traceId: sensorData.trace_id,
+            sensorData,
+            energy: {
+              predicted_watt: systemResult.forecast_30m.predicted_power_watt,
+              confidence_percent: systemResult.forecast_30m.confidence_percent,
+              status: systemResult.forecast_30m.status
+            },
+            ac: systemResult.ac_recommendation,
+            comfort: systemResult.comfort,
+            forecast: systemResult.forecast_30m,
+            recommendation: systemResult.ac_recommendation,
+            modelVersion: systemResult.forecast_30m.model_version || 'candidate-v1',
+            timestampUtc: systemResult.timestamp_utc
+          })
+        }
+      }
+
       const recommendation = payload.data || payload.recommendation || payload
 
       console.log('[ML] Parsed recommendation:', JSON.stringify(recommendation))
@@ -247,13 +302,13 @@ export function useMLPrediction() {
           daily_kwh: (sensorData.daya * 24) / 1000,
           monthly_kwh: ((sensorData.daya * 24) / 1000) * 30,
           monthly_cost_idr: (((sensorData.daya * 24) / 1000) * 30) * 1444.70,
-          confidence: recommendation.confidence || 0.96
+          confidence: recommendation.confidence
         },
         ac: {
           recommended_temp: recommendation.recommendedTemp ?? recommendation.recommended_temp,
           action: recommendation.reason ?? recommendation.action,
           mode: recommendation.mode,
-          confidence: recommendation.confidence || 0.96
+          confidence: recommendation.confidence
         },
         modelVersion: recommendation.model_info?.training_date || 'azure_function',
         timestampUtc: recommendation.timestamp
@@ -356,6 +411,17 @@ export function useMLPrediction() {
           mode,
           confidence: 60
         },
+        comfort: {
+          comfort_score: Math.max(0, 100 - Math.abs(suhu - 24) * 12),
+          comfort_level: suhu > 26 ? 'warm' : suhu < 22 ? 'cool' : 'comfortable',
+          method: 'local_heuristic_v1',
+          is_estimate: true
+        },
+        forecast: {
+          horizon_minutes: 30,
+          status: 'baseline',
+          method: 'naive_persistence'
+        },
         modelVersion: 'local_rule_v1'
       }),
       source: 'local_calculation'
@@ -414,18 +480,34 @@ export function useMLPrediction() {
           dailyKwh: data.energy.daily_kwh || 0,
           monthlyKwh: data.energy.monthly_kwh || 0,
           monthlyCostIDR: data.energy.monthly_cost_idr || 0,
-          confidence: data.energy.confidence_percent || 0
+          confidence: data.energy.confidence_percent
         }
         
         acRecommendation.value = {
           recommendedTemp: data.ac.recommended_temp || 24,
           action: data.ac.action || 'Pertahankan suhu',
           mode: data.ac.mode || 'maintain',
-          confidence: data.ac.confidence_percent || 0,
+          confidence: data.ac.confidence_percent,
+          requiresUserApproval: data.ac.requires_user_approval !== false,
           sourceTag: data.source_tag,
           fallbackLevel,
           traceId: data.trace_id
         }
+
+        comfortCalculation.value = {
+          score: data.comfort.score,
+          level: data.comfort.level,
+          method: data.comfort.method,
+          isEstimate: data.comfort.is_estimate
+        }
+
+        forecastMeta.value = {
+          horizonMinutes: data.forecast.horizon_minutes,
+          targetTime: data.forecast.target_time,
+          status: data.forecast.status,
+          method: data.forecast.method
+        }
+        recommendationScenarios.value = data.scenarios
         
         lastPrediction.value = predictionMeta.value
         
@@ -500,6 +582,9 @@ export function useMLPrediction() {
     predictionMeta,
     energyPrediction,
     acRecommendation,
+    comfortCalculation,
+    forecastMeta,
+    recommendationScenarios,
     
     // Computed
     hasValidPrediction,

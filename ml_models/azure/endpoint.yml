@@ -1,0 +1,8 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+name: twinuvo-energy-ml
+description: Candidate endpoint for Twinuvo power estimation and 30-minute forecast.
+auth_mode: key
+tags:
+  project: twinuvo
+  model_status: candidate
+  human_in_the_loop: "true"

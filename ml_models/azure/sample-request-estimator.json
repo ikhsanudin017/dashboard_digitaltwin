@@ -1,0 +1,14 @@
+{
+  "operation": "estimate_power",
+  "room_timezone": "Asia/Jakarta",
+  "telemetry": {
+    "timestamp_utc": "2026-08-06T03:00:00Z",
+    "room_id": "room-01",
+    "device_id": "esp32-01",
+    "temperature_c": 29.5,
+    "humidity_percent": 70,
+    "voltage_v": 225,
+    "current_a": 1.5,
+    "occupancy_count": 3
+  }
+}
