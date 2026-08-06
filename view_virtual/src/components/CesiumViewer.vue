@@ -56,11 +56,11 @@ const emit = defineEmits(['toggle-indoor', 'switch-to-3d'])
 const housePosition = { lat: -7.7229652607057515, lon: 110.5187030823394 }
 const houseCartesian = () => Cesium.Cartesian3.fromDegrees(housePosition.lon, housePosition.lat, 0)
 const lod3Building = {
-  width: 6.4,
-  length: 8.4,
+  width: 9.47,
+  length: 14.2,
   wallHeight: 3.1,
-  roofHeight: 1.05,
-  headingDegrees: -6
+  roofHeight: 1.2078,
+  headingDegrees: 174
 }
 const neighborhoodBuildings = [
   { id: 'home-west-white-roof', offset: [-7.5, 0.4], dimensions: [5.8, 8.0, 2.9], roofHeight: 0.42, roofColor: '#eef0ec', modules: 1, metal: true, frontSide: 'north' },
@@ -142,6 +142,7 @@ let postRenderHandler = null
 let buildingEntities = []
 let buildingPrimitives = []
 let orbitFrameId = null
+let buildingLoadGeneration = 0
 
 const currentBuildingLod = () => {
   const lod = Number(props.buildingLod)
@@ -818,6 +819,30 @@ const addNeighborhoodScene = (lod) => {
   addFineNeighborhoodDetails(lod)
 }
 
+const loadBimLodBuilding = async (lod, generation) => {
+  const model = await Cesium.Model.fromGltfAsync({
+    url: `/models/twinuvo/twinuvo_lod${lod}.glb`,
+    modelMatrix: buildingTransform(),
+    scale: 1,
+    minimumPixelSize: lod === 1 ? 48 : 0,
+    maximumScale: 20000,
+    shadows: Cesium.ShadowMode.ENABLED,
+    incrementallyLoadTextures: true
+  })
+
+  if (!viewer || viewer.isDestroyed() || generation !== buildingLoadGeneration) {
+    model.destroy()
+    return
+  }
+
+  model.id = {
+    name: `Twinuvo BIM LoD ${lod}`,
+    source: 'Autodesk Revit 2025',
+    asset: `twinuvo_lod${lod}.glb`
+  }
+  addBuildingPrimitive(model)
+}
+
 const addLod1Building = () => {
   if (!viewer) return
 
@@ -1006,29 +1031,20 @@ const addLod4Building = () => {
   })
 }
 
-const buildSelectedLodBuilding = () => {
+const buildSelectedLodBuilding = async () => {
   if (!viewer || viewer.isDestroyed()) return
 
+  const generation = ++buildingLoadGeneration
   stopBuildingOrbit()
   clearBuilding()
 
   const lod = currentBuildingLod()
-  addNeighborhoodScene(lod)
 
-  switch (lod) {
-    case 1:
-      addLod1Building()
-      break
-    case 2:
-      addLod2Building()
-      break
-    case 4:
-      addLod4Building()
-      break
-    case 3:
-    default:
-      addLod3Building()
-      break
+  try {
+    await loadBimLodBuilding(lod, generation)
+  } catch (error) {
+    console.error(`Gagal memuat BIM Revit LoD ${lod} di Cesium:`, error)
+    loadError.value = `BIM Revit LoD ${lod} gagal dimuat`
   }
 
   updateMarkerOverlay()
@@ -1145,7 +1161,7 @@ const initViewer = async () => {
 
     loadingStatus.value = `Step 4: Build LOD ${currentBuildingLod()} building...`
     console.log(`5. Build LOD ${currentBuildingLod()} building`)
-    buildSelectedLodBuilding()
+    await buildSelectedLodBuilding()
 
     loadingStatus.value = 'Step 5: Lock location marker...'
     console.log('6. Lock location marker')

@@ -16,6 +16,7 @@
         :sensor-data="sensorData"
         :people-count="peopleCount"
         :is-dark-mode="isDarkMode"
+        :building-lod="selectedBuildingLod"
       />
     </div>
 

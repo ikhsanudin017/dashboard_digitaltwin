@@ -16,6 +16,15 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB untuk bundle besar (Cesium + Babylon)
         runtimeCaching: [
           {
+            urlPattern: /\/assets\/(CesiumViewer|DigitalTwin3D_Babylon)-.*\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: '3d-engine-chunks-cache',
+              expiration: { maxEntries: 6, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
             urlPattern: /\/models\/.*\.glb$/,
             handler: 'CacheFirst',
             options: {
@@ -27,7 +36,12 @@ export default defineConfig({
           }
         ],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        globIgnores: ['**/models/**/*', '**/models/*.glb']
+        globIgnores: [
+          '**/models/**/*',
+          '**/models/*.glb',
+          '**/assets/CesiumViewer-*.js',
+          '**/assets/DigitalTwin3D_Babylon-*.js'
+        ]
       },
       manifest: {
         name: 'Digital Twin Dashboard',

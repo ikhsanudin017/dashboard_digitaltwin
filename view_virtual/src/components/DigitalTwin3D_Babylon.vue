@@ -18,7 +18,7 @@
         </div>
         <p class="loading-details">{{ loadingDetails }}</p>
         <p v-if="loadingProgress > 0 && loadingProgress < 100" class="loading-tip">
-          💡 Loading 3D apartment model...
+          Memuat BIM rumah Twinuvo dari Revit...
         </p>
       </div>
     </div>
@@ -67,6 +67,11 @@ const props = defineProps({
   isDarkMode: {
     type: Boolean,
     default: false
+  },
+  buildingLod: {
+    type: Number,
+    default: 3,
+    validator: value => [1, 2, 3, 4].includes(Number(value))
   }
 })
 
@@ -138,6 +143,9 @@ let scene = null
 let camera = null
 let blenderModel = null
 let highlightLayer = null
+let shadowGenerator = null
+let activeModelMeshes = []
+let modelLoadGeneration = 0
 const modelLoaded = ref(false)
 const loadingProgress = ref(0)
 const loadingStatus = ref('Initializing 3D Engine...')
@@ -146,9 +154,9 @@ let loadStartTime = null
 let lastLoadedBytes = 0
 let downloadSpeed = 0
 
-// Mapping nama mesh ke informasi ruangan (sesuai scene.gltf)
+// Fallback mapping untuk nama mesh yang tidak membawa metadata BIM.
 const roomMapping = {
-  // Ruangan utama dari scene.gltf
+  // Nama lama tetap didukung hanya sebagai fallback metadata.
   'LivingRoomWallper': { name: 'Living Room', type: 'living', icon: '🛋️' },
   'KitchenTiles': { name: 'Kitchen', type: 'kitchen', icon: '🍳' },
   'ToiletTiles': { name: 'Toilet', type: 'toilet', icon: '🚻' },
@@ -196,6 +204,10 @@ watch(() => props.peopleCount, (count) => {
 
 watch(() => props.isDarkMode, () => {
   updateSceneTheme()
+})
+
+watch(() => props.buildingLod, () => {
+  if (scene && shadowGenerator) loadModel(shadowGenerator)
 })
 
 const updateSceneTheme = () => {
@@ -265,7 +277,7 @@ const initBabylonJS = () => {
     mainLight.position = new BABYLON.Vector3(10, 15, 10)
 
     // Enable shadows
-    const shadowGenerator = new BABYLON.ShadowGenerator(1024, mainLight)
+    shadowGenerator = new BABYLON.ShadowGenerator(1024, mainLight)
     shadowGenerator.useBlurExponentialShadowMap = true
     shadowGenerator.blurScale = 2
 
@@ -288,8 +300,7 @@ const initBabylonJS = () => {
 
     console.log('✅ Babylon.js initialized')
 
-    // Setup mesh click detection (disabled for now)
-    // setupMeshInteraction()
+    setupMeshInteraction()
 
     // Prevent page scroll/zoom when scrolling on canvas - only zoom 3D view
     canvas.value.addEventListener('wheel', (event) => {
@@ -357,7 +368,7 @@ const setupMeshInteraction = () => {
       highlightLayer.addMesh(mesh, new BABYLON.Color3(0.2, 0.6, 1)) // Blue highlight
       
       // Get room info
-      const roomInfo = getRoomInfo(meshName)
+      const roomInfo = getRoomInfo(meshName, mesh)
       hoveredMesh.value = {
         mesh: mesh,
         name: meshName,
@@ -383,7 +394,7 @@ const setupMeshInteraction = () => {
       console.log('🖱️ Clicked mesh:', meshName)
       
       // Get room info and show popup
-      const roomInfo = getRoomInfo(meshName)
+      const roomInfo = getRoomInfo(meshName, mesh)
       showMeshPopup(mesh, roomInfo)
     }
   }
@@ -392,7 +403,36 @@ const setupMeshInteraction = () => {
 }
 
 // Get room info based on mesh name
-const getRoomInfo = (meshName) => {
+const getRoomInfo = (meshName, mesh = null) => {
+  const extras = mesh?.metadata?.gltf?.extras || mesh?.parent?.metadata?.gltf?.extras
+  if (extras?.category) {
+    const categoryMap = {
+      'Walls': { name: 'Dinding BIM', type: 'structure', icon: '🧱' },
+      'Roofs': { name: 'Atap BIM', type: 'structure', icon: '🏠' },
+      'Ceilings': { name: 'Plafon BIM', type: 'structure', icon: '▱' },
+      'Doors': { name: 'Pintu BIM', type: 'structure', icon: '🚪' },
+      'Windows': { name: 'Jendela BIM', type: 'structure', icon: '🪟' },
+      'Structural Foundations': { name: 'Fondasi/Lantai BIM', type: 'structure', icon: '▰' },
+      'Structural Columns': { name: 'Kolom BIM', type: 'structure', icon: '▮' },
+      'Structural Framing': { name: 'Rangka Atap BIM', type: 'structure', icon: '⌂' },
+      'Data Devices': { name: 'Sensor Lingkungan', type: 'equipment', icon: '📡' },
+      'Electrical Equipment': { name: 'Panel Listrik', type: 'equipment', icon: '⚡' },
+      'Electrical Fixtures': { name: 'Perangkat Listrik', type: 'equipment', icon: '🔌' },
+      'Lighting Fixtures': { name: 'Lampu', type: 'equipment', icon: '💡' },
+      'Generic Models': { name: 'Massa Bangunan', type: 'structure', icon: '🏠' }
+    }
+    const mapped = categoryMap[extras.category] || {
+      name: extras.category,
+      type: 'other',
+      icon: '📍'
+    }
+    return {
+      ...mapped,
+      name: extras.mark || extras.type || mapped.name,
+      bim: extras
+    }
+  }
+
   // Check exact match first
   if (roomMapping[meshName]) {
     return roomMapping[meshName]
@@ -466,6 +506,18 @@ const showMeshPopup = (mesh, roomInfo) => {
         humidity: props.sensorData.humidity
       }
   }
+
+  if (roomInfo.bim) {
+    sensorData = {
+      ...sensorData,
+      category: roomInfo.bim.category,
+      family: roomInfo.bim.family || '-',
+      typeName: roomInfo.bim.type || '-',
+      mark: roomInfo.bim.mark || '-',
+      revitElementId: roomInfo.bim.revitElementId,
+      lod: `LoD ${roomInfo.bim.lod}`
+    }
+  }
   
   selectedItem.value = {
     name: roomInfo.name,
@@ -485,15 +537,101 @@ const showMeshPopup = (mesh, roomInfo) => {
   console.log('📊 Showing popup for:', roomInfo.name)
 }
 
-const loadModel = (shadowGenerator) => {
-  console.log('🏠 Loading apartment model from local...')
+const disposeActiveModel = () => {
+  activeModelMeshes.forEach(mesh => {
+    if (mesh && !mesh.isDisposed()) mesh.dispose(false, true)
+  })
+  activeModelMeshes = []
+  blenderModel = null
+}
+
+const frameBimModel = meshes => {
+  const renderableMeshes = meshes.filter(mesh => mesh.getTotalVertices?.() > 0)
+  if (!renderableMeshes.length || !camera) return
+
+  let minimum = new BABYLON.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY)
+  let maximum = new BABYLON.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY)
+
+  renderableMeshes.forEach(mesh => {
+    mesh.computeWorldMatrix(true)
+    const bounds = mesh.getBoundingInfo().boundingBox
+    minimum = BABYLON.Vector3.Minimize(minimum, bounds.minimumWorld)
+    maximum = BABYLON.Vector3.Maximize(maximum, bounds.maximumWorld)
+  })
+
+  const center = minimum.add(maximum).scale(0.5)
+  const diagonal = BABYLON.Vector3.Distance(minimum, maximum)
+  camera.setTarget(new BABYLON.Vector3(center.x, Math.max(1.2, center.y * 0.72), center.z))
+  camera.radius = Math.max(10, diagonal * 1.08)
+  camera.lowerRadiusLimit = Math.max(3, diagonal * 0.22)
+  camera.upperRadiusLimit = Math.max(35, diagonal * 4)
+}
+
+const loadModel = async currentShadowGenerator => {
+  if (!scene) return
+
+  const lod = Math.min(4, Math.max(1, Math.round(Number(props.buildingLod) || 3)))
+  const generation = ++modelLoadGeneration
+  const modelFileName = `twinuvo_lod${lod}.glb`
+  const modelPath = '/models/twinuvo/'
+
+  modelLoaded.value = false
+  loadingProgress.value = 0
+  loadingStatus.value = `Memuat BIM Revit LoD ${lod}...`
+  loadingDetails.value = modelFileName
+  loadStartTime = Date.now()
+  disposeActiveModel()
+
+  try {
+    const result = await BABYLON.SceneLoader.ImportMeshAsync(
+      '',
+      modelPath,
+      modelFileName,
+      scene,
+      event => {
+        if (generation !== modelLoadGeneration) return
+        if (event.lengthComputable && event.total > 0) {
+          loadingProgress.value = Math.round((event.loaded / event.total) * 100)
+          loadingDetails.value = `${formatBytes(event.loaded)} / ${formatBytes(event.total)}`
+        }
+      }
+    )
+
+    if (generation !== modelLoadGeneration) {
+      result.meshes.forEach(mesh => mesh.dispose(false, true))
+      return
+    }
+
+    activeModelMeshes = result.meshes
+    blenderModel = result.meshes[0] || null
+
+    result.meshes.forEach(mesh => {
+      if (!mesh) return
+      mesh.receiveShadows = true
+      if (mesh.getTotalVertices?.() > 0) currentShadowGenerator.addShadowCaster(mesh)
+    })
+
+    frameBimModel(result.meshes)
+    loadingProgress.value = 100
+    loadingStatus.value = `BIM Revit LoD ${lod} siap`
+    loadingDetails.value = `${result.meshes.length} node • ${formatTime((Date.now() - loadStartTime) / 1000)}`
+    modelLoaded.value = true
+  } catch (error) {
+    console.error(`Gagal memuat ${modelFileName}:`, error)
+    loadingStatus.value = 'Gagal memuat BIM Revit'
+    loadingDetails.value = error?.message || modelFileName
+    modelLoaded.value = true
+  }
+}
+
+const loadLegacyApartmentModel = (shadowGenerator) => {
+  console.log('🏠 Loading Twinuvo BIM model from local...')
   loadingStatus.value = 'Loading 3D Model...'
   loadStartTime = Date.now()
   lastLoadedBytes = 0
   
-  // Local model path - using 3d twin folder
-  const modelPath = "/models/3d twin/"
-  const modelFileName = "scene.gltf"
+  const modelPath = '/models/twinuvo/'
+  const modelFileName = `twinuvo_lod${Math.min(4, Math.max(1, Math.round(Number(props.buildingLod) || 3)))}.glb`
   
   BABYLON.SceneLoader.ImportMesh(
     "",
@@ -528,9 +666,6 @@ const loadModel = (shadowGenerator) => {
           }
         }
       })
-      
-      // Tambahkan AC unit di atas pintu
-      createACUnit(shadowGenerator)
       
       loadingStatus.value = '✅ Model Loaded!'
       modelLoaded.value = true
@@ -572,7 +707,7 @@ const loadModel = (shadowGenerator) => {
     },
     (scene, message, exception) => {
       console.error('❌ Error loading model:', message, exception)
-      console.error('⚠️ Pastikan file ada di: /models/floor_plan.glb')
+      console.error(`Pastikan file ada di: ${modelPath}${modelFileName}`)
       loadingStatus.value = '❌ Error loading model'
       loadingDetails.value = 'Check console for details'
       modelLoaded.value = true
@@ -790,7 +925,13 @@ const formatLabel = (key) => {
     voltage: 'Tegangan',
     current: 'Arus',
     power: 'Daya',
-    peopleCount: 'Jumlah Orang'
+    peopleCount: 'Jumlah Orang',
+    category: 'Kategori BIM',
+    family: 'Family Revit',
+    typeName: 'Tipe Revit',
+    mark: 'Mark',
+    revitElementId: 'Element ID',
+    lod: 'Level of Detail'
   }
   return labels[key] || key
 }
@@ -808,6 +949,11 @@ const formatValue = (key, value) => {
 }
 
 const cleanup = () => {
+  modelLoadGeneration += 1
+  disposeActiveModel()
+  highlightLayer?.dispose()
+  shadowGenerator?.dispose()
+  shadowGenerator = null
   if (engine) {
     engine.dispose()
   }

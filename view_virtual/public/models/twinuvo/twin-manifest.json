@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "2.0.0",
+  "siteId": "SITE_TWINUVO",
+  "buildingId": "BLDG_HOME_01",
+  "roomId": "ROOM_POC_01",
+  "coordinateReference": {
+    "geographicCrs": "EPSG:4326",
+    "metricCrs": "EPSG:32749",
+    "siteAnchor": {
+      "latitude": -7.722901841918586,
+      "longitude": 110.51870499972996,
+      "easting": 446925.87979937135,
+      "northing": 9146305.619681457
+    },
+    "buildingCenter": {
+      "easting": 446931.275,
+      "northing": 9146308.31125
+    }
+  },
+  "footprint": {
+    "source": "OpenStreetMap way 1017791778 verified against Esri World Imagery",
+    "quality": "desktop_digitized_not_surveyed",
+    "widthMeters": 6.706468,
+    "lengthMeters": 22.365994,
+    "areaSquareMeters": 149.996828,
+    "longAxisDegreesFromNorth": 9.578004,
+    "utmVertices": [
+      [446926.108, 9146318.781],
+      [446932.723, 9146319.882],
+      [446936.442, 9146297.842],
+      [446929.827, 9146296.74],
+      [446926.108, 9146318.781]
+    ],
+    "wgs84Vertices": [
+      [110.5187072, -7.7227828],
+      [110.5187672, -7.7227729],
+      [110.5188007, -7.7229723],
+      [110.5187407, -7.7229822],
+      [110.5187072, -7.7227828]
+    ]
+  },
+  "bimSource": {
+    "application": "Autodesk Revit 2025",
+    "document": "Rumah_Digital_Twin_LoD0-4.rvt",
+    "projectNumber": "DT-HOUSE-20260805",
+    "coordinateSystem": "GLB Y-up, metres, centred on building ground",
+    "exporter": "tools/revit_export_twinuvo_glb.py"
+  },
+  "lods": [
+    {
+      "level": 1,
+      "revitView": "DT_LOD1",
+      "asset": "twinuvo_lod1.glb",
+      "content": ["building_mass"],
+      "elements": 1,
+      "triangles": 12,
+      "bytes": 2668
+    },
+    {
+      "level": 2,
+      "revitView": "DT_LOD2",
+      "asset": "twinuvo_lod2.glb",
+      "content": ["foundations", "walls", "ceiling", "roofs", "columns", "doors", "windows"],
+      "elements": 29,
+      "triangles": 5322,
+      "bytes": 362120
+    },
+    {
+      "level": 3,
+      "revitView": "DT_LOD3",
+      "asset": "twinuvo_lod3.glb",
+      "content": ["lod2", "roof_structural_framing"],
+      "elements": 70,
+      "triangles": 6606,
+      "bytes": 480524
+    },
+    {
+      "level": 4,
+      "revitView": "DT_LOD4",
+      "asset": "twinuvo_lod4.glb",
+      "content": ["lod3", "data_devices", "electrical_equipment", "electrical_fixtures", "lighting_fixtures"],
+      "elements": 89,
+      "triangles": 6834,
+      "bytes": 516144
+    }
+  ],
+  "entities": [
+    {
+      "id": "EQ_AC_01",
+      "telemetryKey": "ac",
+      "controllable": false
+    },
+    {
+      "id": "SENSOR_ENV_01",
+      "telemetryKey": "temperature_humidity",
+      "controllable": false
+    },
+    {
+      "id": "SENSOR_ENERGY_01",
+      "telemetryKey": "voltage_current_power",
+      "controllable": false
+    },
+    {
+      "id": "SENSOR_OCCUPANCY_01",
+      "telemetryKey": "people_count",
+      "privacy": "edge_only",
+      "controllable": false
+    }
+  ]
+}

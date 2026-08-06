@@ -7,7 +7,7 @@ Folder ini berisi file 3D model untuk visualisasi Digital Twin.
 ## Files
 
 - 3d digital twin.glb: Model utama ruangan dengan sensor
-- floor_plan.glb: Floor plan 3D (opsional)
+- twinuvo/: BIM rumah Twinuvo LoD1-LoD4 dari Revit (aset 3D yang dipakai dashboard)
 
 ## File Size Limitation
 
