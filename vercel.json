@@ -2,7 +2,8 @@
   "version": 2,
   "buildCommand": "cd view_virtual && npm install --legacy-peer-deps && npm run build",
   "outputDirectory": "view_virtual/dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
