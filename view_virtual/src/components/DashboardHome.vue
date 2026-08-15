@@ -3,19 +3,9 @@
     <!-- Full-Screen 3D Background -->
     <div class="viewer-3d">
       <CesiumViewer
-        v-if="current3DView === 'cesium'"
         :sensor-data="sensorData"
         :is-dark-mode="isDarkMode"
         :show-info-card="false"
-        :building-lod="selectedBuildingLod"
-        @toggle-indoor="current3DView = 'babylon'"
-        @switch-to-3d="current3DView = 'babylon'"
-      />
-      <DigitalTwinBabylon
-        v-else
-        :sensor-data="sensorData"
-        :people-count="peopleCount"
-        :is-dark-mode="isDarkMode"
         :building-lod="selectedBuildingLod"
       />
     </div>
@@ -30,10 +20,6 @@
               <img src="/logo.png" alt="Logo" class="brand-logo" />
               <span class="brand">TWINUVO</span>
             </div>
-            <span class="status-badge" :class="isConnected ? 'online' : 'offline'">
-              <span class="dot"></span>
-              {{ isConnected ? 'ONLINE' : 'OFFLINE' }}
-            </span>
           </div>
         </div>
 
@@ -102,24 +88,6 @@
           </div>
         </div>
 
-        <!-- BUILDING LOD -->
-        <div class="section-header lod-section-header">
-          <span>BUILDING LOD</span>
-        </div>
-        <div class="lod-selector" role="group" aria-label="Building LOD">
-          <button
-            v-for="option in buildingLodOptions"
-            :key="option.value"
-            type="button"
-            class="lod-btn"
-            :class="{ active: selectedBuildingLod === option.value }"
-            @click="selectedBuildingLod = option.value"
-          >
-            <span class="lod-code">LOD {{ option.value }}</span>
-            <span class="lod-name">{{ option.label }}</span>
-          </button>
-        </div>
-
       </div>
     </aside>
 
@@ -131,22 +99,21 @@
           <span class="time-display">{{ formattedTime }}</span>
         </div>
 
-        <!-- 3D VIEW -->
-        <div class="section-header">
-          <span>3D VIEW</span>
+        <div class="section-header lod-section-header">
+          <span>BUILDING LOD</span>
         </div>
-        <div class="view-toggle">
+        <div class="lod-selector" role="group" aria-label="Building LOD">
           <button
-            :class="['view-btn', { active: current3DView === 'cesium' }]"
-            @click="current3DView = 'cesium'"
+            v-for="option in buildingLodOptions"
+            :key="option.value"
+            type="button"
+            class="lod-btn"
+            :class="{ active: selectedBuildingLod === option.value }"
+            :aria-pressed="selectedBuildingLod === option.value"
+            @click="selectedBuildingLod = option.value"
           >
-            Map
-          </button>
-          <button
-            :class="['view-btn', { active: current3DView === 'babylon' }]"
-            @click="current3DView = 'babylon'"
-          >
-            Indoor
+            <span class="lod-code">LOD {{ option.value }}</span>
+            <span class="lod-name">{{ option.label }}</span>
           </button>
         </div>
 
@@ -247,7 +214,8 @@
               </div>
               <div class="settings-card">
                 <h4>System</h4>
-                <p>Status: <span :class="isConnected ? 'online' : 'offline'">{{ isConnected ? 'Online' : 'Offline' }}</span></p>
+                <p>Sumber data: {{ isDemoMode ? 'Simulasi terkontrol' : 'Telemetri perangkat/Azure' }}</p>
+                <p>AI: {{ aiSourceLabel }}</p>
                 <p>Energy: {{ totalEnergyWh.toFixed(2) }} Wh</p>
               </div>
             </div>
@@ -265,9 +233,6 @@ import { computed, onMounted, onUnmounted, ref, watch, defineAsyncComponent } fr
 // Lazy load heavy 3D components
 const CesiumViewer = defineAsyncComponent(() =>
   import('./CesiumViewer.vue')
-)
-const DigitalTwinBabylon = defineAsyncComponent(() =>
-  import('./DigitalTwin3D_Babylon.vue')
 )
 const CameraStream = defineAsyncComponent(() =>
   import('./CameraStream.vue')
@@ -291,7 +256,6 @@ const props = defineProps({
 const emit = defineEmits(['toggle-theme', 'logout'])
 
 const activeSection = ref('overview')
-const current3DView = ref('cesium')
 const selectedBuildingLod = ref(3)
 const buildingLodOptions = [
   { value: 1, label: 'Massa' },
@@ -300,7 +264,12 @@ const buildingLodOptions = [
   { value: 4, label: 'Detail' }
 ]
 
-const { isConnected, sensorData, startPolling, stopPolling } = useAzureTelemetry()
+const {
+  isDemoMode,
+  sensorData,
+  startPolling,
+  stopPolling
+} = useAzureTelemetry()
 const { loadHistoricalData, addDataPoint } = useHistoricalData()
 const mlPrediction = useMLPrediction()
 
@@ -354,8 +323,8 @@ const aiSourceLabel = computed(() => {
   const source = mlPrediction.predictionMeta.value?.source
   if (source === 'azure_ml') return 'AZURE ML · CANDIDATE V1'
   if (source === 'azure_function') return 'AZURE FUNCTION'
-  if (source === 'ml_api') return 'ML API'
-  if (source === 'local_calculation') return 'BASELINE LOKAL'
+  if (source === 'ml_api') return 'AI LOKAL · BASELINE'
+  if (source === 'local_calculation') return 'ADVISORY LOKAL'
   return 'MENUNGGU AI'
 })
 const aiSourceClass = computed(() => mlPrediction.predictionMeta.value?.fallback_level > 0 ? 'fallback' : 'cloud')
@@ -384,8 +353,17 @@ onMounted(() => {
   startPolling()
   loadHistoricalData()
   timeInterval = setInterval(() => { currentTime.value = new Date() }, 1000)
+  mlPrediction.getModelInfo()
   // Trigger initial ML prediction
   triggerMLPrediction()
+})
+
+onUnmounted(() => {
+  stopPolling()
+  if (timeInterval) {
+    clearInterval(timeInterval)
+    timeInterval = null
+  }
 })
 
 // Watch for sensor data changes and update ML prediction
@@ -434,6 +412,8 @@ const triggerMLPrediction = async () => {
     const sensorInput = {
       suhu: sensorData.value?.temperature || sensorData.value?.suhu || 25,
       kelembaban: sensorData.value?.humidity || sensorData.value?.kelembaban || 60,
+      tegangan: sensorData.value?.voltage || sensorData.value?.tegangan || 220,
+      arus: sensorData.value?.current || sensorData.value?.arus || 0,
       daya: sensorData.value?.power || sensorData.value?.daya || 0,
       jumlahOrang: sensorData.value?.peopleCount || peopleCount.value || 0
     }
@@ -880,38 +860,6 @@ let lastSensorSuhu = null
   background: var(--success);
 }
 
-/* View Toggle */
-.view-toggle {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.view-btn {
-  flex: 1;
-  padding: 10px 8px;
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-2);
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-}
-
-.view-btn:hover {
-  background: var(--surface-hover);
-}
-
-.view-btn.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
 /* Menu Grid */
 .menu-grid {
   display: grid;
@@ -1312,12 +1260,6 @@ let lastSensorSuhu = null
     line-height: 1.1;
   }
 
-  .view-toggle {
-    gap: 5px;
-    margin-bottom: 6px;
-  }
-
-  .view-btn,
   .theme-btn {
     min-height: 30px;
     padding: 6px 7px;
@@ -1388,7 +1330,6 @@ let lastSensorSuhu = null
   .sensor-item,
   .stat-item,
   .lod-btn,
-  .view-btn,
   .menu-btn,
   .theme-btn {
     min-height: 28px;

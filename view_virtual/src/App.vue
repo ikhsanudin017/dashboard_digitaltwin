@@ -1,23 +1,8 @@
 <template>
   <div class="app-shell">
-    <!-- User Login -->
-    <LoginPage
-      v-if="isUserLoginRoute"
-      :is-dark-mode="isDarkMode"
-      :is-auth-ready="isAuthReady"
-      :is-signing-in="isSigningIn"
-      :auth-error="authError"
-      :is-firebase-configured="isFirebaseConfigured"
-      mode="user"
-      @login-google="handleUserGoogleLogin"
-      @login-credentials="handleCredentialLogin"
-      @forgot-password="handleForgotPassword"
-      @toggle-theme="toggleTheme"
-    />
-
     <!-- Admin Login -->
     <LoginPage
-      v-else-if="isAdminLoginRoute"
+      v-if="isAdminLoginRoute"
       :is-dark-mode="isDarkMode"
       :is-auth-ready="isAuthReady"
       :is-signing-in="isSigningIn"
@@ -91,7 +76,6 @@ const clearAdminSessionTimer = () => {
   }
 }
 
-const isUserLoginRoute = computed(() => route.name === 'user-login')
 const isAdminLoginRoute = computed(() => route.name === 'admin-login')
 const isAdminDashboardRoute = computed(() => route.name === 'admin-dashboard')
 
@@ -212,7 +196,7 @@ const handleLogout = async () => {
     return
   }
 
-  await router.replace('/login')
+  await router.replace('/dashboard')
 }
 
 onMounted(() => {
@@ -245,7 +229,7 @@ watch(
   () => route.name,
   async nextRouteName => {
     if (!user.value) return
-    if (nextRouteName !== 'user-login' && nextRouteName !== 'admin-login') return
+    if (nextRouteName !== 'admin-login') return
     await redirectAfterLogin()
   }
 )

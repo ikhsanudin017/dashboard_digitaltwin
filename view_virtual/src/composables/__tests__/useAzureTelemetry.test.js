@@ -3,11 +3,12 @@ import { useAzureTelemetry } from '../useAzureTelemetry'
 
 // --- Module-level mocks (hoisted by vi.mock) ---
 
-vi.mock('../lib/appConfig', () => ({
+vi.mock('../../lib/appConfig', () => ({
   AZURE_FUNCTION_URL: 'https://test-azure-function.azurewebsites.net/api',
   AZURE_FUNCTION_WRITE_KEY: 'test-write-key',
   API_BASE_URL: 'http://localhost:3000/api',
-  ML_API_URL: 'http://localhost:5000/api'
+  ML_API_URL: 'http://localhost:5000/api',
+  DEMO_MODE: false
 }))
 
 // Stub global fetch before any imports

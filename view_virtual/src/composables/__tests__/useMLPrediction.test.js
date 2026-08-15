@@ -11,7 +11,8 @@ vi.mock('axios', () => ({
 
 vi.mock('../../lib/appConfig', () => ({
   AZURE_FUNCTION_URL: 'https://example-azure-function.azurewebsites.net/api',
-  ML_API_URL: 'http://localhost:5000/api'
+  ML_API_URL: 'http://localhost:5000/api',
+  DEMO_MODE: false
 }))
 
 describe('useMLPrediction', () => {

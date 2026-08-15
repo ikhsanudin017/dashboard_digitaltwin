@@ -3,6 +3,16 @@
 
 const readEnv = key => String(import.meta.env[key] || '').trim()
 
+const readBooleanEnv = (key, fallback = false) => {
+  const value = readEnv(key)
+  if (!value) return fallback
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
+}
+
+// This competition build defaults to its deterministic local scenario.
+// Set VITE_DEMO_MODE=false when verified device telemetry is available.
+export const DEMO_MODE = readBooleanEnv('VITE_DEMO_MODE', true)
+
 // Read-only URLs
 export const AZURE_FUNCTION_URL =
   readEnv('VITE_AZURE_FUNCTION_URL') || 'https://func-digitaltwin-2026.azurewebsites.net/api'

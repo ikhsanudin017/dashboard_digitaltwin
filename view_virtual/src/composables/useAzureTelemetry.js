@@ -13,9 +13,10 @@
  */
 
 import { ref, watch, onUnmounted } from 'vue'
-import { AZURE_FUNCTION_URL, AZURE_FUNCTION_WRITE_KEY } from '../lib/appConfig'
+import { AZURE_FUNCTION_URL, AZURE_FUNCTION_WRITE_KEY, DEMO_MODE } from '../lib/appConfig'
+import { getDemoTelemetry } from '../lib/demoScenario'
 
-const STORAGE_KEY = 'sensor_last_data'
+const STORAGE_KEY = DEMO_MODE ? 'sensor_demo_replay_v1' : 'sensor_last_data'
 
 // Polling interval in milliseconds (5 seconds to match ESP32 sensor interval)
 const POLLING_INTERVAL = 5000
@@ -66,6 +67,7 @@ const loadLastData = () => {
 export function useAzureTelemetry() {
   // "Azure connected / polling aktif"
   const isConnected = ref(false)
+  const isDemoMode = ref(DEMO_MODE)
   const sensorData = ref({
     temperature: 0,
     humidity: 0,
@@ -82,6 +84,16 @@ export function useAzureTelemetry() {
 
   let pollingTimer = null
   let isPolling = false
+  let demoStartedAt = Date.now()
+
+  const updateDemoTelemetry = () => {
+    const now = new Date()
+    const elapsedSeconds = (now.getTime() - demoStartedAt) / 1000
+    const nextData = getDemoTelemetry(elapsedSeconds, now)
+    sensorData.value = nextData
+    isConnected.value = true
+    return true
+  }
 
   // Auto-save ke localStorage setiap ada perubahan data
   watch(sensorData, (newData) => {
@@ -172,6 +184,10 @@ export function useAzureTelemetry() {
 
   // Fetch people count dari Azure Function (PeopleCount table)
   const fetchPeopleCount = async () => {
+    if (isDemoMode.value) {
+      return updateDemoTelemetry()
+    }
+
     try {
       const response = await fetch(`${AZURE_FUNCTION_URL}/telemetry/people?limit=1`)
 
@@ -214,6 +230,12 @@ export function useAzureTelemetry() {
 
   // Simpan people count ke Azure (dipanggil dari camera detection)
   const savePeopleCount = async (count, location = 'Ruang Utama') => {
+    if (isDemoMode.value) {
+      sensorData.value.peopleCount = Math.max(0, Math.trunc(Number(count) || 0))
+      sensorData.value.lastPeopleUpdate = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+      return true
+    }
+
     try {
       if (!AZURE_FUNCTION_WRITE_KEY) {
         console.warn('⚠️ VITE_AZURE_FUNCTION_WRITE_KEY belum diisi. Endpoint write Azure Function tidak bisa dipanggil.')
@@ -256,6 +278,18 @@ export function useAzureTelemetry() {
 
   // Mulai polling data dari Azure
   const startPolling = () => {
+    if (isDemoMode.value) {
+      console.log('Demo replay lokal dimulai')
+      demoStartedAt = Date.now()
+      isPolling = true
+      updateDemoTelemetry()
+
+      if (!pollingTimer) {
+        pollingTimer = setInterval(updateDemoTelemetry, 2000)
+      }
+      return
+    }
+
     console.log('🔌 Memulai polling Azure...')
     console.log('📡 Azure Function URL:', AZURE_FUNCTION_URL)
 
@@ -311,6 +345,7 @@ export function useAzureTelemetry() {
 
   return {
     isConnected,
+    isDemoMode,
     sensorData,
     startPolling,
     stopPolling,

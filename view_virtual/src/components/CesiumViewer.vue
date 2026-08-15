@@ -2,15 +2,6 @@
   <div class="cesium-viewer" :class="{ dark: isDarkMode }">
     <div ref="cesiumContainer" class="cesium-container"></div>
 
-    <div
-      v-if="isReady && markerScreenPosition.visible"
-      class="home-marker"
-      :style="{ left: `${markerScreenPosition.x}px`, top: `${markerScreenPosition.y}px` }"
-    >
-      <div class="home-marker-label">Digital Twin Home</div>
-      <div class="home-marker-dot"></div>
-    </div>
-
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-spinner">
         <div class="spinner"></div>
@@ -33,7 +24,6 @@
         <span class="card-title">3D Map</span>
       </div>
       <button class="card-btn orbit-btn" @click="orbitAroundBuilding">360 View</button>
-      <button class="card-btn" @click="emit('switch-to-3d')">🏠 Indoor</button>
     </div>
   </div>
 </template>
@@ -43,6 +33,21 @@ import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as Cesium from 'cesium'
 
 const CESIUM_TOKEN = import.meta.env.VITE_CESIUM_ION_TOKEN || ''
+const CESIUM_BASEMAP_ASSET_ID = Number(
+  import.meta.env.VITE_CESIUM_BASEMAP_ASSET_ID || 2275207
+)
+const CESIUM_MODEL_ANCHOR_HEIGHT = Number(
+  import.meta.env.VITE_CESIUM_MODEL_ANCHOR_HEIGHT || 225.7319374907
+)
+const CESIUM_BUILDING_HEIGHT_FINE_TUNE = Number(
+  import.meta.env.VITE_CESIUM_BUILDING_HEIGHT_FINE_TUNE || 0.85
+)
+const CESIUM_LOD_ASSET_IDS = Object.freeze({
+  1: Number(import.meta.env.VITE_CESIUM_LOD1_ASSET_ID || 5139696),
+  2: Number(import.meta.env.VITE_CESIUM_LOD2_ASSET_ID || 5139697),
+  3: Number(import.meta.env.VITE_CESIUM_LOD3_ASSET_ID || 5139698),
+  4: Number(import.meta.env.VITE_CESIUM_LOD4_ASSET_ID || 5139699)
+})
 
 const props = defineProps({
   sensorData: { type: Object, default: () => ({}) },
@@ -50,8 +55,6 @@ const props = defineProps({
   showInfoCard: { type: Boolean, default: true },
   buildingLod: { type: Number, default: 3 }
 })
-
-const emit = defineEmits(['toggle-indoor', 'switch-to-3d'])
 
 const housePosition = { lat: -7.7229652607057515, lon: 110.5187030823394 }
 const houseCartesian = () => Cesium.Cartesian3.fromDegrees(housePosition.lon, housePosition.lat, 0)
@@ -135,14 +138,14 @@ const isLoading = ref(true)
 const isReady = ref(false)
 const loadError = ref('')
 const loadingStatus = ref('')
-const markerScreenPosition = ref({ x: 0, y: 0, visible: false })
 
 let viewer = null
-let postRenderHandler = null
 let buildingEntities = []
 let buildingPrimitives = []
 let orbitFrameId = null
 let buildingLoadGeneration = 0
+let activeTileset = null
+let basemapTileset = null
 
 const currentBuildingLod = () => {
   const lod = Number(props.buildingLod)
@@ -170,6 +173,7 @@ const clearBuilding = () => {
   if (!viewer || viewer.isDestroyed()) {
     buildingEntities = []
     buildingPrimitives = []
+    activeTileset = null
     return
   }
 
@@ -177,6 +181,7 @@ const clearBuilding = () => {
   buildingPrimitives.forEach(primitive => viewer.scene.primitives.remove(primitive))
   buildingEntities = []
   buildingPrimitives = []
+  activeTileset = null
 }
 
 const destroyViewer = () => {
@@ -189,13 +194,9 @@ const destroyViewer = () => {
 
   clearBuilding()
 
-  if (postRenderHandler) {
-    viewer.scene.postRender.removeEventListener(postRenderHandler)
-    postRenderHandler = null
-  }
-
   viewer.destroy()
   viewer = null
+  basemapTileset = null
 }
 
 const applySceneTheme = () => {
@@ -213,41 +214,6 @@ const applySceneTheme = () => {
   }
 }
 
-const updateMarkerOverlay = () => {
-  if (!viewer) return
-
-  const windowPosition = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    buildingMarkerCartesian()
-  )
-
-  if (!windowPosition) {
-    markerScreenPosition.value = { ...markerScreenPosition.value, visible: false }
-    return
-  }
-
-  const canvas = viewer.scene.canvas
-  const visible =
-    windowPosition.x >= 0 &&
-    windowPosition.y >= 0 &&
-    windowPosition.x <= canvas.clientWidth &&
-    windowPosition.y <= canvas.clientHeight
-
-  markerScreenPosition.value = {
-    x: windowPosition.x,
-    y: windowPosition.y,
-    visible
-  }
-}
-
-const bindMarkerOverlay = () => {
-  if (!viewer || postRenderHandler) return
-
-  postRenderHandler = () => updateMarkerOverlay()
-  viewer.scene.postRender.addEventListener(postRenderHandler)
-  updateMarkerOverlay()
-}
-
 const buildingHpr = () =>
   new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(lod3Building.headingDegrees), 0, 0)
 
@@ -263,9 +229,6 @@ const localBuildingPoint = (x, y, z) =>
     new Cesium.Cartesian3(x, y, z),
     new Cesium.Cartesian3()
   )
-
-const buildingMarkerCartesian = () =>
-  localBuildingPoint(0, 0, lod3Building.wallHeight + lod3Building.roofHeight + 0.35)
 
 const buildingCameraTarget = () =>
   localBuildingPoint(0, 0, lod3Building.wallHeight * 0.55)
@@ -819,28 +782,132 @@ const addNeighborhoodScene = (lod) => {
   addFineNeighborhoodDetails(lod)
 }
 
+const applyTilesetHeightOffset = (tileset, offsetMeters) => {
+  if (!Number.isFinite(offsetMeters) || tileset.isDestroyed()) return
+
+  const center = Cesium.Cartographic.fromCartesian(tileset.boundingSphere.center)
+  const surfaceNormal = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormalCartographic(
+    center,
+    new Cesium.Cartesian3()
+  )
+  const translation = Cesium.Cartesian3.multiplyByScalar(
+    surfaceNormal,
+    offsetMeters,
+    new Cesium.Cartesian3()
+  )
+  tileset.modelMatrix = Cesium.Matrix4.fromTranslation(translation)
+}
+
+const alignTilesetToGroundSurface = async tileset => {
+  if (!viewer?.scene?.sampleHeightSupported) {
+    throw new Error('Sampling permukaan Google 3D tidak didukung browser ini')
+  }
+
+  const center = Cesium.Cartographic.fromCartesian(tileset.boundingSphere.center)
+  const earthRadius = Cesium.Ellipsoid.WGS84.maximumRadius
+  const longitudeMeters = earthRadius * Math.cos(center.latitude)
+  const sampleOffsets = [
+    [-18, -18], [0, -18], [18, -18],
+    [-18, 0],              [18, 0],
+    [-18, 18],  [0, 18],  [18, 18],
+    [-12, -12], [12, -12], [-12, 12], [12, 12]
+  ]
+  const samplePositions = sampleOffsets.map(([eastMeters, northMeters]) =>
+    new Cesium.Cartographic(
+      center.longitude + eastMeters / longitudeMeters,
+      center.latitude + northMeters / earthRadius,
+      0
+    )
+  )
+
+  const surfaces = await viewer.scene.sampleHeightMostDetailed(
+    samplePositions,
+    [tileset],
+    2
+  )
+  const groundHeights = surfaces
+    .map(position => position?.height)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)
+
+  if (!groundHeights.length || tileset.isDestroyed()) {
+    throw new Error('Elevasi tanah di sekitar bangunan tidak dapat dibaca')
+  }
+
+  const groundIndex = Math.floor((groundHeights.length - 1) * 0.25)
+  const groundHeight = groundHeights[groundIndex]
+  const offsetMeters =
+    groundHeight -
+    CESIUM_MODEL_ANCHOR_HEIGHT +
+    CESIUM_BUILDING_HEIGHT_FINE_TUNE
+
+  applyTilesetHeightOffset(tileset, offsetMeters)
+  console.info(
+    `LOD menempel permukaan: ground=${groundHeight.toFixed(2)}m, height-offset=${offsetMeters.toFixed(2)}m, horizontal-offset=0m`
+  )
+}
+
 const loadBimLodBuilding = async (lod, generation) => {
-  const model = await Cesium.Model.fromGltfAsync({
-    url: `/models/twinuvo/twinuvo_lod${lod}.glb`,
-    modelMatrix: buildingTransform(),
-    scale: 1,
-    minimumPixelSize: lod === 1 ? 48 : 0,
-    maximumScale: 20000,
-    shadows: Cesium.ShadowMode.ENABLED,
-    incrementallyLoadTextures: true
+  const assetId = CESIUM_LOD_ASSET_IDS[lod]
+  if (!Number.isInteger(assetId) || assetId <= 0) {
+    throw new Error(`Asset ID Cesium ion untuk LOD ${lod} tidak valid`)
+  }
+
+  const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(assetId, {
+    maximumScreenSpaceError: lod <= 2 ? 12 : 8,
+    preloadWhenHidden: true,
+    preferLeaves: lod >= 3
   })
 
   if (!viewer || viewer.isDestroyed() || generation !== buildingLoadGeneration) {
-    model.destroy()
-    return
+    tileset.destroy()
+    return null
   }
 
-  model.id = {
+  tileset.id = {
     name: `Twinuvo BIM LoD ${lod}`,
     source: 'Autodesk Revit 2025',
-    asset: `twinuvo_lod${lod}.glb`
+    assetId
   }
-  addBuildingPrimitive(model)
+  activeTileset = addBuildingPrimitive(tileset)
+
+  try {
+    await alignTilesetToGroundSurface(activeTileset)
+  } catch (alignmentError) {
+    console.warn('Penyelarasan height otomatis gagal.', alignmentError)
+    applyTilesetHeightOffset(activeTileset, CESIUM_BUILDING_HEIGHT_FINE_TUNE)
+  }
+
+  if (!viewer || viewer.isDestroyed() || generation !== buildingLoadGeneration) {
+    return null
+  }
+  return activeTileset
+}
+
+const loadPhotorealisticBasemap = async () => {
+  if (!Number.isInteger(CESIUM_BASEMAP_ASSET_ID) || CESIUM_BASEMAP_ASSET_ID <= 0) {
+    throw new Error('Asset ID Google Photorealistic 3D Tiles tidak valid')
+  }
+
+  const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(
+    CESIUM_BASEMAP_ASSET_ID,
+    {
+      maximumScreenSpaceError: 16,
+      preloadWhenHidden: true
+    }
+  )
+
+  if (!viewer || viewer.isDestroyed()) {
+    tileset.destroy()
+    return null
+  }
+
+  tileset.id = {
+    name: 'Google Photorealistic 3D Tiles',
+    assetId: CESIUM_BASEMAP_ASSET_ID
+  }
+  basemapTileset = viewer.scene.primitives.add(tileset)
+  return basemapTileset
 }
 
 const addLod1Building = () => {
@@ -1032,7 +1099,7 @@ const addLod4Building = () => {
 }
 
 const buildSelectedLodBuilding = async () => {
-  if (!viewer || viewer.isDestroyed()) return
+  if (!viewer || viewer.isDestroyed()) return null
 
   const generation = ++buildingLoadGeneration
   stopBuildingOrbit()
@@ -1041,13 +1108,13 @@ const buildSelectedLodBuilding = async () => {
   const lod = currentBuildingLod()
 
   try {
-    await loadBimLodBuilding(lod, generation)
+    const tileset = await loadBimLodBuilding(lod, generation)
+    return tileset
   } catch (error) {
     console.error(`Gagal memuat BIM Revit LoD ${lod} di Cesium:`, error)
     loadError.value = `BIM Revit LoD ${lod} gagal dimuat`
+    return null
   }
-
-  updateMarkerOverlay()
 }
 
 const stopBuildingOrbit = () => {
@@ -1102,7 +1169,6 @@ const initViewer = async () => {
   destroyViewer()
   isLoading.value = true
   isReady.value = false
-  markerScreenPosition.value = { x: 0, y: 0, visible: false }
   loadError.value = ''
   loadingStatus.value = 'Step 1: Container...'
   console.log('1. Mulai initViewer')
@@ -1121,6 +1187,8 @@ const initViewer = async () => {
   try {
     if (CESIUM_TOKEN) {
       Cesium.Ion.defaultAccessToken = CESIUM_TOKEN
+    } else {
+      throw new Error('VITE_CESIUM_ION_TOKEN belum dikonfigurasi')
     }
     console.log('3. Cesium config siap, create Viewer...')
 
@@ -1136,55 +1204,45 @@ const initViewer = async () => {
       navigationHelpButton: false,
       infoBox: false,
       selectionIndicator: false,
-      baseLayer: false,
+      globe: false,
       creditContainer: document.createElement('div')
     })
 
     console.log('4. Viewer dibuat!')
 
-    // Use a real base map. Without this Cesium can show only a solid blue globe.
-    applyBaseImagery()
-
-    // Set ellipsoid terrain
-    viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider()
+    loadingStatus.value = 'Step 4: Google Photorealistic 3D Tiles...'
+    await loadPhotorealisticBasemap()
 
     // Set background color
     applySceneTheme()
-    viewer.scene.globe.depthTestAgainstTerrain = false
     viewer.scene.screenSpaceCameraController.enableRotate = true
     viewer.scene.screenSpaceCameraController.enableTilt = true
     viewer.scene.screenSpaceCameraController.enableLook = true
     viewer.scene.screenSpaceCameraController.enableTranslate = true
     viewer.scene.screenSpaceCameraController.enableZoom = true
-    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 25
+    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1
     viewer.scene.screenSpaceCameraController.maximumZoomDistance = 1800
 
-    loadingStatus.value = `Step 4: Build LOD ${currentBuildingLod()} building...`
+    loadingStatus.value = `Step 5: Build LOD ${currentBuildingLod()} building...`
     console.log(`5. Build LOD ${currentBuildingLod()} building`)
-    await buildSelectedLodBuilding()
-
-    loadingStatus.value = 'Step 5: Lock location marker...'
-    console.log('6. Lock location marker')
-    bindMarkerOverlay()
+    const initialTileset = await buildSelectedLodBuilding()
+    if (!initialTileset) {
+      throw new Error(`LOD ${currentBuildingLod()} tidak berhasil dimuat dari Cesium ion`)
+    }
 
     loadingStatus.value = 'Step 6: Fly to location...'
-    console.log('7. Fly to location')
+    console.log('6. Fly to location')
 
-    viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(buildingCameraTarget(), 42),
-      {
-        offset: new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(-28),
-          Cesium.Math.toRadians(-36),
-          118
-        ),
-        duration: 1,
-        complete: updateMarkerOverlay
-      }
+    await viewer.zoomTo(
+      initialTileset,
+      new Cesium.HeadingPitchRange(
+        Cesium.Math.toRadians(-28),
+        Cesium.Math.toRadians(-36),
+        0
+      )
     )
-
     loadingStatus.value = 'Selesai!'
-    console.log('8. Selesai!')
+    console.log('7. Selesai!')
 
     isLoading.value = false
     isReady.value = true
@@ -1206,11 +1264,14 @@ onMounted(() => {
 
 watch(() => props.isDarkMode, () => {
   applySceneTheme()
-  applyBaseImagery()
 })
 
-watch(() => props.buildingLod, () => {
-  buildSelectedLodBuilding()
+watch(() => props.buildingLod, async () => {
+  loadError.value = ''
+  isLoading.value = true
+  loadingStatus.value = `Memuat LOD ${currentBuildingLod()} dari Cesium ion...`
+  await buildSelectedLodBuilding()
+  isLoading.value = false
 })
 </script>
 
@@ -1252,41 +1313,6 @@ watch(() => props.buildingLod, () => {
   inset: 0;
   width: 100%;
   height: 100%;
-}
-
-.home-marker {
-  position: absolute;
-  z-index: 35;
-  pointer-events: none;
-}
-
-.home-marker-dot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #ff1010;
-  border: 4px solid #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
-  transform: translate(-50%, -50%);
-}
-
-.home-marker-label {
-  position: absolute;
-  left: 0;
-  top: -32px;
-  transform: translateX(-50%);
-  color: #ffffff;
-  font: 600 16px Arial, sans-serif;
-  text-shadow:
-    -1px -1px 0 #0f172a,
-    1px -1px 0 #0f172a,
-    -1px 1px 0 #0f172a,
-    1px 1px 0 #0f172a,
-    0 2px 4px rgba(0, 0, 0, 0.45);
-  white-space: nowrap;
 }
 
 :deep(.cesium-viewer-toolbar) { display: none !important; }

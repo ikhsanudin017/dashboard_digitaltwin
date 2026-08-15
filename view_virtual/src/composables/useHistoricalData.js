@@ -12,9 +12,10 @@
  */
 import { ref } from 'vue'
 import axios from 'axios'
-import { AZURE_FUNCTION_URL } from '../lib/appConfig'
+import { AZURE_FUNCTION_URL, DEMO_MODE } from '../lib/appConfig'
+import { createDemoHistory } from '../lib/demoScenario'
 
-const STORAGE_KEY = 'digitaltwin_historical_data'
+const STORAGE_KEY = DEMO_MODE ? 'digitaltwin_demo_history_v1' : 'digitaltwin_historical_data'
 const MAX_DATA_POINTS = 10000
 const DEFAULT_HISTORY_HOURS = 720
 const DEFAULT_HISTORY_LIMIT = 5000
@@ -207,6 +208,14 @@ export function useHistoricalData() {
     const cachedData = loadCachedHistoricalData()
 
     try {
+      if (DEMO_MODE) {
+        const replayData = createDemoHistory({ hours, intervalMinutes: 15 })
+        historicalData.value = mergeUniqueDataPoints(replayData)
+        saveHistoricalData()
+        console.log('Demo replay history loaded:', historicalData.value.length, 'records')
+        return historicalData.value
+      }
+
       if (AZURE_FUNCTION_URL) {
         console.log('Loading historical data from Azure...', { hours, limit })
 

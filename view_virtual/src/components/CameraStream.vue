@@ -4,22 +4,22 @@
     <div class="hero-banner">
       <div class="hero-kicker">VISION SYSTEM</div>
       <h2>Camera Stream</h2>
-      <p>Live monitoring dari Raspberry Pi dengan YOLO edge untuk people counting</p>
+      <p>{{ isDemoMode ? 'People counting untuk demonstrasi alur otomasi berbasis okupansi' : 'Live monitoring dari Raspberry Pi dengan YOLO edge untuk people counting' }}</p>
       <div class="hero-meta">
-        <span class="meta-badge">Status: {{ isStreamActive ? 'LIVE' : 'OFFLINE' }}</span>
+        <span v-if="!isDemoMode" class="meta-badge">Status: {{ isStreamActive ? 'LIVE' : 'MENUNGGU KAMERA' }}</span>
         <span class="meta-badge data-count">{{ peopleCount }} Orang Terdeteksi</span>
       </div>
     </div>
 
     <!-- Stream Container with Canvas Overlay -->
-    <div class="stream-container">
+    <div v-if="!isDemoMode" class="stream-container">
       <!-- Loading Indicator -->
       <div v-if="isLoading" class="loading-overlay">
         <div class="spinner"></div>
         <p>Connecting to camera...</p>
       </div>
 
-      <!-- Video + Canvas Overlay -->
+      <!-- Physical camera feed -->
       <div v-show="!streamError && !isLoading" class="video-wrapper">
         <img
           ref="videoImg"
@@ -48,11 +48,11 @@
     </div>
 
     <!-- Camera Info -->
-    <div class="camera-info-section">
-      <h3 class="section-title">Informasi Kamera</h3>
+    <div v-if="!isDemoMode" class="camera-info-section">
+      <h3 class="section-title">Informasi Vision</h3>
       <div class="info-grid">
         <div class="info-item">
-          <span class="info-label">IP Address</span>
+          <span class="info-label">Sumber</span>
           <span class="info-value">{{ localCameraUrl }}</span>
         </div>
         <div class="info-item">
@@ -74,7 +74,8 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
-import { CAMERA_STREAM_URL } from '../lib/appConfig'
+import { CAMERA_STREAM_URL, DEMO_MODE } from '../lib/appConfig'
+import { getDemoVisionState } from '../lib/demoScenario'
 
 const props = defineProps({
   isDarkMode: {
@@ -86,18 +87,19 @@ const props = defineProps({
 const emit = defineEmits(['peopleCountUpdate'])
 
 const localCameraUrl = ref(CAMERA_STREAM_URL || '')
+const isDemoMode = DEMO_MODE
 const isLoading = ref(true)
 const streamError = ref(false)
 const errorMessage = ref('')
 const isStreamActive = ref(false)
 const peopleCount = ref(0)
-const detections = ref([])
 
 // Refs for DOM elements
 const videoImg = ref(null)
 const streamKey = ref(0)
 let streamTimer = null
 let pollTimer = null
+let demoStartedAt = Date.now()
 
 const videoFeedUrl = computed(() => {
   return `${localCameraUrl.value}/frame?t=${streamKey.value}`
@@ -152,6 +154,24 @@ const stopPolling = () => {
   }
 }
 
+const updateDemoReplay = () => {
+  const now = new Date()
+  const state = getDemoVisionState((now.getTime() - demoStartedAt) / 1000)
+  peopleCount.value = state.peopleCount
+  isLoading.value = false
+  streamError.value = false
+  isStreamActive.value = true
+  emit('peopleCountUpdate', peopleCount.value)
+}
+
+const startDemoReplay = () => {
+  demoStartedAt = Date.now()
+  updateDemoReplay()
+  if (!pollTimer) {
+    pollTimer = setInterval(updateDemoReplay, 1000)
+  }
+}
+
 const handleLoad = () => {
   isLoading.value = false
   streamError.value = false
@@ -173,7 +193,24 @@ const handleError = () => {
   stopStreamRefresh()
 }
 
+const refreshStream = () => {
+  if (isDemoMode) {
+    startDemoReplay()
+    return
+  }
+
+  isLoading.value = true
+  streamError.value = false
+  errorMessage.value = ''
+  streamKey.value = Date.now()
+}
+
 onMounted(() => {
+  if (isDemoMode) {
+    startDemoReplay()
+    return
+  }
+
   // Initial load
   setTimeout(() => {
     streamKey.value = Date.now()
@@ -296,6 +333,7 @@ onUnmounted(() => {
   display: block;
   will-change: contents;
 }
+
 
 .stream-overlay {
   position: absolute;

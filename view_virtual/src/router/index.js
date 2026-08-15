@@ -9,14 +9,13 @@ const RouteMarker = {
 }
 
 const routes = [
-  { path: '/', name: 'root', component: RouteMarker },
-  { path: '/login', name: 'user-login', component: RouteMarker },
+  { path: '/', redirect: '/dashboard' },
+  { path: '/login', redirect: '/dashboard' },
   { path: '/admin/login', name: 'admin-login', component: RouteMarker },
   {
     path: '/dashboard',
     name: 'user-dashboard',
-    component: RouteMarker,
-    meta: { requiresAuth: true }
+    component: RouteMarker
   },
   {
     path: '/admin',
@@ -60,12 +59,6 @@ router.beforeEach(async to => {
     clearAdminSession()
   }
 
-  // Root route: redirect based on auth state
-  if (to.name === 'root') {
-    if (!loggedIn) return '/login'
-    return adminSessionActive ? '/admin' : '/dashboard'
-  }
-
   // Admin routes: require auth + admin role
   if (to.meta.requiresAdmin) {
     if (!loggedIn || !adminSessionActive) return '/admin/login'
@@ -77,16 +70,6 @@ router.beforeEach(async to => {
       return '/admin/login'
     }
     return true
-  }
-
-  // Protected routes: require auth only
-  if (to.meta.requiresAuth && !loggedIn) {
-    return '/login'
-  }
-
-  // User login route: if already logged in → go to dashboard
-  if (to.name === 'user-login' && loggedIn) {
-    return adminSessionActive ? '/admin' : '/dashboard'
   }
 
   // Admin login route: if already logged in → go to admin dashboard

@@ -16,7 +16,7 @@
  */
 import { ref, computed } from 'vue'
 import axios from 'axios'
-import { AZURE_FUNCTION_URL, ML_API_URL } from '../lib/appConfig'
+import { AZURE_FUNCTION_URL, ML_API_URL, DEMO_MODE } from '../lib/appConfig'
 
 const PREDICTION_SCHEMA_VERSION = '1.0.0'
 
@@ -210,8 +210,8 @@ export function useMLPrediction() {
           comfort: response.data.comfort,
           forecast: response.data.forecast_30m,
           recommendation: response.data.ac_recommendation,
-          modelVersion: response.data.model_version ?? 'ml_api',
-          timestampUtc: response.data.timestamp
+          modelVersion: response.data.model_version ?? response.data.forecast_30m?.model_version ?? 'persistence-30m:1',
+          timestampUtc: response.data.timestamp_utc ?? response.data.timestamp
         })
 
         return {
@@ -442,14 +442,19 @@ export function useMLPrediction() {
 
       const fallbackChain = []
 
-      // Priority 1: Azure Function (cloud-first)
-      let result = await fetchFromAzureFunction(normalizedInput)
-      fallbackChain.push('azure_function')
-      
-      // Priority 2: ML API (local Flask)
-      if (!result.success) {
+      // Demo runs locally and deterministically; normal operation remains cloud-first.
+      let result
+      if (DEMO_MODE) {
         result = await fetchFromMLAPI(normalizedInput)
         fallbackChain.push('ml_api')
+      } else {
+        result = await fetchFromAzureFunction(normalizedInput)
+        fallbackChain.push('azure_function')
+
+        if (!result.success) {
+          result = await fetchFromMLAPI(normalizedInput)
+          fallbackChain.push('ml_api')
+        }
       }
       
       // Priority 3: Local calculation
@@ -472,6 +477,7 @@ export function useMLPrediction() {
           model_version: data.model_version,
           fallback_level: fallbackLevel,
           fallback_chain: fallbackChain,
+          demo_mode: DEMO_MODE,
           input: normalizedInput
         }
         
